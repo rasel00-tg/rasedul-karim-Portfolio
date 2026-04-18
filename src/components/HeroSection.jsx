@@ -228,16 +228,6 @@ const HeroSection = () => {
               )}
             </AnimatePresence>
 
-            {/* Static Caption that remains despite scrolling */}
-            <motion.div
-              style={{ display: 'flex', alignItems: 'flex-start', gap: '15px', background: 'rgba(255,255,255,0.02)', padding: '20px 30px', borderRadius: '15px', border: '1px solid rgba(0, 240, 255, 0.1)', flexWrap: 'wrap', justifyContent: 'center' }}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1, duration: 1 }}
-            >
-              <Quote size={40} color="#00f0ff" style={{ opacity: 0.5, transform: 'rotate(180deg) scaleX(-1)', flexShrink: 0 }} />
-              <img src="/caption.png" alt="Caption" style={{ height: 'auto', maxHeight: '120px', maxWidth: '100%', objectFit: 'contain', filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.1))' }} />
-            </motion.div>
           </div>
         </motion.div>
       </div>
