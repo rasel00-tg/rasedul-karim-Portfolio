@@ -44,8 +44,8 @@ const HeroSection = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showFloatingIcons, setShowFloatingIcons] = useState(true);
   const [isBroken, setIsBroken] = useState(false);
-  
-  const nameStr = "RASEDUL KARIM";
+
+  const nameStr = "Rasedul Karim";
   const breakPositions = useRef(
     nameStr.split('').map(() => ({
       x: (Math.random() - 0.5) * 500,
@@ -61,7 +61,7 @@ const HeroSection = () => {
       } else {
         setIsScrolled(false);
       }
-      
+
       // If user scrolls, reassemble characters
       if (window.scrollY > 10 && isBroken) {
         setIsBroken(false);
@@ -80,7 +80,7 @@ const HeroSection = () => {
   return (
     <section id="hero" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
       <SceneBg />
-      
+
       <div style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -93,9 +93,9 @@ const HeroSection = () => {
         zIndex: 1,
         pointerEvents: 'auto'
       }}>
-        
+
         {/* Left Side (Image) */}
-        <motion.div 
+        <motion.div
           style={{ flex: '1 1 400px', display: 'flex', justifyContent: 'center', position: 'relative' }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -113,10 +113,10 @@ const HeroSection = () => {
                 "drop-shadow(0 0 0px rgba(0,255,255,0))"
               ]
             }}
-            transition={{ 
-              duration: 4, 
+            transition={{
+              duration: 4,
               times: [0, 0.02, 0.05, 0.08, 0.12, 1],
-              repeat: Infinity, 
+              repeat: Infinity,
               ease: "linear"
             }}
             style={{ position: 'relative', width: '280px', height: '280px', borderRadius: '50%', zIndex: 3 }}
@@ -133,14 +133,14 @@ const HeroSection = () => {
         </motion.div>
 
         {/* Right Side (Text & Interactive Title) */}
-        <motion.div 
+        <motion.div
           style={{ flex: '1 1 400px', textAlign: 'center', userSelect: 'none' }}
           initial={{ opacity: 0, x: 50 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ type: "spring", bounce: 0.5, duration: 1 }}
         >
-          <motion.h1 
-            style={{ fontSize: 'clamp(1rem, 4.5vw, 3rem)', whiteSpace: 'nowrap', margin: '0 0 10px 0', fontWeight: 800, cursor: 'pointer', display: 'inline-block', letterSpacing: '2px' }}
+          <motion.h1
+            style={{ fontFamily: "'MyCustomFont', cursive", fontSize: 'clamp(3rem, 10vw, 6rem)', whiteSpace: 'nowrap', margin: '0 0 10px 0', fontWeight: 500, cursor: 'pointer', display: 'inline-block', letterSpacing: '2px', lineHeight: 1 }}
             onClick={() => setIsBroken(true)}
             animate={{
               filter: [
@@ -158,9 +158,9 @@ const HeroSection = () => {
               return (
                 <motion.span
                   key={index}
-                  style={{ 
-                    display: 'inline-block', 
-                    minWidth: char === ' ' ? '1rem' : 'auto', 
+                  style={{
+                    display: 'inline-block',
+                    minWidth: char === ' ' ? '1rem' : 'auto',
                     color: '#FFFFFF',
                     textShadow: '0 0 10px #00f0ff, 0 0 20px #00f0ff'
                   }}
@@ -187,7 +187,7 @@ const HeroSection = () => {
               );
             })}
           </motion.h1>
-          
+
           <div style={{ fontSize: 'clamp(1rem, 4vw, 2rem)', color: 'var(--text-secondary)', fontWeight: 300, minHeight: '40px', marginTop: '0px' }}>
             <TypeAnimation
               sequence={[
@@ -204,7 +204,7 @@ const HeroSection = () => {
           <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '30px' }}>
             <AnimatePresence mode="wait">
               {!isScrolled && (
-                <motion.div 
+                <motion.div
                   key="static-icons"
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -212,7 +212,7 @@ const HeroSection = () => {
                   style={{ display: 'flex', gap: '40px', justifyContent: 'center', paddingLeft: '10px' }}
                 >
                   {contactLinks.map((link, i) => (
-                    <motion.a 
+                    <motion.a
                       key={i}
                       href={link.url}
                       target="_blank"
@@ -229,7 +229,7 @@ const HeroSection = () => {
             </AnimatePresence>
 
             {/* Static Caption that remains despite scrolling */}
-            <motion.div 
+            <motion.div
               style={{ display: 'flex', alignItems: 'flex-start', gap: '15px', background: 'rgba(255,255,255,0.02)', padding: '20px 30px', borderRadius: '15px', border: '1px solid rgba(0, 240, 255, 0.1)', flexWrap: 'wrap', justifyContent: 'center' }}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -264,7 +264,7 @@ const HeroSection = () => {
               cursor: 'grab'
             }}
           >
-            <div 
+            <div
               onClick={() => setShowFloatingIcons(false)}
               style={{ position: 'absolute', top: '-10px', right: '-10px', background: 'var(--secondary-color)', borderRadius: '50%', padding: '5px', cursor: 'pointer', boxShadow: '0 0 10px rgba(255,0,127,0.5)' }}
             >
@@ -273,11 +273,11 @@ const HeroSection = () => {
 
             {contactLinks.map((link, i) => (
               <a key={i} href={link.url} target="_blank" rel="noreferrer" draggable="false">
-                <motion.img 
-                  src={link.src} 
-                  alt={link.alt} 
+                <motion.img
+                  src={link.src}
+                  alt={link.alt}
                   whileHover={{ scale: 1.2, rotate: 10 }}
-                  style={{ width: '32px', height: '32px', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' }} 
+                  style={{ width: '32px', height: '32px', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' }}
                   draggable="false"
                 />
               </a>

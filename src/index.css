@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'MyCustomFont';
+  src: url('/Arizonia-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --primary-color: #00f0ff;
   --secondary-color: #ff007f;
