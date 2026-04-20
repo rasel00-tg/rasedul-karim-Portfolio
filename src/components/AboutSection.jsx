@@ -3,14 +3,14 @@ import { motion } from 'framer-motion';
 import { Smartphone, Code2, GitBranch, PenTool, Globe, Database, Cpu, Layers } from 'lucide-react';
 
 const skills = [
-  { name: 'Flutter', icon: <Smartphone size={18} color="#00f0ff" /> },
-  { name: 'React.js', icon: <Globe size={18} color="#00f0ff" /> },
-  { name: 'Firebase', icon: <Database size={18} color="#00f0ff" /> },
-  { name: 'Dart', icon: <Code2 size={18} color="#ff007f" /> },
-  { name: 'JavaScript', icon: <Cpu size={18} color="#ff007f" /> },
-  { name: 'Git & GitHub', icon: <GitBranch size={18} color="#00f0ff" /> },
-  { name: 'UI/UX Design', icon: <PenTool size={18} color="#ff007f" /> },
-  { name: 'Full Stack', icon: <Layers size={18} color="#00f0ff" /> }
+  { name: 'Flutter', icon: <Smartphone size={16} color="#00f0ff" /> },
+  { name: 'React.js', icon: <Globe size={16} color="#00f0ff" /> },
+  { name: 'Firebase', icon: <Database size={16} color="#00f0ff" /> },
+  { name: 'Dart', icon: <Code2 size={16} color="#ff007f" /> },
+  { name: 'JS', icon: <Cpu size={16} color="#ff007f" /> },
+  { name: 'Git', icon: <GitBranch size={16} color="#00f0ff" /> },
+  { name: 'UI/UX', icon: <PenTool size={16} color="#ff007f" /> },
+  { name: 'Stack', icon: <Layers size={16} color="#00f0ff" /> }
 ];
 
 const SkillChip = ({ skill, index }) => {
@@ -19,12 +19,9 @@ const SkillChip = ({ skill, index }) => {
       initial={{ opacity: 0, scale: 0.8 }}
       whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
-      transition={{ 
-        delay: index * 0.1, 
-        duration: 0.5 
-      }}
+      transition={{ delay: index * 0.05, duration: 0.3 }}
       animate={{
-        y: [0, -10, 0],
+        y: [0, -6, 0],
       }}
       transition={{
         y: {
@@ -37,24 +34,23 @@ const SkillChip = ({ skill, index }) => {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '12px',
-        padding: '12px 25px',
-        background: 'rgba(255, 255, 255, 0.03)',
+        gap: '8px',
+        padding: '8px 16px',
+        background: 'rgba(255, 255, 255, 0.02)',
         backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(0, 240, 255, 0.2)',
-        borderRadius: '50px',
+        border: '1px solid rgba(0, 240, 255, 0.15)',
+        borderRadius: '30px',
         color: '#fff',
-        fontSize: '1.1rem',
+        fontSize: '0.95rem',
         fontWeight: '500',
         cursor: 'default',
-        boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3), 0 0 10px rgba(0, 240, 255, 0.1)',
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
         whiteSpace: 'nowrap',
         willChange: 'transform'
       }}
       whileHover={{ 
-        scale: 1.1, 
+        scale: 1.05, 
         borderColor: '#00f0ff',
-        boxShadow: '0 0 20px rgba(0, 240, 255, 0.4)',
         background: 'rgba(0, 240, 255, 0.05)'
       }}
     >
@@ -67,38 +63,40 @@ const SkillChip = ({ skill, index }) => {
 const AboutSection = () => {
   return (
     <section id="skills" style={{ 
-      padding: '100px 5%', 
-      minHeight: '80vh', 
+      padding: '80px 20px', 
+      minHeight: '60vh', 
       display: 'flex', 
       flexDirection: 'column', 
       justifyContent: 'center',
       alignItems: 'center',
-      background: 'transparent',
       overflow: 'hidden'
     }}>
       <motion.div
-        initial={{ opacity: 0, y: 50 }}
+        initial={{ opacity: 0, y: 30 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        transition={{ duration: 0.8 }}
-        style={{ width: '100%', maxWidth: '1200px' }}
+        transition={{ duration: 0.6 }}
+        style={{ width: '100%', maxWidth: '1000px' }}
       >
         <h2 style={{ 
-          fontSize: 'clamp(2.5rem, 5vw, 4rem)', 
-          marginBottom: '80px', 
+          fontSize: 'clamp(2rem, 4vw, 3rem)', 
+          marginBottom: '50px', 
           textAlign: 'center',
           color: '#fff',
-          textShadow: '0 0 20px rgba(0, 240, 255, 0.6)'
+          textShadow: '0 0 15px rgba(0,240,255,0.4)'
         }}>
-          My <span style={{ color: '#00f0ff' }}>Skills & Expertise</span>
+          My <span style={{ color: '#00f0ff' }}>Skills</span>
         </h2>
 
+        {/* Organized Wrap Layout for Mobile */}
         <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '20px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+          gap: '12px',
           justifyContent: 'center',
-          alignItems: 'center'
+          alignItems: 'center',
+          maxWidth: '800px',
+          margin: '0 auto'
         }}>
           {skills.map((skill, index) => (
             <SkillChip key={index} skill={skill} index={index} />
