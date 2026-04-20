@@ -20,8 +20,9 @@ const AboutModal = ({ onClose }) => {
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'flex-start',
-          padding: '50px 20px',
-          overflowY: 'auto'
+          padding: '50px 0', // Completely removed horizontal padding
+          overflowY: 'auto',
+          overflowX: 'hidden'
         }}
       >
         <motion.div
