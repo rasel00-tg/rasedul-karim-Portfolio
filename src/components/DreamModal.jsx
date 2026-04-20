@@ -7,16 +7,16 @@ const DreamCard = ({ enTitle, bnTitle, enContent, bnContent, index, containerScr
   const [isExpanded, setIsExpanded] = useState(false);
   const cardRef = useRef(null);
 
-  // Flying away animation logic
-  // Calculate relative position to container scroll
-  const yOffset = useTransform(containerScrollY, [0, 1000], [0, -200 - index * 50]);
-  const opacity = useTransform(containerScrollY, [0, 800], [1, 0.3]);
+  // Flying away animation logic (Corrected range to [0, 1])
+  const yOffset = useTransform(containerScrollY, [0, 1], [0, -200 - index * 50]);
+  const opacity = useTransform(containerScrollY, [0, 0.8], [1, 0.3]);
 
   const currentTitle = isBangla ? bnTitle : enTitle;
-  const currentContent = isBangla ? bnContent : enContent;
+  const currentContent = isBangla ? bnContent || "" : enContent || "";
   
-  // Truncate logic for Read More
-  const truncatedContent = currentContent.split('\n\n')[0].substring(0, 200) + '...';
+  // Truncate logic for Read More - with safety check
+  const paragraphs = currentContent.split('\n\n');
+  const truncatedContent = (paragraphs[0] || "").substring(0, 200) + '...';
 
   return (
     <motion.div 
@@ -77,7 +77,7 @@ const DreamCard = ({ enTitle, bnTitle, enContent, bnContent, index, containerScr
             transition={{ duration: 0.4 }}
           >
             {isExpanded ? (
-              currentContent.split('\n\n').map((p, i) => (
+              paragraphs.map((p, i) => (
                 <p key={i} style={{ marginBottom: '20px' }}>{p}</p>
               ))
             ) : (
@@ -119,6 +119,9 @@ const DreamModal = ({ onClose }) => {
   const { scrollYProgress } = useScroll({
     container: containerRef
   });
+
+  // Correctly call useTransform at the top level of DreamModal
+  const imageY = useTransform(scrollYProgress, [0, 1], [0, -100]);
 
   const dreamData = [
     {
@@ -222,7 +225,7 @@ const DreamModal = ({ onClose }) => {
               justifyContent: 'center',
               alignItems: 'center',
               position: 'relative',
-              y: useTransform(scrollYProgress, [0, 1], [0, -100])
+              y: imageY // Use the correctly initialized motion value
             }}
           >
             <div style={{
