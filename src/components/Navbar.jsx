@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, ChevronUp } from 'lucide-react';
 
-const Navbar = ({ onOpenDream }) => {
+const Navbar = ({ onOpenDream, onOpenAbout }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -63,13 +63,22 @@ const Navbar = ({ onOpenDream }) => {
               padding: 0
             }}>
               {navItems.map((item) => (
-                <li key={item}>
-                  <a 
-                    href={item === 'Dream' ? '#' : `#${item.toLowerCase()}`}
+                <motion.li 
+                  key={item} 
+                  style={{ position: 'relative' }}
+                  whileHover="hover"
+                  initial="rest"
+                  animate="rest"
+                >
+                  <motion.a 
+                    href={(item === 'Dream' || item === 'About') ? '#' : `#${item.toLowerCase()}`}
                     onClick={(e) => {
                       if (item === 'Dream') {
                         e.preventDefault();
                         onOpenDream && onOpenDream();
+                      } else if (item === 'About') {
+                        e.preventDefault();
+                        onOpenAbout && onOpenAbout();
                       }
                     }}
                     style={{
@@ -77,14 +86,35 @@ const Navbar = ({ onOpenDream }) => {
                       textDecoration: 'none',
                       fontSize: '16px',
                       fontWeight: '600',
+                      padding: '5px 0',
+                      display: 'inline-block',
                       transition: 'color 0.3s',
                     }}
-                    onMouseEnter={(e) => e.target.style.color = 'var(--text-primary)'}
-                    onMouseLeave={(e) => e.target.style.color = 'var(--text-secondary)'}
+                    variants={{
+                      rest: { color: 'var(--text-secondary)', textShadow: 'none' },
+                      hover: { color: '#00f0ff', textShadow: '0 0 15px rgba(0,240,255,0.8)' }
+                    }}
                   >
                     {item}
-                  </a>
-                </li>
+                  </motion.a>
+                  
+                  {/* Animated Glowing Underline */}
+                  <motion.div
+                    variants={{
+                      rest: { width: 0, opacity: 0 },
+                      hover: { width: '100%', opacity: 1 }
+                    }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      height: '2px',
+                      background: '#00f0ff',
+                      boxShadow: '0 0 10px #00f0ff, 0 0 20px #00f0ff'
+                    }}
+                  />
+                </motion.li>
               ))}
             </ul>
           </motion.nav>
@@ -193,12 +223,15 @@ const Navbar = ({ onOpenDream }) => {
                   transition={{ delay: 0.1 + i * 0.1 }}
                 >
                   <a 
-                    href={item === 'Dream' ? '#' : `#${item.toLowerCase()}`}
+                    href={(item === 'Dream' || item === 'About') ? '#' : `#${item.toLowerCase()}`}
                     onClick={(e) => {
                       setIsDrawerOpen(false);
                       if (item === 'Dream') {
                         e.preventDefault();
                         onOpenDream && onOpenDream();
+                      } else if (item === 'About') {
+                        e.preventDefault();
+                        onOpenAbout && onOpenAbout();
                       }
                     }}
                     style={{

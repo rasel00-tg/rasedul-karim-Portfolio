@@ -5,14 +5,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TypeAnimation } from 'react-type-animation';
 import { Code2, Smartphone, Terminal, Braces, X, Quote } from 'lucide-react';
 
-const SceneBg = () => {
+const SceneBg = ({ isDreamOpen }) => {
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: -1 }}>
-      <Canvas camera={{ position: [0, 0, 7], fov: 50 }}>
+      {/* 
+        Optimization: 
+        1. dpr={[1, 1.5]} constrains high-density mobile displays from over-rendering.
+        2. frameloop pauses the entire WebGL loop when the Dream modal is open, freeing up RAM/GPU.
+      */}
+      <Canvas 
+        camera={{ position: [0, 0, 7], fov: 50 }} 
+        dpr={[1, 1.5]} 
+        frameloop={isDreamOpen ? 'never' : 'always'}
+      >
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={2} color="#00f0ff" />
         <directionalLight position={[-10, -10, -5]} intensity={2} color="#ff007f" />
-        <Sparkles count={200} scale={12} size={2} speed={0.4} opacity={0.5} color="#00f0ff" />
+        <Sparkles count={150} scale={12} size={2} speed={0.4} opacity={0.5} color="#00f0ff" />
         <Environment preset="city" />
       </Canvas>
     </div>
@@ -28,19 +37,21 @@ const FloatingDomIcon = ({ icon, left, top, delay }) => (
       left, top,
       background: 'var(--glass-bg)',
       backdropFilter: 'blur(8px)',
+      WebkitBackdropFilter: 'blur(8px)',
       border: '1px solid var(--glass-border)',
       padding: '12px',
       borderRadius: '50%',
       color: 'var(--primary-color)',
       boxShadow: '0 0 20px rgba(0, 240, 255, 0.4)',
       zIndex: 2,
+      willChange: 'transform', /* Hardware acceleration hint */
     }}
   >
     {icon}
   </motion.div>
 );
 
-const HeroSection = () => {
+const HeroSection = ({ isDreamOpen }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showFloatingIcons, setShowFloatingIcons] = useState(true);
   const [isBroken, setIsBroken] = useState(false);
@@ -72,14 +83,14 @@ const HeroSection = () => {
   }, [isBroken]);
 
   const contactLinks = [
-    { src: '/Facebook.png', url: 'https://www.facebook.com/share/1CiNH7Gnt6/', alt: 'Facebook' },
-    { src: '/emile.png', url: 'mailto:rasedul.karim.dev@gmail.com', alt: 'Email' },
-    { src: '/whatsapp.png', url: 'https://wa.me/8801871176267', alt: 'WhatsApp' }
+    { src: '/Facebook.png', url: 'https://www.facebook.com/share/1CiNH7Gnt6/', alt: 'Facebook', baseGlow: 'rgba(24, 119, 242, 0.4)', hoverGlow: 'rgba(24, 119, 242, 0.9)' },
+    { src: '/emile.png', url: 'mailto:rasedul.karim.dev@gmail.com', alt: 'Email', baseGlow: 'rgba(255, 255, 255, 0.3)', hoverGlow: 'rgba(234, 67, 53, 0.9)' },
+    { src: '/whatsapp.png', url: 'https://wa.me/8801871176267', alt: 'WhatsApp', baseGlow: 'rgba(37, 211, 102, 0.4)', hoverGlow: 'rgba(37, 211, 102, 0.9)' }
   ];
 
   return (
     <section id="hero" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-      <SceneBg />
+      <SceneBg isDreamOpen={isDreamOpen} />
 
       <div style={{
         display: 'flex',
@@ -119,10 +130,10 @@ const HeroSection = () => {
               repeat: Infinity,
               ease: "linear"
             }}
-            style={{ position: 'relative', width: '280px', height: '280px', borderRadius: '50%', zIndex: 3 }}
+            style={{ position: 'relative', width: '280px', height: '280px', borderRadius: '50%', zIndex: 3, willChange: 'filter' }}
           >
             <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: 'transparent', border: '2px solid rgba(0, 240, 255, 0.2)' }}>
-              <img src="/profile.jpeg" alt="Rasedul Karim" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src="/profile.jpeg" loading="lazy" alt="Rasedul Karim" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           </motion.div>
 
@@ -134,7 +145,7 @@ const HeroSection = () => {
 
         {/* Right Side (Text & Interactive Title) */}
         <motion.div
-          style={{ flex: '1 1 400px', textAlign: 'center', userSelect: 'none' }}
+          style={{ flex: '1 1 400px', textAlign: 'center', userSelect: 'none', willChange: 'transform, opacity' }}
           initial={{ opacity: 0, x: 50 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ type: "spring", bounce: 0.5, duration: 1 }}
@@ -204,27 +215,39 @@ const HeroSection = () => {
           <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '30px' }}>
             <AnimatePresence mode="wait">
               {!isScrolled && (
-                <motion.div
-                  key="static-icons"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, y: -20, scale: 0.8 }}
-                  style={{ display: 'flex', gap: '40px', justifyContent: 'center', paddingLeft: '10px' }}
-                >
-                  {contactLinks.map((link, i) => (
-                    <motion.a
-                      key={i}
-                      href={link.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      animate={{ y: [0, -10, 0] }}
-                      transition={{ duration: 2, repeat: Infinity, delay: i * 0.2 }}
-                      whileHover={{ scale: 1.2 }}
-                    >
-                      <img src={link.src} alt={link.alt} style={{ width: '32px', height: '32px', filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.2))' }} />
-                    </motion.a>
-                  ))}
-                </motion.div>
+                  <motion.div
+                    key="static-icons"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.8 }}
+                    style={{ display: 'flex', gap: '20px', justifyContent: 'center' }} // Closer spacing
+                  >
+                    {contactLinks.map((link, i) => (
+                      <motion.a
+                        key={i}
+                        href={link.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity, delay: i * 0.2 }}
+                        whileHover={{ scale: 1.3 }}
+                        style={{ display: 'flex' }}
+                      >
+                        <motion.img 
+                          src={link.src} 
+                          alt={link.alt}
+                          loading="lazy"
+                          initial={{ filter: `drop-shadow(0 0 10px ${link.baseGlow})` }}
+                          whileHover={{ filter: `drop-shadow(0 0 25px ${link.hoverGlow})` }}
+                          style={{ 
+                            width: '32px', 
+                            height: '32px',
+                            willChange: 'transform, filter' // Optimize performance
+                          }} 
+                        />
+                      </motion.a>
+                    ))}
+                  </motion.div>
               )}
             </AnimatePresence>
 
@@ -262,12 +285,18 @@ const HeroSection = () => {
             </div>
 
             {contactLinks.map((link, i) => (
-              <a key={i} href={link.url} target="_blank" rel="noreferrer" draggable="false">
+              <a key={i} href={link.url} target="_blank" rel="noreferrer" draggable="false" style={{ display: 'flex' }}>
                 <motion.img
                   src={link.src}
                   alt={link.alt}
-                  whileHover={{ scale: 1.2, rotate: 10 }}
-                  style={{ width: '32px', height: '32px', filter: 'drop-shadow(0 0 5px rgba(255,255,255,0.3))' }}
+                  loading="lazy"
+                  initial={{ filter: `drop-shadow(0 0 5px ${link.baseGlow})` }}
+                  whileHover={{ scale: 1.3, rotate: 10, filter: `drop-shadow(0 0 20px ${link.hoverGlow})` }}
+                  style={{ 
+                    width: '32px', 
+                    height: '32px',
+                    willChange: 'transform, filter' // Performance hardware binding
+                  }}
                   draggable="false"
                 />
               </a>

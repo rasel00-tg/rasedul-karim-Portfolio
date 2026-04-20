@@ -65,19 +65,16 @@ const TiltCard = ({ skill }) => {
 
 const AboutSection = () => {
   return (
-    <section id="about" style={{ padding: '100px 10%', minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+    <section id="skills" style={{ padding: '100px 10%', minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
       <motion.div
         initial={{ opacity: 0, y: 50 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-100px" }}
         transition={{ duration: 0.8 }}
       >
-        <h2 style={{ fontSize: '3rem', marginBottom: '20px' }}>
-          <span className="text-gradient">About Me & Skills</span>
+        <h2 style={{ fontSize: '3rem', marginBottom: '60px', textAlign: 'center' }}>
+          <span className="text-gradient">My Skills</span>
         </h2>
-        <p style={{ fontSize: '1.2rem', color: 'var(--text-secondary)', maxWidth: '600px', marginBottom: '60px', lineHeight: 1.6 }}>
-          I am a passionate Flutter and UI/UX Developer. I blend aesthetics with performance, building apps that not only work flawlessly but look breathtaking.
-        </p>
 
         <div style={{
           display: 'grid',

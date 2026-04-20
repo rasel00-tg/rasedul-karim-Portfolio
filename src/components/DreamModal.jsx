@@ -176,6 +176,7 @@ const DreamModal = ({ onClose }) => {
               <img 
                 src="/caption.png" 
                 alt="Vision Highlight" 
+                loading="lazy"
                 style={{ 
                   height: 'auto', 
                   width: '100%', 
@@ -183,7 +184,8 @@ const DreamModal = ({ onClose }) => {
                   objectFit: 'contain', 
                   filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.5)) drop-shadow(0 0 10px rgba(255,255,255,0.1))',
                   position: 'relative',
-                  zIndex: 1
+                  zIndex: 1,
+                  willChange: 'transform'
                 }} 
               />
             </div>
