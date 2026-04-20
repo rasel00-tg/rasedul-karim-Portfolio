@@ -5,6 +5,13 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'LiAdorNoirrit';
+  src: url('/dream-font/Li Ador Noirrit A-V2 Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --primary-color: #00f0ff;
   --secondary-color: #ff007f;

@@ -32,11 +32,19 @@ const DreamCard = ({ enTitle, bnTitle, enContent, bnContent, index, containerScr
         width: '100%',
         maxWidth: '1000px',
         margin: '0 auto',
-        position: 'relative'
+        position: 'relative',
+        fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
-        <h3 style={{ margin: 0, fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: '#fff', textShadow: '0 0 20px rgba(0,240,255,0.6)', letterSpacing: '1px' }}>
+        <h3 style={{ 
+          margin: 0, 
+          fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', 
+          color: '#fff', 
+          textShadow: '0 0 20px rgba(0,240,255,0.6)', 
+          letterSpacing: '1px',
+          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit' 
+        }}>
           {currentTitle}
         </h3>
         
