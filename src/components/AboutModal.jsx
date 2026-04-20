@@ -1,16 +1,16 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Phone, MapPin, GraduationCap, School, CheckCircle2, Rocket, Monitor, Palette, Briefcase } from 'lucide-react';
+import { X, Mail, Phone, MapPin, GraduationCap, School, CheckCircle2, Rocket, Monitor, Palette } from 'lucide-react';
 
 const InfoSection = ({ title, icon: Icon, children }) => (
-  <div style={{ marginBottom: '40px' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
-      <Icon size={28} color="#00f0ff" />
-      <h3 style={{ margin: 0, fontSize: '1.8rem', color: '#fff', textShadow: '0 0 15px rgba(0,240,255,0.4)', letterSpacing: '1px' }}>
+  <div style={{ marginBottom: '50px', width: '100%' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px', marginBottom: '25px' }}>
+      <Icon size={32} color="#00f0ff" />
+      <h3 style={{ margin: 0, fontSize: 'clamp(1.8rem, 4vw, 2.2rem)', color: '#fff', textShadow: '0 0 15px rgba(0,240,255,0.4)', letterSpacing: '1px' }}>
         {title}
       </h3>
     </div>
-    <div style={{ paddingLeft: '45px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', width: '100%' }}>
       {children}
     </div>
   </div>
@@ -28,8 +28,8 @@ const AboutModal = ({ onClose }) => {
           position: 'fixed',
           top: 0, left: 0, width: '100vw', height: '100vh',
           background: 'rgba(5, 0, 15, 0.98)',
-          backdropFilter: 'blur(30px)',
-          WebkitBackdropFilter: 'blur(30px)',
+          backdropFilter: 'blur(40px)',
+          WebkitBackdropFilter: 'blur(40px)',
           zIndex: 9999,
           display: 'flex',
           justifyContent: 'center',
@@ -46,10 +46,12 @@ const AboutModal = ({ onClose }) => {
           transition={{ type: 'spring', damping: 25, stiffness: 150 }}
           style={{
             width: '100%',
-            maxWidth: '1400px',
+            maxWidth: '1200px',
             display: 'flex',
             flexDirection: 'column',
-            position: 'relative'
+            alignItems: 'center',
+            position: 'relative',
+            padding: '80px 20px'
           }}
         >
           {/* Close Button */}
@@ -74,179 +76,131 @@ const AboutModal = ({ onClose }) => {
             <X size={28} />
           </button>
 
-          {/* 1. TOP SECTION: Massive Profile Image */}
-          <div style={{ position: 'relative', width: '100%', textAlign: 'center', paddingBottom: '50px' }}>
-             <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 1 }}
-                style={{ position: 'relative', display: 'inline-block', width: '100%' }}
-             >
-                {/* Neon Ring / Aura behind image */}
-                <div style={{
-                  position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                  width: '90%', height: '90%', borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(0,240,255,0.3) 0%, transparent 70%)',
-                  filter: 'blur(80px)', zIndex: 0
-                }}></div>
-                
-                <img 
-                  src="/aboutpic.png" 
-                  alt="Rasedul Karim" 
-                  style={{ 
-                    width: '100%', maxWidth: '100vw', height: 'auto', 
-                    maxHeight: '90vh', objectFit: 'contain', 
-                    position: 'relative', zIndex: 1, filter: 'drop-shadow(0 0 20px rgba(0,240,255,0.2))'
-                  }} 
-                />
-             </motion.div>
+          {/* 1. Profile Picture - Centered and Large */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1 }}
+            style={{ position: 'relative', width: '100%', maxWidth: '800px', textAlign: 'center', marginBottom: '60px' }}
+          >
+            <div style={{
+              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '80%', height: '80%', borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(0,240,255,0.2) 0%, transparent 70%)',
+              filter: 'blur(60px)', zIndex: 0
+            }}></div>
+            <img 
+              src="/aboutpic.png" 
+              alt="Rasedul Karim" 
+              style={{ 
+                width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain', 
+                position: 'relative', zIndex: 1, filter: 'drop-shadow(0 0 30px rgba(0,240,255,0.15))'
+              }} 
+            />
+          </motion.div>
+
+          {/* 2. Main Identity & Summary - Centered */}
+          <div style={{ textAlign: 'center', width: '100%', maxWidth: '900px', marginBottom: '80px' }}>
+            <h1 style={{ 
+              fontSize: 'clamp(3rem, 12vw, 6.5rem)', color: '#fff', margin: '0 0 10px 0', 
+              fontWeight: '900', letterSpacing: '-2px', lineHeight: 1,
+              textShadow: '0 0 40px rgba(0,240,255,0.5)'
+            }}>
+              RASEDUL KARIM
+            </h1>
+            <h2 style={{ fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', color: '#00f0ff', margin: '0 0 30px 0', fontWeight: '400', letterSpacing: '4px', opacity: 0.9 }}>
+              SOFTWARE AND WEB DEVELOPER & PHOTO EDITOR
+            </h2>
+            <div style={{ width: '120px', height: '4px', background: 'linear-gradient(90deg, transparent, #00f0ff, transparent)', margin: '0 auto 40px auto' }}></div>
+            <p style={{ 
+              color: '#F0F0F0', 
+              fontSize: 'clamp(1.3rem, 4vw, 1.6rem)', 
+              lineHeight: 1.8, 
+              textAlign: 'center',
+              fontWeight: '400',
+              textShadow: '0 2px 10px rgba(0,0,0,0.5)'
+            }}>
+              I am a seasoned Software and Web Developer & Photo Editor with a deep passion for creating clean, efficient code and stunning visuals. My dedication lies in developing robust web solutions and high-quality designs that meet client needs and enhance user experience.
+            </p>
           </div>
 
-          {/* 2. RESUME CONTENT GRID */}
+          {/* 3. Resume Content Grid - Optimized for Mobile (Flex-Wrap & Center) */}
           <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', 
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            justifyContent: 'center', 
             gap: '80px', 
-            padding: '40px 60px 100px 60px',
-            position: 'relative',
-            zIndex: 2
+            width: '100%', 
+            maxWidth: '1200px' 
           }}>
             
-            {/* Left Side: Name, Title, Summary, Education, Courses */}
+            {/* Contact Info Card - Floating & Centered elements */}
             <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-            >
-              {/* Name Section */}
-              <h1 style={{ 
-                fontSize: 'clamp(3rem, 10vw, 6rem)', color: '#fff', margin: '0 0 10px 0', 
-                fontWeight: '900', letterSpacing: '-2px', lineHeight: 0.9,
-                textShadow: '0 0 40px rgba(0,240,255,0.5)'
-              }}>
-                RASEDUL KARIM
-              </h1>
-              <h2 style={{ fontSize: '1.5rem', color: '#00f0ff', margin: '0 0 30px 0', fontWeight: '400', letterSpacing: '2px', opacity: 0.9 }}>
-                SOFTWARE AND WEB DEVELOPER & PHOTO EDITOR
-              </h2>
-              
-              <div style={{ width: '100px', height: '4px', background: '#00f0ff', marginBottom: '30px' }}></div>
-              
-              {/* Career Summary */}
-              <p style={{ color: '#E0E0E0', fontSize: '1.2rem', lineHeight: 1.8, textAlign: 'justify', marginBottom: '60px', textShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>
-                I am a seasoned Software and Web Developer & Photo Editor with a deep passion for creating clean, efficient code and stunning visuals. My dedication lies in developing robust web solutions and high-quality designs that meet client needs and enhance user experience.
-              </p>
-
-              {/* Education Section */}
-              <InfoSection title="Education" icon={GraduationCap}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', color: '#B0B0B0', fontSize: '1.1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <CheckCircle2 size={18} color="#00f0ff" style={{ marginTop: '5px' }} />
-                    <span>Supia Nuria Dhakil Madrasah</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <School size={18} color="#00f0ff" style={{ marginTop: '5px' }} />
-                    <span>Teknaf Model Pailot High School (School)</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <GraduationCap size={18} color="#00f0ff" style={{ marginTop: '5px' }} />
-                    <span>Teknaf Degree College (College)</span>
-                  </div>
-                </div>
-              </InfoSection>
-
-              {/* Courses Section */}
-              <InfoSection title="Courses" icon={Briefcase}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', color: '#B0B0B0', fontSize: '1.1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <Rocket size={18} color="#00f0ff" style={{ marginTop: '5px' }} />
-                    <div>
-                      <span style={{ color: '#fff' }}>Programming Hero Specialized Learning</span>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '0.9rem', color: '#888' }}>from programminghero.com</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <Monitor size={18} color="#00f0ff" style={{ marginTop: '5px' }} />
-                    <div>
-                      <span style={{ color: '#fff' }}>Web Development & Competitive Programming</span>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '0.9rem', color: '#888' }}>from phitron.io</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <Palette size={18} color="#00f0ff" style={{ marginTop: '5px' }} />
-                    <div>
-                      <span style={{ color: '#fff' }}>Photo Editing & Digital Art Mastery</span>
-                      <p style={{ margin: '5px 0 0 0', fontSize: '0.9rem', color: '#888' }}>Self-taught Excellence</p>
-                    </div>
-                  </div>
-                </div>
-              </InfoSection>
-            </motion.div>
-
-            {/* Right Side: Contact Floating Card */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: 0.2 }}
-              style={{ position: 'sticky', top: '100px', height: 'fit-content' }}
+              style={{ width: '100%', maxWidth: '500px' }}
             >
               <div style={{
-                background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.1) 0%, rgba(0, 0, 0, 0) 100%)',
+                background: 'rgba(255, 255, 255, 0.03)',
                 border: '1px solid rgba(0, 240, 255, 0.2)',
                 borderRadius: '30px',
-                padding: '40px',
-                backdropFilter: 'blur(15px)',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                padding: '40px 20px',
+                backdropFilter: 'blur(20px)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '30px'
+                gap: '30px',
+                alignItems: 'center',
+                textAlign: 'center'
               }}>
-                <h3 style={{ margin: 0, color: '#00f0ff', fontSize: '1.5rem', fontWeight: 'bold', letterSpacing: '1px' }}>
-                  Contact Information
-                </h3>
+                <h3 style={{ margin: 0, color: '#00f0ff', fontSize: '1.8rem', fontWeight: 'bold' }}>Contact Info</h3>
                 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '12px', borderRadius: '15px' }}>
-                    <Mail size={24} color="#00f0ff" />
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>Email</p>
-                    <p style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>rasedul.karim.dev@gmail.com</p>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+                  <Mail color="#00f0ff" size={24} style={{ marginBottom: '5px' }} />
+                  <span style={{ color: '#fff', fontSize: '1.2rem' }}>rasedul.karim.dev@gmail.com</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '12px', borderRadius: '15px' }}>
-                    <Phone size={24} color="#00f0ff" />
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>Phone</p>
-                    <p style={{ margin: 0, color: '#fff', fontSize: '1rem' }}>+8801871176267</p>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+                  <Phone color="#00f0ff" size={24} style={{ marginBottom: '5px' }} />
+                  <span style={{ color: '#fff', fontSize: '1.2rem' }}>+8801871176267</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <div style={{ background: 'rgba(0, 240, 255, 0.1)', padding: '12px', borderRadius: '15px' }}>
-                    <MapPin size={24} color="#00f0ff" />
-                  </div>
-                  <div>
-                    <p style={{ margin: 0, color: '#888', fontSize: '0.9rem' }}>Address</p>
-                    <p style={{ margin: 0, color: '#fff', fontSize: '1rem', lineHeight: '1.4' }}>
-                      Natun Pollan Para, Teknaf, Cox's Bazar-4760
-                    </p>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px' }}>
+                  <MapPin color="#00f0ff" size={24} style={{ marginBottom: '5px' }} />
+                  <span style={{ color: '#fff', fontSize: '1.1rem', maxWidth: '300px' }}>
+                    Natun Pollan Para, Teknaf, Cox's Bazar-4760
+                  </span>
                 </div>
-                
-                {/* Aesthetic decorative element */}
-                <div style={{ 
-                  marginTop: '20px', width: '100%', height: '100px', 
-                  background: 'url(/profile.jpeg)', backgroundSize: 'cover', backgroundPosition: 'center',
-                  borderRadius: '20px', opacity: 0.3, filter: 'grayscale(1) brightness(0.5)'
-                }}></div>
               </div>
             </motion.div>
+
+            {/* Education & Courses Section - Centered Lists */}
+            <div style={{ width: '100%', maxWidth: '600px' }}>
+              <InfoSection title="Education" icon={GraduationCap}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
+                  <li style={{ color: '#E0E0E0', fontSize: '1.2rem', textAlign: 'center' }}>- Supia Nuria Dhakil Madrasah</li>
+                  <li style={{ color: '#E0E0E0', fontSize: '1.2rem', textAlign: 'center' }}>- Teknaf Model Pailot High School (School)</li>
+                  <li style={{ color: '#E0E0E0', fontSize: '1.2rem', textAlign: 'center' }}>- Teknaf Degree College (College)</li>
+                </ul>
+              </InfoSection>
+
+              <InfoSection title="Courses" icon={Monitor}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '25px' }}>
+                  <li style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>Programming Hero Specialized Learning</div>
+                    <div style={{ color: '#888', fontSize: '0.9rem' }}>programminghero.com</div>
+                  </li>
+                  <li style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>Web Development & Competitive Programming</div>
+                    <div style={{ color: '#888', fontSize: '0.9rem' }}>phitron.io</div>
+                  </li>
+                  <li style={{ textAlign: 'center' }}>
+                    <div style={{ color: '#fff', fontSize: '1.2rem', fontWeight: 'bold' }}>Photo Editing & Digital Art Mastery</div>
+                    <div style={{ color: '#888', fontSize: '0.9rem' }}>Self-taught Expertise</div>
+                  </li>
+                </ul>
+              </InfoSection>
+            </div>
 
           </div>
         </motion.div>
