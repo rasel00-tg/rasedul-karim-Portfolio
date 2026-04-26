@@ -43,7 +43,7 @@ const DreamCard = ({ enTitle, bnTitle, enContent, bnContent, index, containerScr
           color: '#fff', 
           textShadow: '0 0 20px rgba(0,240,255,0.6)', 
           letterSpacing: '1px',
-          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit' 
+          fontFamily: isBangla ? 'LiAdorNoirrit' : 'inherit' 
         }}>
           {currentTitle}
         </h3>
@@ -86,10 +86,10 @@ const DreamCard = ({ enTitle, bnTitle, enContent, bnContent, index, containerScr
           >
             {isExpanded ? (
               paragraphs.map((p, i) => (
-                <p key={i} style={{ marginBottom: '20px' }}>{p}</p>
+                <p key={i} style={{ marginBottom: '20px', fontFamily: isBangla ? 'LiAdorNoirrit' : 'inherit' }}>{p}</p>
               ))
             ) : (
-              <p>{truncatedContent}</p>
+              <p style={{ fontFamily: isBangla ? 'LiAdorNoirrit' : 'inherit' }}>{truncatedContent}</p>
             )}
           </motion.div>
         </AnimatePresence>
