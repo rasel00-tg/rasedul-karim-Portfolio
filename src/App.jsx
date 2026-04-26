@@ -1,6 +1,7 @@
 import React, { useState, Suspense, lazy } from 'react';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
+import NoticeSlider from './components/NoticeSlider';
 import AboutSection from './components/AboutSection';
 import ProjectsSection from './components/ProjectsSection';
 import ContactSection from './components/ContactSection';
@@ -26,6 +27,7 @@ function App() {
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Pass down to pause WebGL rendering when any modal is open */}
         <HeroSection isDreamOpen={showDream || showAbout} />
+        <NoticeSlider />
         <AboutSection />
         <ProjectsSection />
         <ContactSection />
