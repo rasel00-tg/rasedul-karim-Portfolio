@@ -15,11 +15,50 @@
 :root {
   --primary-color: #00f0ff;
   --secondary-color: #ff007f;
-  --bg-gradient: linear-gradient(135deg, #0b001a, #001026, #14002e);
-  --glass-bg: rgba(255, 255, 255, 0.03);
+  --accent-cyan: #00f0ff;
+  --accent-pink: #ff007f;
+  --accent-blue: #00b4d8;
+  --accent-green: #00C853;
+  --bg-primary: #0D1117;
+  --bg-gradient: linear-gradient(145deg, #0d1117 0%, #161b22 45%, #0f172a 100%);
+  --card-bg: rgba(22, 27, 34, 0.94);
+  --card-border: rgba(0, 240, 255, 0.28);
+  --card-shadow: 0 15px 40px rgba(0, 0, 0, 0.45), 0 0 20px rgba(0, 240, 255, 0.12);
+  --glass-bg: rgba(30, 41, 59, 0.75);
   --glass-border: rgba(255, 255, 255, 0.1);
   --text-primary: #ffffff;
-  --text-secondary: #b3b3b3;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --nav-bg: rgba(13, 17, 23, 0.85);
+  --capsule-bg: rgba(22, 27, 34, 0.92);
+  --capsule-border: rgba(0, 240, 255, 0.28);
+  --input-bg: rgba(22, 27, 34, 0.95);
+  --input-border: rgba(0, 240, 255, 0.25);
+  --chip-bg: rgba(30, 41, 59, 0.8);
+}
+
+[data-theme="light"] {
+  --primary-color: #0077b6;
+  --secondary-color: #d90429;
+  --accent-cyan: #0077b6;
+  --accent-pink: #d90429;
+  --accent-blue: #0284c7;
+  --bg-primary: #f8fafc;
+  --bg-gradient: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #f8fafc 100%);
+  --card-bg: rgba(255, 255, 255, 0.95);
+  --card-border: rgba(0, 119, 182, 0.35);
+  --card-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), 0 0 20px rgba(0, 119, 182, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 119, 182, 0.2);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --nav-bg: rgba(255, 255, 255, 0.9);
+  --capsule-bg: rgba(255, 255, 255, 0.9);
+  --capsule-border: rgba(0, 119, 182, 0.3);
+  --input-bg: #ffffff;
+  --input-border: rgba(0, 119, 182, 0.3);
+  --chip-bg: rgba(255, 255, 255, 0.85);
 }
 
 * {
@@ -27,15 +66,16 @@
   padding: 0;
   box-sizing: border-box;
   scroll-behavior: smooth;
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
 }
 
 body {
   font-family: 'Outfit', sans-serif;
   background: var(--bg-gradient);
-  background-size: 400% 400%;
-  animation: gradientBG 15s ease infinite;
+  background-attachment: fixed;
   color: var(--text-primary);
   overflow-x: hidden;
+  min-height: 100vh;
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -1,248 +1,400 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExternalLink, Smartphone, Globe, Layers } from 'lucide-react';
+import { usePortfolioStream } from '../firebase/usePortfolioStream';
+import { getOptimizedImageUrl } from '../services/cloudinaryService';
 
-// Pre-define automated image loading configuration
-// Max items sets how many files the system should check for. E.g., app1.png up to app10.png
-const MAX_APP_ITEMS = 10;
-const MAX_WEB_ITEMS = 10;
+const fallbackApps = [
+  {
+    id: 'app-1',
+    title: 'FifaLive Score App',
+    domain: 'fifalive.click',
+    icon: '/app1.png',
+    link: 'https://fifalive.click',
+    tag: 'Sports App',
+    category: 'apps',
+    displayOrder: 1
+  },
+  {
+    id: 'app-2',
+    title: 'Media Pro Studio',
+    domain: 'mediapro.app',
+    icon: '/app2.png',
+    link: 'https://github.com/rasel00-tg',
+    tag: 'Photo Editor',
+    category: 'apps',
+    displayOrder: 2
+  },
+  {
+    id: 'app-3',
+    title: 'Community Chat',
+    domain: 'connect.community',
+    icon: '/app3.png',
+    link: 'https://t.me/rasedulkarim',
+    tag: 'Social Platform',
+    category: 'apps',
+    displayOrder: 3
+  },
+  {
+    id: 'app-4',
+    title: 'Fast Tools Pro',
+    domain: 'tools.rasedulkarim.dev',
+    icon: '/app4.png',
+    link: 'https://github.com/rasel00-tg',
+    tag: 'Utility Tool',
+    category: 'apps',
+    displayOrder: 4
+  }
+];
 
-// Helper to construct arrays from 1 to N
-const appIndices = Array.from({ length: MAX_APP_ITEMS }, (_, i) => i + 1);
-const webIndices = Array.from({ length: MAX_WEB_ITEMS }, (_, i) => i + 1);
+const fallbackWeb = [
+  {
+    id: 'web-1',
+    title: 'Personal Portfolio 3D',
+    domain: 'rasedulkarim.dev',
+    icon: '/app1.png',
+    link: 'https://rasedulkarim.dev',
+    tag: 'React 3D & Vite',
+    category: 'web',
+    displayOrder: 1
+  },
+  {
+    id: 'web-2',
+    title: 'FIFA Live Streaming Portal',
+    domain: 'fifalive.click',
+    icon: '/app2.png',
+    link: 'https://fifalive.click',
+    tag: 'Live Web App',
+    category: 'web',
+    displayOrder: 2
+  },
+  {
+    id: 'web-3',
+    title: 'Creative Art & Photo Showcase',
+    domain: 'art.rasedul.click',
+    icon: '/caption.png',
+    link: 'https://instagram.com/rasedul.karim.dev',
+    tag: 'Visual Showcase',
+    category: 'web',
+    displayOrder: 3
+  },
+  {
+    id: 'web-4',
+    title: 'Modern E-Commerce Hub',
+    domain: 'shop-next.click',
+    icon: '/app1.png',
+    link: 'https://github.com/rasel00-tg',
+    tag: 'Fullstack Web',
+    category: 'web',
+    displayOrder: 4
+  }
+];
 
-// App Item component - specifically styled as a Smartphone App Icon
-const AppProjectCard = ({ index }) => {
-  const [hasError, setHasError] = useState(false);
-  const imageSrc = `/app${index}.png`;
+const ProjectCard = ({ project, type }) => {
+  const [imgError, setImgError] = useState(false);
 
-  if (hasError) return null; // Hide automatically if image doesn't exist
+  // Determine image source: Cloudinary optimized URL or local fallback
+  const rawImageSrc = project.thumbnail?.imageUrl || project.icon || (type === 'apps' ? '/app1.png' : '/app2.png');
+  const imageSrc = getOptimizedImageUrl(rawImageSrc);
+  const projectLink = project.liveUrl || project.link || '#';
+  const displayTag = project.tag || (Array.isArray(project.technologies) ? project.technologies[0] : 'Project');
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.4, delay: index * 0.05 }}
-      whileHover={{ y: -10, scale: 1.05 }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '15px',
-        cursor: 'pointer'
-      }}
-    >
-      <div style={{
-        width: '120px',
-        height: '120px',
-        borderRadius: '30px', // Squircle iOS style
-        background: 'rgba(255, 255, 255, 0.05)',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        boxShadow: '0 15px 35px rgba(0,0,0,0.4), inset 0 2px 5px rgba(255,255,255,0.2)',
-        overflow: 'hidden',
-        position: 'relative',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        transition: 'all 0.3s ease'
-      }}>
-        {/* Glow behind icon */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: '60%', height: '60%', borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(0,240,255,0.4) 0%, transparent 70%)',
-          filter: 'blur(20px)', zIndex: 0
-        }}></div>
-
-        <img 
-          src={imageSrc} 
-          alt={`App Project ${index}`} 
-          onError={() => setHasError(true)}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            position: 'relative',
-            zIndex: 1,
-            borderRadius: 'inherit' // Ensures image rounds perfectly inside the squircle
-          }}
-        />
-      </div>
-      <h4 style={{ color: '#fff', fontSize: '1rem', letterSpacing: '0.5px', textShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>App {index}</h4>
-    </motion.div>
-  );
-};
-
-// Website Item component - rectangular glass cards with URL link placeholders
-const WebProjectCard = ({ index }) => {
-  const [hasError, setHasError] = useState(false);
-  const imageSrc = `/web${index}.png`;
-  // Customizable default links. If you need dynamic links, these would come from a JSON file, 
-  // but keeping it simple based on the prompt's request.
-  const projectLink = `https://your-website-url-${index}.com`; // Replace with actual links if needed
-
-  if (hasError) return null; // Hide automatically if image doesn't exist
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ duration: 0.5, delay: index * 0.1 }}
-      whileHover={{ y: -8, boxShadow: '0 20px 40px rgba(0,240,255,0.2)' }}
-      className="glass-card"
+      transition={{ duration: 0.4 }}
+      whileHover={{ y: -4, scale: 1.015 }}
       style={{
-        position: 'relative',
-        width: '100%',
-        height: '250px',
-        overflow: 'hidden',
-        borderRadius: '20px',
+        background: 'var(--card-bg)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid var(--card-border)',
+        borderRadius: '16px',
+        padding: '16px 18px',
         display: 'flex',
-        flexDirection: 'column',
-        textDecoration: 'none'
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '14px',
+        boxShadow: 'var(--card-shadow)',
+        position: 'relative',
+        overflow: 'hidden',
+        willChange: 'transform' // RepaintBoundary GPU acceleration
       }}
     >
-      <a href={projectLink} target="_blank" rel="noopener noreferrer" style={{ width: '100%', height: '100%', display: 'block' }}>
-        <img 
-          src={imageSrc}
-          alt={`Web Project ${index}`}
-          onError={() => setHasError(true)}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            transition: 'transform 0.5s ease',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        />
-        
-        {/* Hover Overlay with Link Icon */}
+      {/* Accent side indicator */}
+      <div style={{
+        position: 'absolute',
+        left: 0,
+        top: '20%',
+        height: '60%',
+        width: '3px',
+        background: type === 'apps' ? 'var(--primary-color)' : 'var(--accent-pink)',
+        borderRadius: '0 4px 4px 0',
+        boxShadow: `0 0 10px ${type === 'apps' ? 'var(--primary-color)' : 'var(--accent-pink)'}`
+      }} />
+
+      {/* Left Icon + Text */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
         <div style={{
-          position: 'absolute',
-          bottom: 0, left: 0, width: '100%', padding: '20px',
-          background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%)',
+          width: '48px',
+          height: '48px',
+          borderRadius: type === 'apps' ? '12px' : '10px',
+          background: 'var(--glass-bg)',
+          border: '1px solid var(--card-border)',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-end',
-          pointerEvents: 'none' // Let clicks pass through to to 'a' tag
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          flexShrink: 0
         }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>Website {index}</h3>
-            <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem', color: '#00f0ff' }}>View Live Site</p>
+          {!imgError ? (
+            <img 
+              src={imageSrc} 
+              alt={project.title}
+              onError={() => setImgError(true)}
+              loading="lazy"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            type === 'apps' ? <Smartphone size={22} color="var(--primary-color)" /> : <Globe size={22} color="var(--accent-pink)" />
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '0.98rem',
+              color: 'var(--text-primary)',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {project.title}
+            </h3>
           </div>
-          <div style={{ 
-            background: 'rgba(0, 240, 255, 0.2)', padding: '10px', borderRadius: '50%',
-            display: 'flex', justifyContent: 'center', alignItems: 'center'
-          }}>
-            <ExternalLink size={18} color="#00f0ff" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+            <span style={{
+              fontSize: '0.8rem',
+              color: type === 'apps' ? 'var(--primary-color)' : 'var(--accent-pink)',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {project.domain || (type === 'apps' ? 'App Project' : 'Website')}
+            </span>
+            <span style={{
+              fontSize: '0.7rem',
+              color: 'var(--text-muted)',
+              background: 'var(--glass-bg)',
+              padding: '2px 8px',
+              borderRadius: '10px',
+              border: '1px solid var(--card-border)'
+            }}>
+              {displayTag}
+            </span>
           </div>
         </div>
-      </a>
+      </div>
+
+      {/* Right Redirection Button */}
+      <motion.a
+        href={projectLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.95 }}
+        style={{
+          width: '38px',
+          height: '38px',
+          borderRadius: '50%',
+          background: type === 'apps' ? 'rgba(0, 240, 255, 0.12)' : 'rgba(255, 0, 127, 0.12)',
+          border: `1px solid ${type === 'apps' ? 'var(--primary-color)' : 'var(--accent-pink)'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: type === 'apps' ? 'var(--primary-color)' : 'var(--accent-pink)',
+          textDecoration: 'none',
+          flexShrink: 0,
+          cursor: 'pointer',
+          boxShadow: `0 0 12px ${type === 'apps' ? 'rgba(0, 240, 255, 0.2)' : 'rgba(255, 0, 127, 0.2)'}`
+        }}
+        title="Open Project"
+      >
+        <ExternalLink size={17} />
+      </motion.a>
     </motion.div>
   );
 };
 
 const ProjectsSection = () => {
   const [activeTab, setActiveTab] = useState('apps'); // 'apps' or 'web'
+  const { items: streamProjects } = usePortfolioStream();
+
+  // Filter and sort stream projects, fallback to default lists if stream is empty
+  const dbApps = (streamProjects || [])
+    .filter(p => p.category === 'apps' || !p.category)
+    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+  const dbWeb = (streamProjects || [])
+    .filter(p => p.category === 'web')
+    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+  const activeAppsList = dbApps.length > 0 ? dbApps : fallbackApps;
+  const activeWebList = dbWeb.length > 0 ? dbWeb : fallbackWeb;
 
   return (
-    <section id="projects" style={{ padding: '100px 5%', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <section 
+      id="projects" 
+      style={{ 
+        padding: '50px 5% 60px 5%', 
+        minHeight: '80vh', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center',
+        position: 'relative',
+        zIndex: 2
+      }}
+    >
       <motion.div
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        style={{ width: '100%', maxWidth: '1200px' }}
+        style={{ width: '100%', maxWidth: '1000px' }}
       >
-        <h2 style={{ fontSize: 'clamp(2.5rem, 5vw, 3.5rem)', marginBottom: '50px', textAlign: 'center', color: '#fff', textShadow: '0 0 20px rgba(0,240,255,0.4)' }}>
-          Future <span style={{ color: '#00f0ff' }}>Projects</span>
-        </h2>
+        {/* Section Title */}
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 16px',
+            borderRadius: '30px',
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--card-border)',
+            color: 'var(--primary-color)',
+            fontSize: '0.85rem',
+            fontWeight: '600',
+            letterSpacing: '1px',
+            marginBottom: '12px',
+            textTransform: 'uppercase'
+          }}>
+            <Layers size={16} /> Portfolio Highlights
+          </div>
+
+          <h2 style={{ 
+            fontSize: 'clamp(1.8rem, 4.5vw, 2.6rem)', 
+            color: 'var(--text-primary)', 
+            margin: 0,
+            fontWeight: 800,
+            letterSpacing: '1.5px'
+          }}>
+            WEB APPS & <span style={{ color: 'var(--primary-color)' }}>PROJECTS</span>
+          </h2>
+          <p style={{
+            color: 'var(--text-secondary)',
+            fontSize: 'clamp(0.88rem, 2vw, 1rem)',
+            marginTop: '8px'
+          }}>
+            Selected mobile applications and live production websites.
+          </p>
+        </div>
         
         {/* Category Tabs */}
         <div style={{ 
-          display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '60px',
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: '16px', 
+          marginBottom: '30px',
           flexWrap: 'wrap'
         }}>
           <button 
             onClick={() => setActiveTab('apps')}
             style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '12px 30px',
-              borderRadius: '50px',
-              border: activeTab === 'apps' ? '1px solid #00f0ff' : '1px solid rgba(255,255,255,0.1)',
-              background: activeTab === 'apps' ? 'rgba(0, 240, 255, 0.1)' : 'rgba(255,255,255,0.05)',
-              color: activeTab === 'apps' ? '#00f0ff' : '#fff',
-              fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              padding: '10px 24px',
+              borderRadius: '30px',
+              border: activeTab === 'apps' ? '1px solid var(--primary-color)' : '1px solid var(--card-border)',
+              background: activeTab === 'apps' ? 'rgba(0, 240, 255, 0.15)' : 'var(--glass-bg)',
+              color: activeTab === 'apps' ? 'var(--primary-color)' : 'var(--text-secondary)',
+              fontSize: '0.92rem', 
+              fontWeight: 700, 
+              cursor: 'pointer',
               transition: 'all 0.3s ease',
               boxShadow: activeTab === 'apps' ? '0 0 20px rgba(0,240,255,0.2)' : 'none',
               backdropFilter: 'blur(10px)'
             }}
           >
-            <Smartphone size={20} /> Apps
+            <Smartphone size={18} /> Apps
           </button>
 
           <button 
             onClick={() => setActiveTab('web')}
             style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '12px 30px',
-              borderRadius: '50px',
-              border: activeTab === 'web' ? '1px solid #ff007f' : '1px solid rgba(255,255,255,0.1)',
-              background: activeTab === 'web' ? 'rgba(255, 0, 127, 0.1)' : 'rgba(255,255,255,0.05)',
-              color: activeTab === 'web' ? '#ff007f' : '#fff',
-              fontSize: '1.1rem', fontWeight: 'bold', cursor: 'pointer',
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              padding: '10px 24px',
+              borderRadius: '30px',
+              border: activeTab === 'web' ? '1px solid var(--accent-pink)' : '1px solid var(--card-border)',
+              background: activeTab === 'web' ? 'rgba(255, 0, 127, 0.15)' : 'var(--glass-bg)',
+              color: activeTab === 'web' ? 'var(--accent-pink)' : 'var(--text-secondary)',
+              fontSize: '0.92rem', 
+              fontWeight: 700, 
+              cursor: 'pointer',
               transition: 'all 0.3s ease',
               boxShadow: activeTab === 'web' ? '0 0 20px rgba(255,0,127,0.2)' : 'none',
               backdropFilter: 'blur(10px)'
             }}
           >
-            <Globe size={20} /> Websites
+            <Globe size={18} /> Websites
           </button>
         </div>
 
-        {/* Dynamic Project Grids */}
+        {/* Dynamic Project List from Firestore Stream with Cloudinary f_auto,q_auto */}
         <AnimatePresence mode="wait">
           {activeTab === 'apps' && (
             <motion.div
-              key="apps-grid"
-              initial={{ opacity: 0, x: -20 }}
+              key="apps-list"
+              initial={{ opacity: 0, x: -15 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
+              exit={{ opacity: 0, x: 15 }}
               transition={{ duration: 0.3 }}
               style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                gap: '40px',
-                padding: '20px'
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: '16px',
+                width: '100%'
               }}
             >
-              {/* Fallback info when no apps are loaded yet */}
-              {appIndices.map(index => (
-                <AppProjectCard key={`app-${index}`} index={index} />
+              {activeAppsList.map(item => (
+                <ProjectCard key={item.id} project={item} type="apps" />
               ))}
-              
             </motion.div>
           )}
 
           {activeTab === 'web' && (
             <motion.div
-              key="web-grid"
-              initial={{ opacity: 0, x: 20 }}
+              key="web-list"
+              initial={{ opacity: 0, x: 15 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
+              exit={{ opacity: 0, x: -15 }}
               transition={{ duration: 0.3 }}
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '30px',
-                width: '100%',
-                padding: '20px 0'
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: '16px',
+                width: '100%'
               }}
             >
-              {webIndices.map(index => (
-                <WebProjectCard key={`web-${index}`} index={index} />
+              {activeWebList.map(item => (
+                <ProjectCard key={item.id} project={item} type="web" />
               ))}
             </motion.div>
           )}
