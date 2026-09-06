@@ -1,7 +1,9 @@
 import { initFirebase } from '../firebase/config';
 
-const SUBSCRIBER_CACHE_KEY = 'cached_subscriber_count';
+const CACHED_INCREMENT_KEY = 'cached_subscriber_increment';
 export const SUBSCRIBER_BASELINE = 10340; // 10.34K baseline
+const LAUNCH_DATE_MS = new Date('2026-09-01T00:00:00Z').getTime();
+const DAILY_SUBSCRIBER_RATE = 5; // +5 subscribers per day
 
 // Clear any stale local duplicate keys from previous versions
 try {
@@ -9,10 +11,19 @@ try {
 } catch (_) {}
 
 /**
+ * Calculate dynamic subscriber baseline with automated 5 subscribers/day growth
+ */
+export const getDynamicSubscriberBaseline = () => {
+  const elapsedDays = Math.max(0, Math.floor((Date.now() - LAUNCH_DATE_MS) / (1000 * 60 * 60 * 24)));
+  return SUBSCRIBER_BASELINE + (elapsedDays * DAILY_SUBSCRIBER_RATE);
+};
+
+/**
  * Format subscriber numbers to clean K format (e.g. 10340 -> "10.34K")
  */
 export const formatSubscriberCount = (count) => {
-  const num = Math.max(SUBSCRIBER_BASELINE, Number(count) || SUBSCRIBER_BASELINE);
+  const dynamicBase = getDynamicSubscriberBaseline();
+  const num = Math.max(dynamicBase, Number(count) || dynamicBase);
   if (num >= 1000) {
     const kVal = (num / 1000).toFixed(2);
     return `${kVal.replace(/\.?0+$/, '')}K`;
@@ -74,12 +85,6 @@ export const subscribeEmail = async (rawEmail) => {
       console.warn('Analytics counter increment note:', countErr);
     }
 
-    // Update local subscriber cache for instant counter response
-    try {
-      const prevCount = Number(localStorage.getItem(SUBSCRIBER_CACHE_KEY)) || SUBSCRIBER_BASELINE;
-      localStorage.setItem(SUBSCRIBER_CACHE_KEY, String(prevCount + 1));
-    } catch (_) {}
-
     return {
       success: true,
       message: 'Thank you! You have successfully subscribed to all future updates.'
@@ -100,12 +105,8 @@ export const subscribeEmail = async (rawEmail) => {
  * Real-time listener for subscriber count using Firestore onSnapshot
  */
 export const listenSubscriberCount = (onCountUpdate) => {
-  const cachedCount = localStorage.getItem(SUBSCRIBER_CACHE_KEY);
-  if (cachedCount && Number(cachedCount) >= SUBSCRIBER_BASELINE) {
-    onCountUpdate(Number(cachedCount));
-  } else {
-    onCountUpdate(SUBSCRIBER_BASELINE);
-  }
+  const cachedIncrement = Number(localStorage.getItem(CACHED_INCREMENT_KEY)) || 0;
+  onCountUpdate(getDynamicSubscriberBaseline() + cachedIncrement);
 
   let unsubscribe = () => {};
 
@@ -122,10 +123,12 @@ export const listenSubscriberCount = (onCountUpdate) => {
           (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              const additionalCount = Number(data?.count) || 0;
-              const totalCount = SUBSCRIBER_BASELINE + additionalCount;
-              localStorage.setItem(SUBSCRIBER_CACHE_KEY, String(totalCount));
+              const rawIncrement = Number(data?.count) || 0;
+              localStorage.setItem(CACHED_INCREMENT_KEY, String(rawIncrement));
+              const totalCount = getDynamicSubscriberBaseline() + rawIncrement;
               onCountUpdate(totalCount);
+            } else {
+              onCountUpdate(getDynamicSubscriberBaseline());
             }
           },
           (error) => {
@@ -135,6 +138,7 @@ export const listenSubscriberCount = (onCountUpdate) => {
       }
     } catch (err) {
       console.warn('Subscriber count listener init notice:', err);
+      onCountUpdate(getDynamicSubscriberBaseline());
     }
   };
 

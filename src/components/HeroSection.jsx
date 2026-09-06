@@ -23,7 +23,7 @@ import {
   Sparkles as SparkleIcon 
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { recordUniqueVisit, listenVisitorCount } from '../services/visitorService';
+import { recordUniqueVisit, listenVisitorCount, formatVisitorCount } from '../services/visitorService';
 import { listenSubscriberCount, formatSubscriberCount, subscribeEmail } from '../services/subscriptionService';
 
 const SceneBg = ({ isDreamOpen }) => {
@@ -138,7 +138,7 @@ const MatrixCodeRain = ({ isDark }) => {
 
 const HeroSection = ({ isDreamOpen }) => {
   const { isDark } = useTheme();
-  const [visitorCount, setVisitorCount] = useState(1477);
+  const [visitorCount, setVisitorCount] = useState(123300);
   const [subscriberCount, setSubscriberCount] = useState(10340);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
   const [subEmailInput, setSubEmailInput] = useState('');
@@ -149,7 +149,7 @@ const HeroSection = ({ isDreamOpen }) => {
   const [hasAgreedPolicy, setHasAgreedPolicy] = useState(false);
   const [policyLanguage, setPolicyLanguage] = useState('en');
 
-  // Initialize unique visit tracking & live listeners (Visitors 1,477 baseline, Subscribers 10.34K baseline)
+  // Initialize unique visit tracking & live listeners (Visitors 123.3K baseline, Subscribers 10.34K baseline)
   useEffect(() => {
     recordUniqueVisit();
     const unsubVisitor = listenVisitorCount((count) => {
@@ -184,67 +184,73 @@ const HeroSection = ({ isDreamOpen }) => {
       id: 'facebook',
       name: 'Facebook',
       url: 'https://www.facebook.com/share/1CiNH7Gnt6/',
+      borderColor: '#1877F2',
+      glow: '0 0 12px rgba(24, 119, 242, 0.75), inset 0 0 8px rgba(24, 119, 242, 0.3)',
       icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877F2">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="#1877F2">
           <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
         </svg>
-      ),
-      glow: 'rgba(24, 119, 242, 0.45)'
+      )
     },
     {
       id: 'whatsapp',
       name: 'WhatsApp',
       url: 'https://wa.me/8801871176267',
+      borderColor: '#25D366',
+      glow: '0 0 12px rgba(37, 211, 102, 0.75), inset 0 0 8px rgba(37, 211, 102, 0.3)',
       icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="#25D366">
           <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
         </svg>
-      ),
-      glow: 'rgba(37, 211, 102, 0.45)'
+      )
     },
     {
       id: 'telegram',
       name: 'Telegram',
       url: 'https://t.me/rasedulkarim',
+      borderColor: '#229ED9',
+      glow: '0 0 12px rgba(34, 158, 217, 0.75), inset 0 0 8px rgba(34, 158, 217, 0.3)',
       icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#229ED9">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="#229ED9">
           <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.34-.635.34l.213-3.053 5.56-5.023c.24-.213-.054-.334-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.458c.538-.196 1.006.128.832.894z"/>
         </svg>
-      ),
-      glow: 'rgba(34, 158, 217, 0.45)'
+      )
     },
     {
       id: 'youtube',
       name: 'YouTube',
       url: 'https://youtube.com/@its.rasel.bro143?feature=shared',
+      borderColor: '#FF0000',
+      glow: '0 0 12px rgba(255, 0, 0, 0.75), inset 0 0 8px rgba(255, 0, 0, 0.3)',
       icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#FF0000">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="#FF0000">
           <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
         </svg>
-      ),
-      glow: 'rgba(255, 0, 0, 0.45)'
+      )
     },
     {
       id: 'instagram',
       name: 'Instagram',
       url: 'https://www.instagram.com/rasedulkarim.00?stkn=MWZ3ZHZiYm15dW12cA==',
+      borderColor: '#E4405F',
+      glow: '0 0 12px rgba(228, 64, 95, 0.75), inset 0 0 8px rgba(228, 64, 95, 0.3)',
       icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="#E1306C">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="#E4405F">
           <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
         </svg>
-      ),
-      glow: 'rgba(225, 48, 108, 0.45)'
+      )
     },
     {
       id: 'twitter',
       name: 'Twitter (X)',
       url: 'https://x.com/rasedulkarim0',
+      borderColor: '#F8FAFC',
+      glow: '0 0 12px rgba(248, 250, 252, 0.65), inset 0 0 8px rgba(248, 250, 252, 0.25)',
       icon: (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill={isDark ? '#FFFFFF' : '#000000'}>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill={isDark ? '#FFFFFF' : '#000000'}>
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
         </svg>
-      ),
-      glow: 'rgba(255, 255, 255, 0.4)'
+      )
     }
   ];
 
@@ -378,13 +384,13 @@ const HeroSection = ({ isDreamOpen }) => {
               </div>
             </motion.div>
 
-            {/* 2. Micro-Scale Title Case Name (12.5px) + Enlarged Red Facebook Rosette Verified Badge (21px) */}
+            {/* 2. Micro-Scale Title Case Name (13.5px) + Enlarged Red Facebook Rosette Verified Badge (19px) */}
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
               width: '100%',
-              padding: '6px 0 3px 0',
+              padding: '6px 24px 3px 24px',
               boxSizing: 'border-box'
             }}>
               <div style={{
@@ -396,9 +402,9 @@ const HeroSection = ({ isDreamOpen }) => {
               }}>
                 <h1 style={{
                   fontFamily: "'Space Grotesk', sans-serif",
-                  fontSize: '12.5px',
-                  fontWeight: 600,
-                  letterSpacing: '0.3px',
+                  fontSize: '11.8px',
+                  fontWeight: 700,
+                  letterSpacing: '0.4px',
                   color: 'var(--text-primary)',
                   margin: 0,
                   whiteSpace: 'nowrap',
@@ -410,7 +416,7 @@ const HeroSection = ({ isDreamOpen }) => {
                   Rasedul Karim
                 </h1>
 
-                {/* Enlarged Authentic Facebook-Style 16-Point Scalloped Rosette Verified Badge (21px) */}
+                {/* Enlarged Authentic Facebook-Style 16-Point Scalloped Rosette Verified Badge (19px) */}
                 <motion.div
                   animate={{
                     scale: [1, 1.05, 0.98, 1],
@@ -426,12 +432,12 @@ const HeroSection = ({ isDreamOpen }) => {
                     ease: "easeInOut"
                   }}
                   style={{
-                    width: '21px',
-                    height: '21px',
-                    minWidth: '21px',
-                    minHeight: '21px',
-                    maxWidth: '21px',
-                    maxHeight: '21px',
+                    width: '19px',
+                    height: '19px',
+                    minWidth: '19px',
+                    minHeight: '19px',
+                    maxWidth: '19px',
+                    maxHeight: '19px',
                     aspectRatio: '1 / 1',
                     flexShrink: 0,
                     display: 'inline-flex',
@@ -442,8 +448,8 @@ const HeroSection = ({ isDreamOpen }) => {
                   title="Verified Profile"
                 >
                   <svg 
-                    width="21" 
-                    height="21" 
+                    width="19" 
+                    height="19" 
                     viewBox="0 0 24 24" 
                     fill="none" 
                     xmlns="http://www.w3.org/2000/svg"
@@ -564,21 +570,21 @@ const HeroSection = ({ isDreamOpen }) => {
 
           {/* 4. Communication & Analytics Hub */}
           <div style={{
-            marginTop: '16px',
+            marginTop: '10px',
             borderTop: '1px solid var(--card-border)',
-            paddingTop: '14px',
+            paddingTop: '10px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px'
+            gap: '10px'
           }}>
-            {/* Live Analytics Status Row (Visitors & Subscribers) Placed Above Contacts & Socials */}
+            {/* Live Analytics Status Row (Visitors 123.3K & Subscribers 10.34K) */}
             <div style={{
               display: 'flex',
               gap: '8px',
               justifyContent: 'center',
               width: '100%'
             }}>
-              {/* 1. Live Visitor Counter Pill (1,477+ Baseline) */}
+              {/* 1. Live Visitor Counter Pill (123.3K Baseline) */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -608,7 +614,7 @@ const HeroSection = ({ isDreamOpen }) => {
                   boxShadow: '0 0 6px #00E676'
                 }} />
                 <Eye size={12} />
-                <span>Visitors: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{visitorCount.toLocaleString()}</strong></span>
+                <span>Visitors: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatVisitorCount(visitorCount)}</strong></span>
               </motion.div>
 
               {/* 2. Live Subscribers Counter Pill (10.34K Baseline) */}
@@ -645,13 +651,14 @@ const HeroSection = ({ isDreamOpen }) => {
               </motion.div>
             </div>
 
-            {/* Social Icons Row */}
+            {/* Social Icons Row (42px x 42px with vivid brand neon glow rings) */}
             <div style={{
               display: 'flex',
               justifyContent: 'center',
-              gap: '10px',
+              gap: '12px',
               alignItems: 'center',
-              flexWrap: 'wrap'
+              flexWrap: 'wrap',
+              marginTop: '2px'
             }}>
               {socialLinks.map((item) => (
                 <motion.a
@@ -659,19 +666,20 @@ const HeroSection = ({ isDreamOpen }) => {
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  whileHover={{ scale: 1.2, y: -2 }}
+                  whileHover={{ scale: 1.18, y: -2 }}
                   whileTap={{ scale: 0.95 }}
                   style={{
-                    width: '38px',
-                    height: '38px',
+                    width: '42px',
+                    height: '42px',
                     borderRadius: '50%',
-                    background: 'var(--glass-bg)',
-                    border: '1px solid var(--card-border)',
+                    background: isDark ? 'rgba(13, 17, 23, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+                    border: `1.5px solid ${item.borderColor}`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    boxShadow: `0 4px 12px ${item.glow}`,
-                    cursor: 'pointer'
+                    boxShadow: item.glow,
+                    cursor: 'pointer',
+                    transition: 'all 0.25s ease'
                   }}
                   title={item.name}
                 >

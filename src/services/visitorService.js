@@ -1,8 +1,27 @@
 import { initFirebase, firebaseConfig } from '../firebase/config';
 
 const VISITOR_KEY = 'has_visited_portfolio';
-const CACHED_COUNT_KEY = 'cached_visitor_count';
-const BASELINE_COUNT = 1477;
+const CACHED_INCREMENT_KEY = 'cached_visitor_increment';
+export const BASELINE_COUNT = 123300; // 123.3K Baseline
+const LAUNCH_DATE_MS = new Date('2026-09-01T00:00:00Z').getTime();
+const DAILY_VISITOR_RATE = 50; // +50 visitors per day
+
+/**
+ * Calculate dynamic baseline with automated 50 visitors/day growth
+ */
+export const getDynamicVisitorBaseline = () => {
+  const elapsedDays = Math.max(0, Math.floor((Date.now() - LAUNCH_DATE_MS) / (1000 * 60 * 60 * 24)));
+  return BASELINE_COUNT + (elapsedDays * DAILY_VISITOR_RATE);
+};
+
+/**
+ * Format visitor numbers into clean 123.3K format
+ */
+export const formatVisitorCount = (count) => {
+  const dynamicBase = getDynamicVisitorBaseline();
+  const num = Math.max(dynamicBase, Number(count) || dynamicBase);
+  return `${(num / 1000).toFixed(1)}K`;
+};
 
 /**
  * Record a unique visit in Firestore atomic transaction if first visit
@@ -15,19 +34,14 @@ export const recordUniqueVisit = async () => {
     const { db } = await initFirebase();
 
     if (db) {
-      const { doc, getDoc, setDoc, increment } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, getDoc, setDoc, increment, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
       const visitorDocRef = doc(db, 'analytics', 'visitors');
       
       const snap = await getDoc(visitorDocRef);
       if (!snap.exists()) {
-        await setDoc(visitorDocRef, { count: BASELINE_COUNT + 1, lastVisit: new Date().toISOString() });
+        await setDoc(visitorDocRef, { count: 1, lastVisit: serverTimestamp() });
       } else {
-        const currentData = snap.data();
-        if ((currentData?.count || 0) < BASELINE_COUNT) {
-          await setDoc(visitorDocRef, { count: BASELINE_COUNT + 1, lastVisit: new Date().toISOString() }, { merge: true });
-        } else {
-          await setDoc(visitorDocRef, { count: increment(1), lastVisit: new Date().toISOString() }, { merge: true });
-        }
+        await setDoc(visitorDocRef, { count: increment(1), lastVisit: serverTimestamp() }, { merge: true });
       }
       localStorage.setItem(VISITOR_KEY, 'true');
     } else {
@@ -40,15 +54,11 @@ export const recordUniqueVisit = async () => {
 };
 
 /**
- * Real-time listener for visitor count with calibrated baseline (1477)
+ * Real-time listener for visitor count with automated daily growth (50/day) and Firestore real updates
  */
 export const listenVisitorCount = (onCountUpdate) => {
-  const cachedCount = localStorage.getItem(CACHED_COUNT_KEY);
-  if (cachedCount && Number(cachedCount) >= BASELINE_COUNT) {
-    onCountUpdate(Number(cachedCount));
-  } else {
-    onCountUpdate(BASELINE_COUNT);
-  }
+  const cachedIncrement = Number(localStorage.getItem(CACHED_INCREMENT_KEY)) || 0;
+  onCountUpdate(getDynamicVisitorBaseline() + cachedIncrement);
 
   let unsubscribe = () => {};
 
@@ -63,12 +73,12 @@ export const listenVisitorCount = (onCountUpdate) => {
         unsubscribe = onSnapshot(visitorDocRef, (snap) => {
           if (snap.exists()) {
             const data = snap.data();
-            const rawCount = Number(data?.count || 0);
-            const finalCount = rawCount >= BASELINE_COUNT ? rawCount : BASELINE_COUNT + rawCount;
-            localStorage.setItem(CACHED_COUNT_KEY, String(finalCount));
+            const rawIncrement = Number(data?.count || 0);
+            localStorage.setItem(CACHED_INCREMENT_KEY, String(rawIncrement));
+            const finalCount = getDynamicVisitorBaseline() + rawIncrement;
             onCountUpdate(finalCount);
           } else {
-            onCountUpdate(BASELINE_COUNT);
+            onCountUpdate(getDynamicVisitorBaseline());
           }
         }, (err) => {
           console.warn('Visitor stream listener notice:', err);
@@ -78,23 +88,25 @@ export const listenVisitorCount = (onCountUpdate) => {
         const res = await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/analytics/visitors`);
         if (res.ok) {
           const json = await res.json();
-          const rawCount = Number(json.fields?.count?.integerValue || json.fields?.count?.stringValue || 0);
-          const finalCount = rawCount >= BASELINE_COUNT ? rawCount : BASELINE_COUNT + rawCount;
-          localStorage.setItem(CACHED_COUNT_KEY, String(finalCount));
+          const rawIncrement = Number(json.fields?.count?.integerValue || json.fields?.count?.stringValue || 0);
+          localStorage.setItem(CACHED_INCREMENT_KEY, String(rawIncrement));
+          const finalCount = getDynamicVisitorBaseline() + rawIncrement;
           onCountUpdate(finalCount);
         } else {
-          onCountUpdate(BASELINE_COUNT);
+          onCountUpdate(getDynamicVisitorBaseline());
         }
       }
     } catch (err) {
       console.warn('Visitor counter fetch notice:', err);
-      onCountUpdate(BASELINE_COUNT);
+      onCountUpdate(getDynamicVisitorBaseline());
     }
   };
 
   setupListener();
 
   return () => {
-    unsubscribe();
+    try {
+      unsubscribe();
+    } catch (_) {}
   };
 };
