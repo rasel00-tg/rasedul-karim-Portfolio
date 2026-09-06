@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas } from '@react-three/fiber';
 import { Environment, Sparkles } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,18 +10,21 @@ import {
   Check, 
   Copy, 
   Eye, 
-  Phone,
-  MessageCircle,
-  X,
-  ShieldAlert,
-  AlertCircle,
-  ExternalLink,
-  Globe,
-  FileText,
+  X, 
+  ShieldAlert, 
+  AlertCircle, 
+  AlertTriangle,
+  ExternalLink, 
+  Globe, 
+  FileText, 
+  Users, 
+  CheckCircle2, 
+  Loader2, 
   Sparkles as SparkleIcon 
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { recordUniqueVisit, listenVisitorCount } from '../services/visitorService';
+import { listenSubscriberCount, formatSubscriberCount, subscribeEmail } from '../services/subscriptionService';
 
 const SceneBg = ({ isDreamOpen }) => {
   return (
@@ -135,20 +139,39 @@ const MatrixCodeRain = ({ isDark }) => {
 const HeroSection = ({ isDreamOpen }) => {
   const { isDark } = useTheme();
   const [visitorCount, setVisitorCount] = useState(1477);
+  const [subscriberCount, setSubscriberCount] = useState(10340);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
+  const [subEmailInput, setSubEmailInput] = useState('');
+  const [subLoading, setSubLoading] = useState(false);
+  const [subResult, setSubResult] = useState(null); // { success: boolean, alreadySubscribed?: boolean, message: string }
   const [isWarningOpen, setIsWarningOpen] = useState(false);
   const [isPolicyDetailOpen, setIsPolicyDetailOpen] = useState(false);
   const [hasAgreedPolicy, setHasAgreedPolicy] = useState(false);
   const [policyLanguage, setPolicyLanguage] = useState('en');
 
-  // Initialize unique visit tracking & live listener with 1477 baseline
+  // Initialize unique visit tracking & live listeners (Visitors 1,477 baseline, Subscribers 10.34K baseline)
   useEffect(() => {
     recordUniqueVisit();
-    const unsubscribe = listenVisitorCount((count) => {
+    const unsubVisitor = listenVisitorCount((count) => {
       if (count) setVisitorCount(count);
     });
-    return () => unsubscribe();
+    const unsubSubscriber = listenSubscriberCount((count) => {
+      if (count) setSubscriberCount(count);
+    });
+    return () => {
+      unsubVisitor();
+      unsubSubscriber();
+    };
   }, []);
+
+  const handleSubscribeSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!subEmailInput.trim()) return;
+    setSubLoading(true);
+    const result = await subscribeEmail(subEmailInput);
+    setSubLoading(false);
+    setSubResult(result);
+  };
 
   const handleOpenGoogleChat = () => {
     window.open('https://chat.google.com/dm/rasedul.karim.connect@gmail.com', '_blank', 'noopener,noreferrer');
@@ -355,73 +378,93 @@ const HeroSection = ({ isDreamOpen }) => {
               </div>
             </motion.div>
 
-            {/* 2. Refined Single-Line Name (~13-14px) + Red Verified Badge (~19px) */}
+            {/* 2. Micro-Scale Title Case Name (12.5px) + Enlarged Red Facebook Rosette Verified Badge (21px) */}
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              gap: '6px', 
               width: '100%',
-              maxWidth: '300px',
-              padding: '0 4px'
+              padding: '6px 0 3px 0',
+              boxSizing: 'border-box'
             }}>
-              <h1 style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: 'clamp(0.82rem, 2.7vw, 0.92rem)',
-                fontWeight: 800,
-                letterSpacing: '0.4px',
-                color: 'var(--text-primary)',
-                margin: 0,
-                whiteSpace: 'nowrap',
-                lineHeight: 1.2,
-                textShadow: isDark ? '0 0 10px rgba(0, 240, 255, 0.3)' : 'none'
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                flexShrink: 0
               }}>
-                RASEDUL KARIM
-              </h1>
-
-              {/* Red Animated Verified Badge (~19px diameter) */}
-              <motion.div
-                animate={{
-                  rotate: [0, 360],
-                  scale: [1, 1.08, 1],
-                  filter: [
-                    'drop-shadow(0 0 4px rgba(255, 23, 68, 0.8)) drop-shadow(0 0 8px rgba(255, 23, 68, 0.4))',
-                    'drop-shadow(0 0 8px rgba(255, 23, 68, 0.95)) drop-shadow(0 0 14px rgba(255, 23, 68, 0.6))',
-                    'drop-shadow(0 0 4px rgba(255, 23, 68, 0.8)) drop-shadow(0 0 8px rgba(255, 23, 68, 0.4))'
-                  ]
-                }}
-                transition={{
-                  rotate: { repeat: Infinity, duration: 8, ease: "linear" },
-                  scale: { repeat: Infinity, duration: 2.2, ease: "easeInOut" },
-                  filter: { repeat: Infinity, duration: 2.2, ease: "easeInOut" }
-                }}
-                style={{
-                  width: '19px',
-                  height: '19px',
-                  minWidth: '19px',
-                  minHeight: '19px',
-                  maxWidth: '19px',
-                  maxHeight: '19px',
-                  aspectRatio: '1 / 1',
+                <h1 style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  letterSpacing: '0.3px',
+                  color: 'var(--text-primary)',
+                  margin: 0,
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1.2,
+                  overflow: 'visible',
                   flexShrink: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  willChange: 'transform, filter'
-                }}
-                title="Verified Profile"
-              >
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" style={{ width: '100%', height: '100%', display: 'block' }}>
-                  <circle cx="12" cy="12" r="11" fill="#FF1744" />
-                  <path 
-                    d="M8.5 12.2l2.3 2.3 5-5" 
-                    stroke="#FFFFFF" 
-                    strokeWidth="2.6" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                  />
-                </svg>
-              </motion.div>
+                  textShadow: isDark ? '0 0 8px rgba(0, 240, 255, 0.25)' : 'none'
+                }}>
+                  Rasedul Karim
+                </h1>
+
+                {/* Enlarged Authentic Facebook-Style 16-Point Scalloped Rosette Verified Badge (21px) */}
+                <motion.div
+                  animate={{
+                    scale: [1, 1.05, 0.98, 1],
+                    filter: [
+                      'drop-shadow(0 0 3px rgba(255, 23, 68, 0.75)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))',
+                      'drop-shadow(0 0 6px rgba(255, 23, 68, 0.95)) drop-shadow(0 0 10px rgba(255, 23, 68, 0.6))',
+                      'drop-shadow(0 0 3px rgba(255, 23, 68, 0.75)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))'
+                    ]
+                  }}
+                  transition={{
+                    duration: 2.4,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  style={{
+                    width: '21px',
+                    height: '21px',
+                    minWidth: '21px',
+                    minHeight: '21px',
+                    maxWidth: '21px',
+                    maxHeight: '21px',
+                    aspectRatio: '1 / 1',
+                    flexShrink: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    willChange: 'transform, filter'
+                  }}
+                  title="Verified Profile"
+                >
+                  <svg 
+                    width="21" 
+                    height="21" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    xmlns="http://www.w3.org/2000/svg"
+                    style={{ width: '100%', height: '100%', display: 'block' }}
+                  >
+                    {/* 16-Point Scalloped Rosette Contour */}
+                    <path 
+                      d="M 12.00 1.50 A 2.95 2.95 0 0 1 16.02 2.30 A 2.95 2.95 0 0 1 19.42 4.58 A 2.95 2.95 0 0 1 21.70 7.98 A 2.95 2.95 0 0 1 22.50 12.00 A 2.95 2.95 0 0 1 21.70 16.02 A 2.95 2.95 0 0 1 19.42 19.42 A 2.95 2.95 0 0 1 16.02 21.70 A 2.95 2.95 0 0 1 12.00 22.50 A 2.95 2.95 0 0 1 7.98 21.70 A 2.95 2.95 0 0 1 4.58 19.42 A 2.95 2.95 0 0 1 2.30 16.02 A 2.95 2.95 0 0 1 1.50 12.00 A 2.95 2.95 0 0 1 2.30 7.98 A 2.95 2.95 0 0 1 4.58 4.58 A 2.95 2.95 0 0 1 7.98 2.30 A 2.95 2.95 0 0 1 12.00 1.50 Z" 
+                      fill="#FF1744" 
+                    />
+                    {/* Precision-Centered White Checkmark */}
+                    <path 
+                      d="M8.2 12.3L10.8 14.9L16.2 9.5" 
+                      stroke="#FFFFFF" 
+                      strokeWidth="2.5" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                    />
+                  </svg>
+                </motion.div>
+              </div>
             </div>
 
             {/* 3. English Humble Bio */}
@@ -519,7 +562,7 @@ const HeroSection = ({ isDreamOpen }) => {
             </motion.button>
           </div>
 
-          {/* 4. Communication & Social Hub */}
+          {/* 4. Communication & Analytics Hub */}
           <div style={{
             marginTop: '16px',
             borderTop: '1px solid var(--card-border)',
@@ -528,6 +571,80 @@ const HeroSection = ({ isDreamOpen }) => {
             flexDirection: 'column',
             gap: '12px'
           }}>
+            {/* Live Analytics Status Row (Visitors & Subscribers) Placed Above Contacts & Socials */}
+            <div style={{
+              display: 'flex',
+              gap: '8px',
+              justifyContent: 'center',
+              width: '100%'
+            }}>
+              {/* 1. Live Visitor Counter Pill (1,477+ Baseline) */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '7px 12px',
+                  borderRadius: '20px',
+                  background: isDark ? 'rgba(0, 240, 255, 0.08)' : 'rgba(0, 119, 182, 0.08)',
+                  border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.25)' : 'rgba(0, 119, 182, 0.25)'}`,
+                  fontSize: 'clamp(0.68rem, 2vw, 0.76rem)',
+                  fontWeight: 600,
+                  color: isDark ? '#00f0ff' : '#0077b6',
+                  boxShadow: '0 0 10px rgba(0, 240, 255, 0.12)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#00E676',
+                  display: 'inline-block',
+                  boxShadow: '0 0 6px #00E676'
+                }} />
+                <Eye size={12} />
+                <span>Visitors: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{visitorCount.toLocaleString()}</strong></span>
+              </motion.div>
+
+              {/* 2. Live Subscribers Counter Pill (10.34K Baseline) */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '7px 12px',
+                  borderRadius: '20px',
+                  background: 'rgba(255, 23, 68, 0.08)',
+                  border: '1px solid rgba(255, 23, 68, 0.3)',
+                  fontSize: 'clamp(0.68rem, 2vw, 0.76rem)',
+                  fontWeight: 600,
+                  color: '#FF1744',
+                  boxShadow: '0 0 10px rgba(255, 23, 68, 0.15)',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#FF1744',
+                  display: 'inline-block',
+                  boxShadow: '0 0 6px #FF1744'
+                }} />
+                <Bell size={12} />
+                <span>Subscribers: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatSubscriberCount(subscriberCount)}</strong></span>
+              </motion.div>
+            </div>
+
             {/* Social Icons Row */}
             <div style={{
               display: 'flex',
@@ -562,547 +679,695 @@ const HeroSection = ({ isDreamOpen }) => {
                 </motion.a>
               ))}
             </div>
-
-            {/* Quick Contact Pills (Work Phone & WhatsApp) */}
-            <div style={{
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'center'
-            }}>
-              <a
-                href="tel:+8801871176267"
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '8px 12px',
-                  borderRadius: '24px',
-                  background: 'var(--glass-bg)',
-                  border: '1px solid var(--card-border)',
-                  color: 'var(--text-primary)',
-                  textDecoration: 'none',
-                  fontSize: 'clamp(0.7rem, 2.1vw, 0.8rem)',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <Phone size={13} color="var(--primary-color)" />
-                <span>Work: +8801871176267</span>
-              </a>
-
-              <a
-                href="https://wa.me/8801871176267"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '8px 12px',
-                  borderRadius: '24px',
-                  background: 'rgba(37, 211, 102, 0.1)',
-                  border: '1px solid rgba(37, 211, 102, 0.4)',
-                  color: '#25D366',
-                  textDecoration: 'none',
-                  fontSize: 'clamp(0.7rem, 2.1vw, 0.8rem)',
-                  fontWeight: 600,
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <MessageCircle size={13} />
-                <span>WhatsApp Direct</span>
-              </a>
-            </div>
-
-            {/* Repositioned Calibrated Live Visitor Counter (1,477+ Baseline) */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              marginTop: '4px'
-            }}>
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '4px 12px',
-                  borderRadius: '20px',
-                  background: isDark ? 'rgba(0, 240, 255, 0.08)' : 'rgba(0, 119, 182, 0.08)',
-                  border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.25)' : 'rgba(0, 119, 182, 0.25)'}`,
-                  fontSize: 'clamp(0.7rem, 2vw, 0.78rem)',
-                  fontWeight: 600,
-                  color: isDark ? '#00f0ff' : '#0077b6',
-                  boxShadow: '0 0 10px rgba(0, 240, 255, 0.12)'
-                }}
-              >
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#00E676',
-                  display: 'inline-block',
-                  boxShadow: '0 0 6px #00E676'
-                }} />
-                <Eye size={12} />
-                <span>Live Visitors: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{visitorCount.toLocaleString()}</strong></span>
-              </motion.div>
-            </div>
           </div>
         </motion.div>
       </div>
 
-      {/* 5. Warning Policy Agreement Modal Dialog */}
-      <AnimatePresence>
-        {isWarningOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              width: '100vw',
-              height: '100vh',
-              background: 'rgba(0, 0, 0, 0.8)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999,
-              padding: '16px'
-            }}
-            onClick={() => setIsWarningOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.85, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
+      {/* 5. Warning Policy Agreement Modal Dialog (Rendered via Portal to Document Body with z-index 999999) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isWarningOpen && (
+            <div
               style={{
-                width: '100%',
-                maxWidth: '440px',
-                background: 'var(--card-bg)',
-                border: '1px solid rgba(255, 23, 68, 0.35)',
-                borderRadius: '24px',
-                padding: '26px 22px',
-                textAlign: 'center',
-                boxShadow: isDark 
-                  ? '0 20px 50px rgba(0, 0, 0, 0.9), 0 0 30px rgba(255, 23, 68, 0.25)' 
-                  : '0 20px 50px rgba(0, 0, 0, 0.15)',
-                position: 'relative'
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(0, 0, 0, 0.85)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 999999,
+                padding: '16px',
+                boxSizing: 'border-box'
               }}
+              onClick={() => setIsWarningOpen(false)}
             >
-              <button
-                onClick={() => setIsWarningOpen(false)}
-                style={{
-                  position: 'absolute',
-                  top: '16px',
-                  right: '16px',
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  padding: '4px'
-                }}
-                aria-label="Close modal"
-              >
-                <X size={20} />
-              </button>
-
-              {/* Warning Shield Icon */}
-              <div style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                background: 'rgba(255, 23, 68, 0.12)',
-                border: '1px solid rgba(255, 23, 68, 0.4)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 14px auto',
-                boxShadow: '0 0 20px rgba(255, 23, 68, 0.3)'
-              }}>
-                <ShieldAlert size={28} color="#FF1744" />
-              </div>
-
-              <h3 style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: '1.2rem',
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-                margin: '0 0 8px 0'
-              }}>
-                Communication Policy Notice
-              </h3>
-
-              <p style={{
-                fontSize: '0.88rem',
-                color: 'var(--text-secondary)',
-                lineHeight: 1.55,
-                margin: '0 0 14px 0'
-              }}>
-                Notice: Please review our Communication & Messaging Policy before proceeding to direct chat.
-              </p>
-
-              {/* Link to Open Full Policy Modal */}
-              <button
-                onClick={() => {
-                  setIsWarningOpen(false);
-                  setIsPolicyDetailOpen(true);
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--primary-color)',
-                  fontSize: '0.84rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  marginBottom: '18px',
-                  textDecoration: 'underline'
-                }}
-              >
-                <FileText size={14} /> Read Full Policy / সম্পূর্ণ নীতিমালা পড়ুন
-              </button>
-
-              {/* Agreement Checkbox */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontSize: '0.84rem',
-                color: 'var(--text-primary)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                marginBottom: '20px',
-                padding: '8px 12px',
-                borderRadius: '12px',
-                background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
-                border: '1px solid var(--card-border)'
-              }}>
-                <input 
-                  type="checkbox"
-                  checked={hasAgreedPolicy}
-                  onChange={(e) => setHasAgreedPolicy(e.target.checked)}
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    cursor: 'pointer',
-                    accentColor: '#FF1744'
-                  }}
-                />
-                <span>I have read and agree to the Warning Policy.</span>
-              </label>
-
-              {/* Proceed to Google Chat Button */}
-              <motion.button
-                onClick={handleOpenGoogleChat}
-                disabled={!hasAgreedPolicy}
-                whileHover={hasAgreedPolicy ? { scale: 1.03 } : {}}
-                whileTap={hasAgreedPolicy ? { scale: 0.97 } : {}}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.85, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
-                  padding: '12px',
-                  borderRadius: '30px',
-                  background: hasAgreedPolicy 
-                    ? 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)' 
-                    : 'rgba(255, 255, 255, 0.1)',
-                  border: 'none',
-                  color: hasAgreedPolicy ? '#000000' : 'var(--text-secondary)',
-                  fontWeight: 800,
-                  fontSize: '0.88rem',
-                  cursor: hasAgreedPolicy ? 'pointer' : 'not-allowed',
-                  opacity: hasAgreedPolicy ? 1 : 0.45,
-                  boxShadow: hasAgreedPolicy ? '0 4px 18px rgba(0, 240, 255, 0.35)' : 'none',
+                  maxWidth: '380px',
+                  background: 'var(--card-bg)',
+                  border: '1px solid rgba(255, 23, 68, 0.35)',
+                  borderRadius: '24px',
+                  padding: '24px 20px',
+                  textAlign: 'center',
+                  boxShadow: isDark 
+                    ? '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 23, 68, 0.3)' 
+                    : '0 25px 60px rgba(0, 0, 0, 0.25)',
+                  position: 'relative',
+                  maxHeight: '90vh',
+                  overflowY: 'auto'
+                }}
+              >
+                <button
+                  onClick={() => setIsWarningOpen(false)}
+                  style={{
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    padding: '4px'
+                  }}
+                  aria-label="Close modal"
+                >
+                  <X size={20} />
+                </button>
+
+                {/* Warning Shield Icon */}
+                <div style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '50%',
+                  background: 'rgba(255, 23, 68, 0.12)',
+                  border: '1px solid rgba(255, 23, 68, 0.4)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span>Proceed to Google Chat</span>
-                <ExternalLink size={15} />
-              </motion.button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 6. Dedicated Bilingual Policy Modal */}
-      <AnimatePresence>
-        {isPolicyDetailOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              width: '100vw',
-              height: '100vh',
-              background: 'rgba(0, 0, 0, 0.85)',
-              backdropFilter: 'blur(14px)',
-              WebkitBackdropFilter: 'blur(14px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10000,
-              padding: '16px'
-            }}
-            onClick={() => setIsPolicyDetailOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: '100%',
-                maxWidth: '480px',
-                background: 'var(--card-bg)',
-                border: '1px solid rgba(255, 23, 68, 0.35)',
-                borderRadius: '24px',
-                padding: '24px',
-                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.8)',
-                position: 'relative',
-                maxHeight: '90vh',
-                overflowY: 'auto'
-              }}
-            >
-              {/* Header with Language Switcher */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                borderBottom: '1px solid var(--card-border)',
-                paddingBottom: '12px',
-                marginBottom: '16px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ShieldAlert size={20} color="#FF1744" />
-                  <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
-                    Communication Policy
-                  </span>
-                </div>
-
-                {/* Language Toggle Button */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                  borderRadius: '20px',
-                  padding: '2px',
-                  border: '1px solid var(--card-border)'
+                  margin: '0 auto 12px auto',
+                  boxShadow: '0 0 20px rgba(255, 23, 68, 0.3)'
                 }}>
-                  <button
-                    onClick={() => setPolicyLanguage('en')}
-                    style={{
-                      background: policyLanguage === 'en' ? 'var(--primary-color)' : 'transparent',
-                      color: policyLanguage === 'en' ? '#000000' : 'var(--text-secondary)',
-                      border: 'none',
-                      borderRadius: '16px',
-                      padding: '4px 10px',
-                      fontSize: '0.74rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    English
-                  </button>
-                  <button
-                    onClick={() => setPolicyLanguage('bn')}
-                    style={{
-                      background: policyLanguage === 'bn' ? 'var(--primary-color)' : 'transparent',
-                      color: policyLanguage === 'bn' ? '#000000' : 'var(--text-secondary)',
-                      border: 'none',
-                      borderRadius: '16px',
-                      padding: '4px 10px',
-                      fontSize: '0.74rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    বাংলা
-                  </button>
+                  <ShieldAlert size={26} color="#FF1744" />
                 </div>
-              </div>
 
-              {/* Policy Body Content */}
-              {policyLanguage === 'en' ? (
-                <div style={{ textAlign: 'left', lineHeight: 1.6, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-                  <h4 style={{ color: '#FF1744', margin: '0 0 8px 0', fontSize: '0.96rem', fontWeight: 800 }}>
-                    Official Messaging Guidelines:
-                  </h4>
-                  <p style={{ color: 'var(--text-secondary)', margin: '0 0 14px 0' }}>
-                    Strictly professional inquiries only. Any spam, unsolicited promotional messages, unsolicited requests, or irrelevant communication will result in an immediate and permanent block. Please respect professional boundaries and do not initiate contact without a valid work-related purpose.
-                  </p>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'left', lineHeight: 1.65, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-                  <h4 style={{ color: '#FF1744', margin: '0 0 8px 0', fontSize: '0.96rem', fontWeight: 800 }}>
-                    অফিসিয়াল যোগাযোগ নীতিমালা:
-                  </h4>
-                  <p style={{ color: 'var(--text-secondary)', margin: '0 0 14px 0' }}>
-                    শুধুমাত্র পেশাগত ও প্রয়োজনীয় বিষয়ে যোগাযোগের জন্য অনুরোধ করা হচ্ছে। কেউ অপ্রয়োজনীয় বার্তা, স্প্যাম বা অযথা মেসেজ রিকোয়েস্ট পাঠালে তাকে কোনো প্রকার পূর্ব নোটিশ ছাড়াই সরাসরি ও স্থায়ীভাবে ব্লক করা হবে। অনুগ্রহ করে সময়ের মূল্য বজায় রাখুন এবং সুনির্দিষ্ট কারণ ছাড়া বার্তা পাঠানো থেকে বিরত থাকুন।
-                  </p>
-                </div>
-              )}
+                <h3 style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontSize: '1.15rem',
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  margin: '0 0 6px 0'
+                }}>
+                  Communication Policy Notice
+                </h3>
 
-              {/* Modal Confirmation Action */}
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                <motion.button
+                <p style={{
+                  fontSize: '0.84rem',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                  margin: '0 0 12px 0'
+                }}>
+                  Notice: Please review our Communication & Messaging Policy before proceeding to direct chat.
+                </p>
+
+                {/* Link to Open Full Policy Modal */}
+                <button
                   onClick={() => {
-                    setHasAgreedPolicy(true);
-                    setIsPolicyDetailOpen(false);
-                    setIsWarningOpen(true);
+                    setIsWarningOpen(false);
+                    setIsPolicyDetailOpen(true);
                   }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                   style={{
-                    flex: 1,
-                    padding: '11px',
-                    borderRadius: '30px',
-                    background: 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)',
+                    background: 'none',
                     border: 'none',
-                    color: '#000000',
-                    fontWeight: 800,
-                    fontSize: '0.85rem',
+                    color: 'var(--primary-color)',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    boxShadow: '0 4px 15px rgba(0, 240, 255, 0.3)'
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    marginBottom: '16px',
+                    textDecoration: 'underline'
                   }}
                 >
-                  {policyLanguage === 'en' ? 'I Agree & Return' : 'আমি একমত ও ফিরে যান'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                  <FileText size={14} /> Read Full Policy / সম্পূর্ণ নীতিমালা পড়ুন
+                </button>
 
-      {/* 7. Subscription Success Modal Dialog */}
-      <AnimatePresence>
-        {isSubscribeOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              width: '100vw',
-              height: '100vh',
-              background: 'rgba(0, 0, 0, 0.75)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 9999,
-              padding: '16px'
-            }}
-            onClick={() => setIsSubscribeOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.85, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: '100%',
-                maxWidth: '420px',
-                background: 'var(--card-bg)',
-                border: '1px solid var(--card-border)',
-                borderRadius: '24px',
-                padding: '28px 24px',
-                textAlign: 'center',
-                boxShadow: isDark 
-                  ? '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 23, 68, 0.3)' 
-                  : '0 20px 50px rgba(0, 0, 0, 0.15)',
-                position: 'relative'
-              }}
-            >
-              <button
-                onClick={() => setIsSubscribeOpen(false)}
-                style={{
-                  position: 'absolute',
-                  top: '16px',
-                  right: '16px',
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
+                {/* Agreement Checkbox */}
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600,
                   cursor: 'pointer',
-                  padding: '4px'
-                }}
-                aria-label="Close modal"
-              >
-                <X size={20} />
-              </button>
+                  marginBottom: '18px',
+                  padding: '8px 10px',
+                  borderRadius: '12px',
+                  background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+                  border: '1px solid var(--card-border)'
+                }}>
+                  <input 
+                    type="checkbox"
+                    checked={hasAgreedPolicy}
+                    onChange={(e) => setHasAgreedPolicy(e.target.checked)}
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      cursor: 'pointer',
+                      accentColor: '#FF1744'
+                    }}
+                  />
+                  <span>I have read and agree to the Warning Policy.</span>
+                </label>
 
-              {/* Animated Bell Icon with Glowing Ring */}
-              <div style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, rgba(255, 23, 68, 0.2), rgba(255, 23, 68, 0.05))',
-                border: '1px solid rgba(255, 23, 68, 0.4)',
+                {/* Proceed to Google Chat Button */}
+                <motion.button
+                  onClick={handleOpenGoogleChat}
+                  disabled={!hasAgreedPolicy}
+                  whileHover={hasAgreedPolicy ? { scale: 1.03 } : {}}
+                  whileTap={hasAgreedPolicy ? { scale: 0.97 } : {}}
+                  style={{
+                    width: '100%',
+                    padding: '11px',
+                    borderRadius: '30px',
+                    background: hasAgreedPolicy 
+                      ? 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)' 
+                      : 'rgba(255, 255, 255, 0.1)',
+                    border: 'none',
+                    color: hasAgreedPolicy ? '#000000' : 'var(--text-secondary)',
+                    fontWeight: 800,
+                    fontSize: '0.86rem',
+                    cursor: hasAgreedPolicy ? 'pointer' : 'not-allowed',
+                    opacity: hasAgreedPolicy ? 1 : 0.45,
+                    boxShadow: hasAgreedPolicy ? '0 4px 18px rgba(0, 240, 255, 0.35)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <span>Proceed to Google Chat</span>
+                  <ExternalLink size={15} />
+                </motion.button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* 6. Dedicated Bilingual Policy Modal (Rendered via Portal to Document Body with z-index 999999) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isPolicyDetailOpen && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(0, 0, 0, 0.88)',
+                backdropFilter: 'blur(14px)',
+                WebkitBackdropFilter: 'blur(14px)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                margin: '0 auto 18px auto',
-                boxShadow: '0 0 25px rgba(255, 23, 68, 0.4)'
-              }}>
-                <Bell size={28} color="#FF1744" />
-              </div>
-
-              <h3 style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: '1.25rem',
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-                margin: '0 0 10px 0'
-              }}>
-                Subscription Confirmed!
-              </h3>
-
-              <p style={{
-                fontSize: '0.92rem',
-                color: 'var(--text-secondary)',
-                lineHeight: 1.6,
-                margin: '0 0 22px 0'
-              }}>
-                Thank you for subscribing! You will be the first to receive all future updates.
-              </p>
-
-              <motion.button
-                onClick={() => setIsSubscribeOpen(false)}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
+                zIndex: 999999,
+                padding: '16px',
+                boxSizing: 'border-box'
+              }}
+              onClick={() => setIsPolicyDetailOpen(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
-                  padding: '12px',
-                  borderRadius: '30px',
-                  background: 'linear-gradient(135deg, #FF1744 0%, #D50000 100%)',
-                  border: 'none',
-                  color: '#FFFFFF',
-                  fontWeight: 700,
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 18px rgba(255, 23, 68, 0.45)'
+                  maxWidth: '440px',
+                  background: 'var(--card-bg)',
+                  border: '1px solid rgba(255, 23, 68, 0.35)',
+                  borderRadius: '24px',
+                  padding: '24px',
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95)',
+                  position: 'relative',
+                  maxHeight: '90vh',
+                  overflowY: 'auto'
                 }}
               >
-                Got It!
-              </motion.button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                {/* Header with Language Switcher */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid var(--card-border)',
+                  paddingBottom: '12px',
+                  marginBottom: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldAlert size={20} color="#FF1744" />
+                    <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)' }}>
+                      Communication Policy
+                    </span>
+                  </div>
+
+                  {/* Language Toggle Button */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                    borderRadius: '20px',
+                    padding: '2px',
+                    border: '1px solid var(--card-border)'
+                  }}>
+                    <button
+                      onClick={() => setPolicyLanguage('en')}
+                      style={{
+                        background: policyLanguage === 'en' ? 'var(--primary-color)' : 'transparent',
+                        color: policyLanguage === 'en' ? '#000000' : 'var(--text-secondary)',
+                        border: 'none',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      English
+                    </button>
+                    <button
+                      onClick={() => setPolicyLanguage('bn')}
+                      style={{
+                        background: policyLanguage === 'bn' ? 'var(--primary-color)' : 'transparent',
+                        color: policyLanguage === 'bn' ? '#000000' : 'var(--text-secondary)',
+                        border: 'none',
+                        borderRadius: '16px',
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      বাংলা
+                    </button>
+                  </div>
+                </div>
+
+                {/* Policy Body Content */}
+                {policyLanguage === 'en' ? (
+                  <div style={{ textAlign: 'left', lineHeight: 1.6, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                    <h4 style={{ color: '#FF1744', margin: '0 0 8px 0', fontSize: '0.96rem', fontWeight: 800 }}>
+                      Official Messaging Guidelines:
+                    </h4>
+                    <p style={{ color: 'var(--text-secondary)', margin: '0 0 14px 0' }}>
+                      Strictly professional inquiries only. Any spam, unsolicited promotional messages, unsolicited requests, or irrelevant communication will result in an immediate and permanent block. Please respect professional boundaries and do not initiate contact without a valid work-related purpose.
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'left', lineHeight: 1.65, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
+                    <h4 style={{ color: '#FF1744', margin: '0 0 8px 0', fontSize: '0.96rem', fontWeight: 800 }}>
+                      অফিসিয়াল যোগাযোগ নীতিমালা:
+                    </h4>
+                    <p style={{ color: 'var(--text-secondary)', margin: '0 0 14px 0' }}>
+                      শুধুমাত্র পেশাগত ও প্রয়োজনীয় বিষয়ে যোগাযোগের জন্য অনুরোধ করা হচ্ছে। কেউ অপ্রয়োজনীয় বার্তা, স্প্যাম বা অযথা মেসেজ রিকোয়েস্ট পাঠালে তাকে কোনো প্রকার পূর্ব নোটিশ ছাড়াই সরাসরি ও স্থায়ীভাবে ব্লক করা হবে। অনুগ্রহ করে সময়ের মূল্য বজায় রাখুন এবং সুনির্দিষ্ট কারণ ছাড়া বার্তা পাঠানো থেকে বিরত থাকুন।
+                    </p>
+                  </div>
+                )}
+
+                {/* Modal Confirmation Action */}
+                <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                  <motion.button
+                    onClick={() => {
+                      setHasAgreedPolicy(true);
+                      setIsPolicyDetailOpen(false);
+                      setIsWarningOpen(true);
+                    }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    style={{
+                      flex: 1,
+                      padding: '11px',
+                      borderRadius: '30px',
+                      background: 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)',
+                      border: 'none',
+                      color: '#000000',
+                      fontWeight: 800,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 15px rgba(0, 240, 255, 0.3)'
+                    }}
+                  >
+                    {policyLanguage === 'en' ? 'I Agree & Return' : 'আমি একমত ও ফিরে যান'}
+                  </motion.button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* 7. Interactive Email Subscription Modal Dialog with Firestore Integration & Duplicate Prevention */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isSubscribeOpen && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(0, 0, 0, 0.85)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 999999,
+                padding: '16px',
+                boxSizing: 'border-box'
+              }}
+              onClick={() => {
+                setIsSubscribeOpen(false);
+                setSubResult(null);
+                setSubEmailInput('');
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.85, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: '100%',
+                  maxWidth: '390px',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--card-border)',
+                  borderRadius: '24px',
+                  padding: '28px 22px',
+                  textAlign: 'center',
+                  boxShadow: isDark 
+                    ? '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 23, 68, 0.3)' 
+                    : '0 25px 60px rgba(0, 0, 0, 0.25)',
+                  position: 'relative',
+                  maxHeight: '90vh',
+                  overflowY: 'auto'
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setIsSubscribeOpen(false);
+                    setSubResult(null);
+                    setSubEmailInput('');
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    padding: '4px'
+                  }}
+                  aria-label="Close modal"
+                >
+                  <X size={20} />
+                </button>
+
+                {/* 1. Already Subscribed State Dialog */}
+                {subResult?.alreadySubscribed ? (
+                  <div>
+                    <div style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '50%',
+                      background: 'rgba(255, 23, 68, 0.12)',
+                      border: '1px solid rgba(255, 23, 68, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px auto',
+                      boxShadow: '0 0 25px rgba(255, 23, 68, 0.35)'
+                    }}>
+                      <AlertTriangle size={28} color="#FF1744" />
+                    </div>
+
+                    <h3 style={{
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontSize: '1.22rem',
+                      fontWeight: 800,
+                      color: '#FF1744',
+                      margin: '0 0 8px 0'
+                    }}>
+                      Already Subscribed
+                    </h3>
+
+                    <p style={{
+                      fontSize: '0.88rem',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.55,
+                      margin: '0 0 22px 0'
+                    }}>
+                      Your email is already subscribed!
+                    </p>
+
+                    <motion.button
+                      onClick={() => {
+                        setIsSubscribeOpen(false);
+                        setSubResult(null);
+                        setSubEmailInput('');
+                      }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        borderRadius: '30px',
+                        background: 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)',
+                        border: 'none',
+                        color: '#000000',
+                        fontWeight: 800,
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)'
+                      }}
+                    >
+                      OK
+                    </motion.button>
+                  </div>
+                ) : subResult?.success ? (
+                  /* 2. Subscribed Success State Dialog */
+                  <div>
+                    <div style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '50%',
+                      background: 'rgba(0, 230, 118, 0.12)',
+                      border: '1px solid rgba(0, 230, 118, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 16px auto',
+                      boxShadow: '0 0 25px rgba(0, 230, 118, 0.35)'
+                    }}>
+                      <CheckCircle2 size={30} color="#00E676" />
+                    </div>
+
+                    <h3 style={{
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontSize: '1.25rem',
+                      fontWeight: 800,
+                      color: 'var(--text-primary)',
+                      margin: '0 0 8px 0'
+                    }}>
+                      Subscription Confirmed
+                    </h3>
+
+                    <p style={{
+                      fontSize: '0.88rem',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.55,
+                      margin: '0 0 22px 0'
+                    }}>
+                      Thank you! You have successfully subscribed to all future updates.
+                    </p>
+
+                    <motion.button
+                      onClick={() => {
+                        setIsSubscribeOpen(false);
+                        setSubResult(null);
+                        setSubEmailInput('');
+                      }}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      style={{
+                        width: '100%',
+                        padding: '11px',
+                        borderRadius: '30px',
+                        background: 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)',
+                        border: 'none',
+                        color: '#000000',
+                        fontWeight: 800,
+                        fontSize: '0.88rem',
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)'
+                      }}
+                    >
+                      Awesome
+                    </motion.button>
+                  </div>
+                ) : (
+                  /* Subscription Form State */
+                  <div>
+                    {/* Animated Bell Icon */}
+                    <div style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, rgba(255, 23, 68, 0.2), rgba(255, 23, 68, 0.05))',
+                      border: '1px solid rgba(255, 23, 68, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 14px auto',
+                      boxShadow: '0 0 25px rgba(255, 23, 68, 0.35)'
+                    }}>
+                      <Bell size={26} color="#FF1744" />
+                    </div>
+
+                    <h3 style={{
+                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontSize: '1.2rem',
+                      fontWeight: 800,
+                      color: 'var(--text-primary)',
+                      margin: '0 0 8px 0'
+                    }}>
+                      Stay Updated
+                    </h3>
+
+                    {/* Notice / Disclosure */}
+                    <p style={{
+                      fontSize: '0.84rem',
+                      color: 'var(--text-secondary)',
+                      lineHeight: 1.5,
+                      margin: '0 0 16px 0',
+                      padding: '0 6px'
+                    }}>
+                      If any new updates or projects are released, you will be notified directly via email.
+                    </p>
+
+                    {/* Feedback Alert for Duplicate / Invalid Email */}
+                    {subResult && !subResult.success && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        style={{
+                          padding: '9px 12px',
+                          borderRadius: '12px',
+                          background: subResult.alreadySubscribed ? 'rgba(255, 170, 0, 0.12)' : 'rgba(255, 23, 68, 0.12)',
+                          border: `1px solid ${subResult.alreadySubscribed ? 'rgba(255, 170, 0, 0.4)' : 'rgba(255, 23, 68, 0.4)'}`,
+                          color: subResult.alreadySubscribed ? '#FFAA00' : '#FF1744',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          marginBottom: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        <AlertCircle size={14} />
+                        <span>{subResult.message}</span>
+                      </motion.div>
+                    )}
+
+                    {/* Input Form */}
+                    <form onSubmit={handleSubscribeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <input
+                        type="email"
+                        required
+                        placeholder="Enter your email address"
+                        value={subEmailInput}
+                        onChange={(e) => {
+                          setSubEmailInput(e.target.value);
+                          if (subResult) setSubResult(null);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '12px 16px',
+                          borderRadius: '14px',
+                          background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
+                          border: '1px solid var(--card-border)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.88rem',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsSubscribeOpen(false);
+                            setSubResult(null);
+                            setSubEmailInput('');
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '11px',
+                            borderRadius: '30px',
+                            background: 'transparent',
+                            border: '1px solid var(--card-border)',
+                            color: 'var(--text-secondary)',
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Cancel
+                        </button>
+
+                        <motion.button
+                          type="submit"
+                          disabled={subLoading}
+                          whileHover={!subLoading ? { scale: 1.02 } : {}}
+                          whileTap={!subLoading ? { scale: 0.98 } : {}}
+                          style={{
+                            flex: 1.4,
+                            padding: '11px',
+                            borderRadius: '30px',
+                            background: 'linear-gradient(135deg, #FF1744 0%, #D50000 100%)',
+                            border: 'none',
+                            color: '#FFFFFF',
+                            fontWeight: 700,
+                            fontSize: '0.85rem',
+                            cursor: subLoading ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 4px 18px rgba(255, 23, 68, 0.45)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          {subLoading ? (
+                            <>
+                              <Loader2 size={14} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
+                              <span>Subscribing...</span>
+                            </>
+                          ) : (
+                            <span>Confirm Subscription</span>
+                          )}
+                        </motion.button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </section>
   );
 };

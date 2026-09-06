@@ -14,15 +14,6 @@ import {
 const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
   const links = [
     {
-      id: 'email',
-      icon: <Mail size={18} color="#00f0ff" />,
-      title: 'rasedul.karim.dev@gmail.com',
-      subtitle: 'Official Contact Email',
-      actionType: 'link',
-      href: 'mailto:rasedul.karim.dev@gmail.com',
-      badgeColor: '#00f0ff'
-    },
-    {
       id: 'projects',
       icon: <Globe size={18} color="#00f0ff" />,
       title: 'Web Apps & Projects',
