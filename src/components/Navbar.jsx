@@ -9,24 +9,26 @@ import {
   Settings, 
   Sun, 
   Moon, 
-  Shield, 
   QrCode,
   Sparkles,
   ChevronRight,
   Globe,
-  Check
+  Check,
+  Star,
+  SlidersHorizontal
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 
-const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }) => {
+const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill, onOpenReview }) => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeItem, setActiveItem] = useState('ABOUT');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   
   const { isDark, toggleTheme } = useTheme();
-  const { isBangla, language, setLanguage, languagesList, t, isRTL } = useLanguage();
+  const { isBangla, language, setLanguage, languagesList, t } = useLanguage();
 
   // Secret Admin hotkey: Ctrl + Shift + A
   useEffect(() => {
@@ -40,12 +42,12 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onOpenAdmin]);
 
-  // Primary 4 Structured Menu Items with Distinct Vibrant Colors & Themes
+  // Primary 5 Top-Level Menu Items in Specific Order
   const mainNavItems = [
     {
       id: 'ABOUT',
-      label: t('nav.about', 'ABOUT'),
-      sublabel: t('nav.aboutSub', 'Biography & Journey'),
+      label: isBangla ? 'সম্পর্কে' : 'ABOUT',
+      sublabel: isBangla ? 'প্রোফাইল ও পরিচিতি' : 'Biography & Journey',
       icon: <User size={19} />,
       color: '#00E5FF', // Electric Cyan
       bgTint: 'rgba(0, 229, 255, 0.08)',
@@ -54,13 +56,14 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
       action: () => {
         setActiveItem('ABOUT');
         setIsDrawerOpen(false);
+        setIsDesktopSettingsOpen(false);
         onOpenAbout && onOpenAbout();
       }
     },
     {
       id: 'SKILL',
-      label: t('nav.skill', 'SKILL'),
-      sublabel: t('nav.skillSub', 'Technical Expertise'),
+      label: isBangla ? 'দক্ষতা' : 'SKILL',
+      sublabel: isBangla ? 'টেকনিক্যাল দক্ষতা' : 'Technical Expertise',
       icon: <Zap size={19} />,
       color: '#10B981', // Vibrant Emerald
       bgTint: 'rgba(16, 185, 129, 0.08)',
@@ -69,6 +72,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
       action: () => {
         setActiveItem('SKILL');
         setIsDrawerOpen(false);
+        setIsDesktopSettingsOpen(false);
         onOpenSkill ? onOpenSkill() : (() => {
           const el = document.getElementById('skills');
           if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -77,8 +81,8 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
     },
     {
       id: 'DREAM',
-      label: t('nav.dream', 'DREAM'),
-      sublabel: t('nav.dreamSub', 'Vision & Future Goals'),
+      label: isBangla ? 'স্বপ্ন' : 'DREAM',
+      sublabel: isBangla ? 'উন্নয়ন ও ভবিষ্যৎ লক্ষ্য' : 'Vision & Future Goals',
       icon: <Target size={19} />,
       color: '#A855F7', // Neon Purple / Violet
       bgTint: 'rgba(168, 85, 247, 0.08)',
@@ -87,39 +91,287 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
       action: () => {
         setActiveItem('DREAM');
         setIsDrawerOpen(false);
+        setIsDesktopSettingsOpen(false);
         onOpenDream && onOpenDream();
       }
     },
     {
+      id: 'REVIEWS',
+      label: isBangla ? 'রেটিং ও রিভিউ' : 'REVIEWS',
+      sublabel: isBangla ? 'গ্রাহক মূল্যায়ন ও ফিডব্যাক' : 'Ratings & Feedback',
+      icon: <Star size={19} fill="#F59E0B" />,
+      color: '#F59E0B', // Vibrant Amber / Gold
+      bgTint: 'rgba(245, 158, 11, 0.1)',
+      borderTint: 'rgba(245, 158, 11, 0.35)',
+      glowShadow: '0 4px 22px rgba(245, 158, 11, 0.25)',
+      action: () => {
+        setActiveItem('REVIEWS');
+        setIsDrawerOpen(false);
+        setIsDesktopSettingsOpen(false);
+        onOpenReview && onOpenReview();
+      }
+    },
+    {
       id: 'SETTING',
-      label: t('nav.setting', 'SETTING'),
-      sublabel: t('nav.settingSub', 'Preferences & Tools'),
+      label: isBangla ? 'সেটিংস' : 'SETTINGS',
+      sublabel: isBangla ? 'কন্ট্রোল ও সেটিংস' : 'Preferences & Setup',
       icon: <Settings size={19} />,
-      color: '#F59E0B', // Warm Sunset Amber
-      bgTint: 'rgba(245, 158, 11, 0.08)',
-      borderTint: 'rgba(245, 158, 11, 0.25)',
-      glowShadow: '0 4px 20px rgba(245, 158, 11, 0.15)',
+      color: '#FF7A00', // Sunset Orange
+      bgTint: 'rgba(255, 122, 0, 0.08)',
+      borderTint: 'rgba(255, 122, 0, 0.25)',
+      glowShadow: '0 4px 20px rgba(255, 122, 0, 0.15)',
       action: () => {
         setActiveItem('SETTING');
         setIsSettingsOpen(!isSettingsOpen);
+        setIsDesktopSettingsOpen(!isDesktopSettingsOpen);
       }
     }
   ];
 
   return (
     <>
-      {/* Top Floating Corner Controls (Unobscured Cover Picture) */}
-      <div style={{
-        position: 'fixed',
-        top: '14px',
-        left: '14px',
-        right: '14px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        zIndex: 1000,
-        pointerEvents: 'none'
-      }}>
+      {/* Pinned Desktop Top Navigation Bar (>= 1024px) */}
+      <header
+        className="desktop-navbar"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '64px',
+          background: isDark ? 'rgba(13, 17, 23, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.2)' : 'rgba(0, 119, 182, 0.2)'}`,
+          zIndex: 1000,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 32px',
+          boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.45)' : '0 4px 20px rgba(0, 0, 0, 0.08)'
+        }}
+      >
+        {/* Left: Brand Identity Logo & Name with Live Date */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            padding: '2px',
+            background: 'linear-gradient(135deg, #00F0FF 0%, #00E676 50%, #FF007F 100%)',
+            boxShadow: '0 0 16px rgba(0, 240, 255, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <img 
+              src="/logo.png" 
+              alt="RASHED Logo" 
+              style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', display: 'block' }}
+              onError={(e) => {
+                if (e.target.src.includes('/logo.png')) {
+                  e.target.src = '/about.png';
+                }
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{
+              fontFamily: "'Space Grotesk', sans-serif",
+              fontSize: '1.2rem',
+              fontWeight: 900,
+              letterSpacing: '2px',
+              color: 'var(--text-primary)',
+              lineHeight: 1.1
+            }}>
+              RASHED
+            </span>
+            <span style={{
+              fontSize: '0.7rem',
+              color: 'var(--primary-color)',
+              letterSpacing: '0.3px',
+              fontWeight: 700,
+              marginTop: '2px',
+              fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
+            }}>
+              {new Intl.DateTimeFormat(isBangla ? 'bn-BD' : 'en-US', { 
+                weekday: 'long', 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+              }).format(new Date())}
+            </span>
+          </div>
+        </div>
+
+        {/* Center: 5 Permanent Colorful Menu Tabs */}
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }}>
+          {mainNavItems.map((item) => (
+            <div key={item.id} style={{ position: 'relative' }}>
+              <motion.button
+                onClick={item.action}
+                whileHover={{ scale: 1.05, y: -2 }}
+                whileTap={{ scale: 0.96 }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '12px',
+                  background: activeItem === item.id ? item.bgTint : 'rgba(255, 255, 255, 0.03)',
+                  border: `1px solid ${activeItem === item.id ? item.borderTint : 'rgba(255, 255, 255, 0.08)'}`,
+                  boxShadow: activeItem === item.id ? item.glowShadow : 'none',
+                  color: activeItem === item.id ? item.color : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  letterSpacing: isBangla ? '0' : '0.5px',
+                  fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif",
+                  transition: 'all 0.25s ease'
+                }}
+              >
+                <span style={{ color: item.color, display: 'flex', alignItems: 'center' }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </motion.button>
+
+              {/* Desktop Settings Dropdown (Only Discreet "Control" Gateway) */}
+              {item.id === 'SETTING' && isDesktopSettingsOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: '115%',
+                  right: 0,
+                  background: isDark ? '#0D1117' : '#FFFFFF',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)'}`,
+                  borderRadius: '14px',
+                  padding: '6px',
+                  minWidth: '150px',
+                  boxShadow: isDark ? '0 10px 30px rgba(0, 0, 0, 0.7)' : '0 8px 25px rgba(0, 0, 0, 0.12)',
+                  zIndex: 1001
+                }}>
+                  <button
+                    onClick={() => {
+                      setIsDesktopSettingsOpen(false);
+                      onOpenAdmin && onOpenAdmin();
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 12px',
+                      borderRadius: '10px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: isDark ? '#94A3B8' : '#64748B',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+                      e.currentTarget.style.color = 'var(--text-primary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = isDark ? '#94A3B8' : '#64748B';
+                    }}
+                  >
+                    <SlidersHorizontal size={15} color="#94A3B8" />
+                    <span>{isBangla ? 'কন্ট্রোল' : 'Control'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
+
+        {/* Right: Language Selector, QR Code & Theme Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Language Switch Button */}
+          <motion.button
+            onClick={() => setIsLanguageModalOpen(true)}
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.94 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '20px',
+              background: 'rgba(0, 240, 255, 0.08)',
+              border: '1px solid rgba(0, 240, 255, 0.3)',
+              color: 'var(--primary-color)',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 700
+            }}
+          >
+            <Globe size={16} />
+            <span>{isBangla ? 'বাংলা' : 'English'}</span>
+          </motion.button>
+
+          {/* QR Code Button */}
+          <motion.button
+            onClick={onOpenQR}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.92 }}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'var(--capsule-bg)',
+              border: '1px solid var(--card-border)',
+              color: 'var(--primary-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+            title="QR Code"
+          >
+            <QrCode size={18} />
+          </motion.button>
+
+          {/* Theme Toggle Button */}
+          <motion.button
+            onClick={toggleTheme}
+            whileHover={{ scale: 1.1, rotate: 15 }}
+            whileTap={{ scale: 0.92 }}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'var(--capsule-bg)',
+              border: '1px solid var(--card-border)',
+              color: 'var(--primary-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+          </motion.button>
+        </div>
+      </header>
+
+      {/* Top Floating Corner Controls (Mobile < 1024px) */}
+      <div 
+        className="mobile-navbar-controls"
+        style={{
+          position: 'fixed',
+          top: '14px',
+          left: '14px',
+          right: '14px',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          zIndex: 1000,
+          pointerEvents: 'none'
+        }}
+      >
         {/* Top-Left: Minimalist Theme Toggle Button */}
         <motion.button
           onClick={toggleTheme}
@@ -247,7 +499,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                     <h3 style={{
                       margin: 0,
                       fontSize: '1.05rem',
-                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
+                      fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
                       fontWeight: 800,
                       color: 'var(--text-primary)'
                     }}>
@@ -464,7 +716,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                       letterSpacing: '0.3px',
                       fontWeight: 700,
                       marginTop: '3px',
-                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                      fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
                       {new Intl.DateTimeFormat(isBangla ? 'bn-BD' : 'en-US', { 
                         weekday: 'long', 
@@ -522,15 +774,15 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Globe size={16} color="var(--primary-color)" />
-                    <span style={{ fontSize: '0.84rem', fontWeight: 700, letterSpacing: '0.3px' }}>
-                      Select Language
+                    <span style={{ fontSize: '0.84rem', fontWeight: 700, letterSpacing: '0.3px', fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit' }}>
+                      {isBangla ? 'ভাষা পরিবর্তন করুন' : 'Select Language'}
                     </span>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>▾</span>
                 </motion.button>
               </div>
 
-              {/* 3. Structured Navigation Menu Items (Each with Distinct Color Accents) */}
+              {/* 3. Structured Navigation Menu Items (5 Items in Exact Order) */}
               <div style={{
                 flex: 1,
                 overflowY: 'auto',
@@ -548,10 +800,10 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                   color: 'var(--text-secondary)',
                   textTransform: 'uppercase'
                 }}>
-                  Navigation Tabs
+                  {isBangla ? 'মেনু নেভিগেশন' : 'Navigation Tabs'}
                 </div>
 
-                {/* Distinctly Styled Colorful Menu Cards */}
+                {/* 5 Distinctly Styled Colorful Menu Cards */}
                 {mainNavItems.map((item) => {
                   const isActive = activeItem === item.id;
                   return (
@@ -598,9 +850,9 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                             <span style={{
                               fontSize: '0.9rem',
                               fontWeight: 800,
-                              letterSpacing: '0.8px',
+                              letterSpacing: isBangla ? '0' : '0.8px',
                               color: isActive ? item.color : 'var(--text-primary)',
-                              fontFamily: "'Space Grotesk', sans-serif"
+                              fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
                             }}>
                               {item.label}
                             </span>
@@ -608,105 +860,70 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                               fontSize: '0.7rem',
                               color: 'var(--text-secondary)',
                               marginTop: '2px',
-                              fontWeight: 500
+                              fontWeight: 500,
+                              fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
                             }}>
                               {item.sublabel}
                             </span>
                           </div>
                         </div>
 
-                        <ChevronRight 
-                          size={16} 
-                          color={item.color}
-                          style={{
-                            transform: item.id === 'SETTING' && isSettingsOpen ? 'rotate(90deg)' : 'none',
-                            transition: 'transform 0.2s',
-                            opacity: 0.85
-                          }} 
-                        />
+                        {item.id === 'SETTING' && (
+                          <ChevronRight 
+                            size={16} 
+                            color={item.color}
+                            style={{
+                              transform: isSettingsOpen ? 'rotate(90deg)' : 'none',
+                              transition: 'transform 0.2s',
+                              opacity: 0.85
+                            }} 
+                          />
+                        )}
                       </motion.button>
 
-                      {/* Expanding Sub-Menu for SETTING */}
+                      {/* Clean Discreet Sub-Menu for SETTING (Only Subtle "Control" Option) */}
                       {item.id === 'SETTING' && isSettingsOpen && (
                         <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
                           exit={{ opacity: 0, height: 0 }}
                           style={{
-                            padding: '8px 8px 4px 34px',
+                            padding: '6px 8px 4px 34px',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '5px'
+                            gap: '6px'
                           }}
                         >
-                          {/* Theme Switcher in Settings */}
-                          <button
-                            onClick={toggleTheme}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '8px 12px',
-                              borderRadius: '10px',
-                              background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-                              border: '1px solid var(--card-border)',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.78rem',
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <span>Theme: {isDark ? 'Dark Mode' : 'Light Mode'}</span>
-                            {isDark ? <Sun size={14} color="#F59E0B" /> : <Moon size={14} color="#00E5FF" />}
-                          </button>
-
-                          {/* QR Card in Settings */}
-                          <button
+                          {/* Discreet Gateway for Admin / Control */}
+                          <motion.button
+                            whileHover={{ scale: 1.02, x: 2 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={() => {
                               setIsDrawerOpen(false);
-                              onOpenQR && onOpenQR();
-                            }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '8px 12px',
-                              borderRadius: '10px',
-                              background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-                              border: '1px solid var(--card-border)',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.78rem',
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <span>Digital NFC Card QR</span>
-                            <QrCode size={14} color="#00E5FF" />
-                          </button>
-
-                          {/* Admin Dashboard in Settings */}
-                          <button
-                            onClick={() => {
-                              setIsDrawerOpen(false);
+                              setIsSettingsOpen(false);
                               onOpenAdmin && onOpenAdmin();
                             }}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
-                              padding: '8px 12px',
+                              padding: '9px 12px',
                               borderRadius: '10px',
-                              background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-                              border: '1px solid var(--card-border)',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.78rem',
+                              background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
+                              border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+                              color: isDark ? '#94A3B8' : '#64748B',
+                              fontSize: '0.8rem',
                               fontWeight: 600,
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
                             }}
                           >
-                            <span>Admin Dashboard</span>
-                            <Shield size={14} color="#FF1744" />
-                          </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <SlidersHorizontal size={14} color="#94A3B8" />
+                              <span>{isBangla ? 'কন্ট্রোল' : 'Control'}</span>
+                            </div>
+                            <span style={{ fontSize: '0.64rem', color: '#64748B' }}>•</span>
+                          </motion.button>
                         </motion.div>
                       )}
                     </div>
@@ -734,7 +951,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                   fontWeight: 600,
                   letterSpacing: '0.5px',
                   marginBottom: '4px',
-                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}>
                   <Sparkles size={13} />
                   <span>{isBangla ? 'মূল দর্শন' : 'Guiding Philosophy'}</span>
@@ -747,7 +964,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                   letterSpacing: '0.4px',
                   color: isDark ? '#E2E8F0' : '#334155',
                   textShadow: isDark ? '0 0 12px rgba(0, 240, 255, 0.2)' : 'none',
-                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}>
                   {isBangla ? '“সর্বদা মানুষের সেবা করুন।”' : '"Always serve humanity."'}
                 </p>

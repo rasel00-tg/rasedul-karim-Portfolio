@@ -20,7 +20,17 @@ import {
   Users, 
   CheckCircle2, 
   Loader2, 
-  Sparkles as SparkleIcon 
+  Sparkles as SparkleIcon,
+  Code2,
+  Braces,
+  Smartphone,
+  Database,
+  Terminal,
+  PenTool,
+  Layers,
+  Crop,
+  Palette,
+  Wand2
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -317,15 +327,8 @@ const HeroSection = ({ isDreamOpen }) => {
         }} />
       </div>
 
-      {/* 2. Digital Profile Main Card Content */}
-      <div style={{
-        width: '100%',
-        maxWidth: '720px',
-        margin: '0 auto',
-        padding: '0 16px',
-        position: 'relative',
-        zIndex: 4
-      }}>
+      {/* 2. Digital Profile Main Card Content (Wide Modern Dashboard on Desktop) */}
+      <div className="hero-responsive-container">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -341,7 +344,7 @@ const HeroSection = ({ isDreamOpen }) => {
             overflow: 'visible',
             position: 'relative',
             marginTop: '-52px',
-            padding: '0 18px 22px 18px',
+            padding: '0 20px 26px 20px',
             willChange: 'transform'
           }}
         >
@@ -354,47 +357,209 @@ const HeroSection = ({ isDreamOpen }) => {
             width: '100%',
             marginTop: '-54px'
           }}>
-            {/* 1. Prominent Centered Circular Profile Avatar (~105px–115px) */}
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              style={{
-                width: 'clamp(105px, 24vw, 115px)',
-                height: 'clamp(105px, 24vw, 115px)',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-green))',
-                padding: '3.5px',
-                boxShadow: isDark 
-                  ? '0 0 35px rgba(0, 240, 255, 0.55), 0 0 15px rgba(0, 200, 83, 0.4)' 
-                  : '0 10px 30px rgba(0, 119, 182, 0.28)',
-                position: 'relative',
-                zIndex: 5,
-                marginBottom: '10px'
-              }}
-            >
+            {/* 1. Prominent Centered Circular Profile Avatar with Dual-Ring 10-Point Orbit Satellite System */}
+            <div style={{
+              position: 'relative',
+              width: 'clamp(195px, 45vw, 218px)',
+              height: 'clamp(195px, 45vw, 218px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '4px'
+            }}>
+              {/* Subtle Track 1: Inner Orbit Guide (Creative Track) */}
               <div style={{
+                position: 'absolute',
+                width: 'clamp(168px, 39vw, 184px)',
+                height: 'clamp(168px, 39vw, 184px)',
+                borderRadius: '50%',
+                border: '1px dashed rgba(255, 0, 127, 0.22)',
+                boxShadow: '0 0 12px rgba(255, 0, 127, 0.08) inset',
+                pointerEvents: 'none'
+              }} />
+
+              {/* Subtle Track 2: Outer Orbit Guide (Dev Track) */}
+              <div style={{
+                position: 'absolute',
                 width: '100%',
                 height: '100%',
                 borderRadius: '50%',
-                overflow: 'hidden',
-                background: '#0D1117'
-              }}>
-                <img 
-                  src="/profile.jpeg" 
-                  alt="Rasedul Karim" 
-                  loading="eager"
-                  fetchPriority="high"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                />
-              </div>
-            </motion.div>
+                border: '1px dashed rgba(0, 240, 255, 0.22)',
+                boxShadow: '0 0 15px rgba(0, 240, 255, 0.08) inset',
+                pointerEvents: 'none'
+              }} />
 
-            {/* 2. Micro-Scale Title Case Name (13.5px) + Enlarged Red Facebook Rosette Verified Badge (19px) */}
+              {/* Ring 1: Inner Creative Editing Track (5 Badges, Clockwise 20s) */}
+              <motion.div
+                animate={{ rotate: [0, 360] }}
+                transition={{
+                  duration: 20,
+                  repeat: Infinity,
+                  ease: "linear"
+                }}
+                style={{
+                  position: 'absolute',
+                  width: 'clamp(168px, 39vw, 184px)',
+                  height: 'clamp(168px, 39vw, 184px)',
+                  borderRadius: '50%',
+                  pointerEvents: 'none',
+                  zIndex: 6
+                }}
+              >
+                {[
+                  { icon: PenTool, name: 'Vector Pen Tool', color: '#FF007F', angle: 0 },
+                  { icon: Layers, name: 'Layers & Compositing', color: '#00F0FF', angle: 72 },
+                  { icon: Crop, name: 'Crop & Framing', color: '#FFB300', angle: 144 },
+                  { icon: Palette, name: 'Color Palette & Grading', color: '#B388FF', angle: 216 },
+                  { icon: Wand2, name: 'Magic Wand & Retouch', color: '#00E676', angle: 288 }
+                ].map((badge, idx) => {
+                  const rad = ((badge.angle - 90) * Math.PI) / 180;
+                  const left = `${50 + 50 * Math.cos(rad)}%`;
+                  const top = `${50 + 50 * Math.sin(rad)}%`;
+                  const IconComp = badge.icon;
+                  return (
+                    <div
+                      key={`inner-${idx}`}
+                      style={{
+                        position: 'absolute',
+                        top,
+                        left,
+                        transform: 'translate(-50%, -50%)',
+                        width: '21px',
+                        height: '21px'
+                      }}
+                    >
+                      <motion.div
+                        animate={{ rotate: [0, -360] }}
+                        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: '50%',
+                          background: 'rgba(15, 23, 42, 0.9)',
+                          backdropFilter: 'blur(6px)',
+                          border: `1px solid ${badge.color}aa`,
+                          boxShadow: `0 0 8px ${badge.color}60, 0 2px 6px rgba(0,0,0,0.6)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: badge.color
+                        }}
+                        title={badge.name}
+                      >
+                        <IconComp size={10} strokeWidth={2.2} />
+                      </motion.div>
+                    </div>
+                  );
+                })}
+              </motion.div>
+
+              {/* Ring 2: Outer Development & Coding Track (5 Badges, Counter-Clockwise 26s) */}
+              <motion.div
+                animate={{ rotate: [360, 0] }}
+                transition={{
+                  duration: 26,
+                  repeat: Infinity,
+                  ease: "linear"
+                }}
+                style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  pointerEvents: 'none',
+                  zIndex: 7
+                }}
+              >
+                {[
+                  { icon: Code2, name: 'React / Code', color: '#00F0FF', angle: 36 },
+                  { icon: Braces, name: 'JavaScript / Scripting', color: '#FFD600', angle: 108 },
+                  { icon: Smartphone, name: 'Flutter / Mobile Apps', color: '#29B6F6', angle: 180 },
+                  { icon: Database, name: 'Database / Firebase', color: '#FF6D00', angle: 252 },
+                  { icon: Terminal, name: 'Terminal / CLI', color: '#00E676', angle: 324 }
+                ].map((badge, idx) => {
+                  const rad = ((badge.angle - 90) * Math.PI) / 180;
+                  const left = `${50 + 50 * Math.cos(rad)}%`;
+                  const top = `${50 + 50 * Math.sin(rad)}%`;
+                  const IconComp = badge.icon;
+                  return (
+                    <div
+                      key={`outer-${idx}`}
+                      style={{
+                        position: 'absolute',
+                        top,
+                        left,
+                        transform: 'translate(-50%, -50%)',
+                        width: '23px',
+                        height: '23px'
+                      }}
+                    >
+                      <motion.div
+                        animate={{ rotate: [0, 360] }}
+                        transition={{ duration: 26, repeat: Infinity, ease: 'linear' }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: '50%',
+                          background: 'rgba(15, 23, 42, 0.92)',
+                          backdropFilter: 'blur(6px)',
+                          border: `1.2px solid ${badge.color}bb`,
+                          boxShadow: `0 0 9px ${badge.color}66, 0 3px 8px rgba(0,0,0,0.65)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: badge.color
+                        }}
+                        title={badge.name}
+                      >
+                        <IconComp size={11} strokeWidth={2.2} />
+                      </motion.div>
+                    </div>
+                  );
+                })}
+              </motion.div>
+
+              {/* Central Profile Avatar (Further Enlarged: 145px–158px) */}
+              <motion.div
+                whileHover={{ scale: 1.03 }}
+                style={{
+                  width: 'clamp(145px, 34vw, 158px)',
+                  height: 'clamp(145px, 34vw, 158px)',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-green))',
+                  padding: '4px',
+                  boxShadow: isDark 
+                    ? '0 0 40px rgba(0, 240, 255, 0.58), 0 0 18px rgba(0, 200, 83, 0.42)' 
+                    : '0 12px 35px rgba(0, 119, 182, 0.32)',
+                  position: 'relative',
+                  zIndex: 5
+                }}
+              >
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: '50%',
+                  overflow: 'hidden',
+                  background: '#0D1117'
+                }}>
+                  <img 
+                    src="/profile.jpeg" 
+                    alt="Rasedul Karim" 
+                    loading="eager"
+                    fetchPriority="high"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
+                </div>
+              </motion.div>
+            </div>
+
+            {/* 2. Absolute Micro-Scale Title Case Name (~7.5px) + Decoupled Rotating Rosette Ring with Static Checkmark */}
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center',
-              width: '100%',
-              padding: '6px 24px 3px 24px',
+              justifyContent: 'center', 
+              width: '100%', 
+              padding: '4px 24px 3px 24px',
               boxSizing: 'border-box'
             }}>
               <div style={{
@@ -404,76 +569,117 @@ const HeroSection = ({ isDreamOpen }) => {
                 gap: '6px',
                 flexShrink: 0
               }}>
-                <h1 style={{
-                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
-                  fontSize: '11.8px',
-                  fontWeight: 700,
-                  letterSpacing: isBangla ? '0.2px' : '0.4px',
-                  color: 'var(--text-primary)',
-                  margin: 0,
-                  whiteSpace: 'nowrap',
-                  lineHeight: 1.2,
-                  overflow: 'visible',
-                  flexShrink: 0,
-                  textShadow: isDark ? '0 0 8px rgba(0, 240, 255, 0.25)' : 'none'
-                }}>
+                <h1 
+                  className="hero-profile-name"
+                  style={{
+                    fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
+                    color: 'var(--text-primary)',
+                    margin: 0,
+                    whiteSpace: 'nowrap',
+                    overflow: 'visible',
+                    flexShrink: 0,
+                    textShadow: isDark ? '0 0 8px rgba(0, 240, 255, 0.25)' : 'none'
+                  }}
+                >
                   {t('hero.name', isBangla ? 'রাশেদুল করিম' : 'Rasedul Karim')}
                 </h1>
 
-                {/* Enlarged Authentic Facebook-Style 16-Point Scalloped Rosette Verified Badge (19px) */}
-                <motion.div
-                  animate={{
-                    scale: [1, 1.05, 0.98, 1],
-                    filter: [
-                      'drop-shadow(0 0 3px rgba(255, 23, 68, 0.75)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))',
-                      'drop-shadow(0 0 6px rgba(255, 23, 68, 0.95)) drop-shadow(0 0 10px rgba(255, 23, 68, 0.6))',
-                      'drop-shadow(0 0 3px rgba(255, 23, 68, 0.75)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))'
-                    ]
-                  }}
-                  transition={{
-                    duration: 2.4,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
+                {/* Decoupled Verified Badge (Rotating Outer Sawtooth Ring + Strictly Stationary Center Checkmark) */}
+                <div 
+                  className="hero-verified-badge"
                   style={{
-                    width: '19px',
-                    height: '19px',
-                    minWidth: '19px',
-                    minHeight: '19px',
-                    maxWidth: '19px',
-                    maxHeight: '19px',
+                    position: 'relative',
                     aspectRatio: '1 / 1',
                     flexShrink: 0,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    willChange: 'transform, filter'
+                    justifyContent: 'center'
                   }}
-                  title="Verified Profile"
+                  title={t('hero.verified', 'Verified Profile')}
                 >
-                  <svg 
-                    width="19" 
-                    height="19" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    xmlns="http://www.w3.org/2000/svg"
-                    style={{ width: '100%', height: '100%', display: 'block' }}
+                  {/* Layer 1: Rotating Outer Sawtooth/Scalloped Red Rosette Ring */}
+                  <motion.div
+                    animate={{
+                      rotate: [0, 360],
+                      filter: [
+                        'drop-shadow(0 0 3px rgba(255, 23, 68, 0.8)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))',
+                        'drop-shadow(0 0 7px rgba(255, 23, 68, 0.98)) drop-shadow(0 0 12px rgba(255, 23, 68, 0.65))',
+                        'drop-shadow(0 0 3px rgba(255, 23, 68, 0.8)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))'
+                      ]
+                    }}
+                    transition={{
+                      rotate: {
+                        duration: 9,
+                        repeat: Infinity,
+                        ease: "linear"
+                      },
+                      filter: {
+                        duration: 2.8,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                      }
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      willChange: 'transform, filter'
+                    }}
                   >
-                    {/* 16-Point Scalloped Rosette Contour */}
-                    <path 
-                      d="M 12.00 1.50 A 2.95 2.95 0 0 1 16.02 2.30 A 2.95 2.95 0 0 1 19.42 4.58 A 2.95 2.95 0 0 1 21.70 7.98 A 2.95 2.95 0 0 1 22.50 12.00 A 2.95 2.95 0 0 1 21.70 16.02 A 2.95 2.95 0 0 1 19.42 19.42 A 2.95 2.95 0 0 1 16.02 21.70 A 2.95 2.95 0 0 1 12.00 22.50 A 2.95 2.95 0 0 1 7.98 21.70 A 2.95 2.95 0 0 1 4.58 19.42 A 2.95 2.95 0 0 1 2.30 16.02 A 2.95 2.95 0 0 1 1.50 12.00 A 2.95 2.95 0 0 1 2.30 7.98 A 2.95 2.95 0 0 1 4.58 4.58 A 2.95 2.95 0 0 1 7.98 2.30 A 2.95 2.95 0 0 1 12.00 1.50 Z" 
-                      fill="#FF1744" 
-                    />
-                    {/* Precision-Centered White Checkmark */}
-                    <path 
-                      d="M8.2 12.3L10.8 14.9L16.2 9.5" 
-                      stroke="#FFFFFF" 
-                      strokeWidth="2.5" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                    />
-                  </svg>
-                </motion.div>
+                    <svg 
+                      width="24" 
+                      height="24" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ width: '100%', height: '100%', display: 'block' }}
+                    >
+                      {/* 16-Point Scalloped Rosette Contour */}
+                      <path 
+                        d="M 12.00 1.50 A 2.95 2.95 0 0 1 16.02 2.30 A 2.95 2.95 0 0 1 19.42 4.58 A 2.95 2.95 0 0 1 21.70 7.98 A 2.95 2.95 0 0 1 22.50 12.00 A 2.95 2.95 0 0 1 21.70 16.02 A 2.95 2.95 0 0 1 19.42 19.42 A 2.95 2.95 0 0 1 16.02 21.70 A 2.95 2.95 0 0 1 12.00 22.50 A 2.95 2.95 0 0 1 7.98 21.70 A 2.95 2.95 0 0 1 4.58 19.42 A 2.95 2.95 0 0 1 2.30 16.02 A 2.95 2.95 0 0 1 1.50 12.00 A 2.95 2.95 0 0 1 2.30 7.98 A 2.95 2.95 0 0 1 4.58 4.58 A 2.95 2.95 0 0 1 7.98 2.30 A 2.95 2.95 0 0 1 12.00 1.50 Z" 
+                        fill="#FF1744" 
+                      />
+                    </svg>
+                  </motion.div>
+
+                  {/* Layer 2: Strictly Stationary (Non-Rotating) Center Checkmark */}
+                  <div 
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none',
+                      zIndex: 2
+                    }}
+                  >
+                    <svg 
+                      width="24" 
+                      height="24" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ width: '100%', height: '100%', display: 'block' }}
+                    >
+                      <path 
+                        d="M8.2 12.3L10.8 14.9L16.2 9.5" 
+                        stroke="#FFFFFF" 
+                        strokeWidth="2.5" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                      />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
 
