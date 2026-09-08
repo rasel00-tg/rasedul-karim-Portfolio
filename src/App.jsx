@@ -2,13 +2,6 @@ import React, { useState, Suspense, lazy } from 'react';
 import { FirestoreStreamBuilder } from './firebase/FirestoreStreamBuilder';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
-import StackedLinkCapsules from './components/StackedLinkCapsules';
-import NoticeSlider from './components/NoticeSlider';
-import AboutSection from './components/AboutSection';
-import SocialCommunitySection from './components/SocialCommunitySection';
-import ProjectsSection from './components/ProjectsSection';
-import ContactSection from './components/ContactSection';
-import Footer from './components/Footer';
 import FloatingActionButtons from './components/FloatingActionButtons';
 
 // Lazy loading modals for maximum performance
@@ -49,41 +42,13 @@ function App() {
           
           {/* Main Mobile-First Digital Business Card Layout */}
           <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-            {/* 1. Digital NFC Business Card Cover & Profile */}
+            {/* 1. Digital NFC Business Card Cover, Profile, Metrics & Social Icons */}
             <HeroSection 
               isDreamOpen={showDream || showAbout || showSkill || showAdmin || showQR} 
               onOpenQR={() => setShowQR(true)}
             />
 
-            {/* 2. Stacked Link & Navigation Capsules */}
-            <StackedLinkCapsules 
-              onOpenAbout={() => setShowAbout(true)} 
-              onOpenDream={() => setShowDream(true)} 
-            />
-            
-            {/* 3. Notice Slider */}
-            <NoticeSlider />
-            
-            {/* 4. My Skills Badges */}
-            <AboutSection />
-            
-            {/* 5. Social Community Hub */}
-            <SocialCommunitySection />
-            
-            {/* 6. Web Apps & Projects Section (Firestore StreamBuilder + Cloudinary) */}
-            <ProjectsSection />
-            
-            {/* 7. Direct Contact Form */}
-            <ContactSection />
-            
-            {/* 8. Clean Footer with Dashboard Login */}
-            <Footer 
-              onOpenDream={() => setShowDream(true)} 
-              onOpenAbout={() => setShowAbout(true)}
-              onOpenAdmin={() => setShowAdmin(true)}
-            />
-            
-            {/* 9. Bottom-Right Floating Quick Actions */}
+            {/* Bottom-Right Floating Quick Actions */}
             <FloatingActionButtons />
           </div>
         </>

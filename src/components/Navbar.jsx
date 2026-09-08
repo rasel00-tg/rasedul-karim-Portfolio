@@ -26,7 +26,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
   
   const { isDark, toggleTheme } = useTheme();
-  const { language, setLanguage, languagesList, t, isRTL } = useLanguage();
+  const { isBangla, language, setLanguage, languagesList, t, isRTL } = useLanguage();
 
   // Secret Admin hotkey: Ctrl + Shift + A
   useEffect(() => {
@@ -247,14 +247,14 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                     <h3 style={{
                       margin: 0,
                       fontSize: '1.05rem',
-                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
                       fontWeight: 800,
                       color: 'var(--text-primary)'
                     }}>
-                      Select Language
+                      {t('nav.languageTitle', 'Language Selection')}
                     </h3>
                     <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                      ভাষা নির্বাচন করুন • اختر اللغة • भाषा चुनें
+                      Select Language • ভাষা নির্বাচন করুন
                     </span>
                   </div>
                 </div>
@@ -292,6 +292,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                       onClick={() => {
                         setLanguage(lang.id);
                         setIsLanguageModalOpen(false);
+                        setIsDrawerOpen(false);
                       }}
                       whileHover={{ scale: 1.02, x: 4 }}
                       whileTap={{ scale: 0.98 }}
@@ -387,15 +388,15 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                 position: 'fixed',
                 top: 0,
                 right: 0,
-                width: 'min(320px, 86vw)',
+                width: 'min(320px, 85vw)',
                 height: '100vh',
                 background: isDark ? '#0D1117' : '#FFFFFF',
-                borderLeft: '1px solid var(--card-border)',
+                borderLeft: isDark ? '1.5px solid rgba(0, 229, 255, 0.4)' : '1.5px solid rgba(0, 229, 255, 0.25)',
                 zIndex: 99999,
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: isDark 
-                  ? '-15px 0 50px rgba(0, 0, 0, 0.85), -1px 0 0 rgba(0, 240, 255, 0.15)' 
+                  ? '-15px 0 50px rgba(0, 0, 0, 0.95), -1px 0 15px rgba(0, 240, 255, 0.2)' 
                   : '-10px 0 40px rgba(0, 0, 0, 0.15)',
                 overflow: 'hidden'
               }}
@@ -424,7 +425,7 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                     flexShrink: 0
                   }}>
                     <img 
-                      src="/about.png" 
+                      src="/logo.png" 
                       alt="RASHED Logo" 
                       style={{
                         width: '100%',
@@ -434,8 +435,14 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                         display: 'block'
                       }}
                       onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.parentNode.innerHTML = '<span style="font-weight:900;color:#000;font-size:1.1rem;font-family:Space Grotesk">R</span>';
+                        if (e.target.src.includes('/logo.png')) {
+                          e.target.src = '/about.png';
+                        } else {
+                          e.target.style.display = 'none';
+                          if (e.target.parentNode) {
+                            e.target.parentNode.innerHTML = '<span style="font-weight:900;color:#000;font-size:1.1rem;font-family:Space Grotesk">R</span>';
+                          }
+                        }
                       }}
                     />
                   </div>
@@ -456,9 +463,10 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                       color: 'var(--primary-color)',
                       letterSpacing: '0.3px',
                       fontWeight: 700,
-                      marginTop: '3px'
+                      marginTop: '3px',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
-                      {new Intl.DateTimeFormat('en-US', { 
+                      {new Intl.DateTimeFormat(isBangla ? 'bn-BD' : 'en-US', { 
                         weekday: 'long', 
                         month: 'short', 
                         day: 'numeric', 
@@ -725,10 +733,11 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                   fontSize: '0.72rem',
                   fontWeight: 600,
                   letterSpacing: '0.5px',
-                  marginBottom: '4px'
+                  marginBottom: '4px',
+                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}>
                   <Sparkles size={13} />
-                  <span>Guiding Philosophy</span>
+                  <span>{isBangla ? 'মূল দর্শন' : 'Guiding Philosophy'}</span>
                 </div>
                 <p style={{
                   margin: 0,
@@ -737,9 +746,10 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill }
                   fontWeight: 600,
                   letterSpacing: '0.4px',
                   color: isDark ? '#E2E8F0' : '#334155',
-                  textShadow: isDark ? '0 0 12px rgba(0, 240, 255, 0.2)' : 'none'
+                  textShadow: isDark ? '0 0 12px rgba(0, 240, 255, 0.2)' : 'none',
+                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}>
-                  "Always serve humanity."
+                  {isBangla ? '“সর্বদা মানুষের সেবা করুন।”' : '"Always serve humanity."'}
                 </p>
               </div>
             </motion.div>

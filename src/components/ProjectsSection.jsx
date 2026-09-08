@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ExternalLink, Smartphone, Globe, Layers } from 'lucide-react';
 import { usePortfolioStream } from '../firebase/usePortfolioStream';
 import { getOptimizedImageUrl } from '../services/cloudinaryService';
+import { useLanguage } from '../context/LanguageContext';
 
 const fallbackApps = [
   {
@@ -234,6 +235,7 @@ const ProjectCard = ({ project, type }) => {
 const ProjectsSection = () => {
   const [activeTab, setActiveTab] = useState('apps'); // 'apps' or 'web'
   const { items: streamProjects } = usePortfolioStream();
+  const { isBangla, t } = useLanguage();
 
   // Filter and sort stream projects, fallback to default lists if stream is empty
   const dbApps = (streamProjects || [])
@@ -281,9 +283,10 @@ const ProjectsSection = () => {
             fontWeight: '600',
             letterSpacing: '1px',
             marginBottom: '12px',
-            textTransform: 'uppercase'
+            textTransform: 'uppercase',
+            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
           }}>
-            <Layers size={16} /> Portfolio Highlights
+            <Layers size={16} /> {t('projects.tag', 'Portfolio Highlights')}
           </div>
 
           <h2 style={{ 
@@ -291,16 +294,18 @@ const ProjectsSection = () => {
             color: 'var(--text-primary)', 
             margin: 0,
             fontWeight: 800,
-            letterSpacing: '1.5px'
+            letterSpacing: '1.5px',
+            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif"
           }}>
-            WEB APPS & <span style={{ color: 'var(--primary-color)' }}>PROJECTS</span>
+            {t('projects.webApps', 'WEB APPS &')} <span style={{ color: 'var(--primary-color)' }}>{t('projects.projects', 'PROJECTS')}</span>
           </h2>
           <p style={{
             color: 'var(--text-secondary)',
             fontSize: 'clamp(0.88rem, 2vw, 1rem)',
-            marginTop: '8px'
+            marginTop: '8px',
+            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
           }}>
-            Selected mobile applications and live production websites.
+            {t('projects.desc', 'Selected mobile applications and live production websites.')}
           </p>
         </div>
         
@@ -328,10 +333,11 @@ const ProjectsSection = () => {
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               boxShadow: activeTab === 'apps' ? '0 0 20px rgba(0,240,255,0.2)' : 'none',
-              backdropFilter: 'blur(10px)'
+              backdropFilter: 'blur(10px)',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}
           >
-            <Smartphone size={18} /> Apps
+            <Smartphone size={18} /> {t('projects.appsTab', 'Mobile Apps')}
           </button>
 
           <button 
@@ -350,10 +356,11 @@ const ProjectsSection = () => {
               cursor: 'pointer',
               transition: 'all 0.3s ease',
               boxShadow: activeTab === 'web' ? '0 0 20px rgba(255,0,127,0.2)' : 'none',
-              backdropFilter: 'blur(10px)'
+              backdropFilter: 'blur(10px)',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}
           >
-            <Globe size={18} /> Websites
+            <Globe size={18} /> {t('projects.webTab', 'Websites & Portals')}
           </button>
         </div>
 

@@ -26,8 +26,9 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
-const SectionCard = ({ title, subtitle, icon: Icon, color = '#00f0ff', children }) => {
+const SectionCard = ({ title, subtitle, icon: Icon, color = '#00f0ff', isBangla = false, children }) => {
   const { isDark } = useTheme();
   return (
     <motion.div
@@ -82,7 +83,7 @@ const SectionCard = ({ title, subtitle, icon: Icon, color = '#00f0ff', children 
           <h3 style={{
             margin: 0,
             fontSize: '1.08rem',
-            fontFamily: "'Space Grotesk', sans-serif",
+            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
             fontWeight: 800,
             letterSpacing: '0.6px',
             color: 'var(--text-primary)',
@@ -95,7 +96,8 @@ const SectionCard = ({ title, subtitle, icon: Icon, color = '#00f0ff', children 
               fontSize: '0.74rem',
               color: 'var(--text-secondary)',
               fontWeight: 500,
-              marginTop: '2px'
+              marginTop: '2px',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}>
               {subtitle}
             </span>
@@ -104,7 +106,7 @@ const SectionCard = ({ title, subtitle, icon: Icon, color = '#00f0ff', children 
       </div>
 
       {/* Body Content */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit' }}>
         {children}
       </div>
     </motion.div>
@@ -113,6 +115,7 @@ const SectionCard = ({ title, subtitle, icon: Icon, color = '#00f0ff', children 
 
 const AboutModal = ({ onClose }) => {
   const { isDark } = useTheme();
+  const { isBangla, t } = useLanguage();
 
   return (
     <AnimatePresence>
@@ -168,11 +171,11 @@ const AboutModal = ({ onClose }) => {
               cursor: 'pointer', 
               color: 'var(--text-primary)',
               borderRadius: '50%', 
-              width: '42px',
-              height: '42px',
+              width: '42px', 
+              height: '42px', 
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center',
+              justifyContent: 'center', 
               zIndex: 100000,
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
             }}
@@ -240,7 +243,7 @@ const AboutModal = ({ onClose }) => {
               lineHeight: 1.15,
               textShadow: isDark ? '0 0 20px rgba(0, 240, 255, 0.35)' : 'none'
             }}>
-              Rasedul Karim
+              {isBangla ? 'রাশেদুল করিম' : 'Rasedul Karim'}
             </h1>
 
             <div style={{
@@ -248,9 +251,10 @@ const AboutModal = ({ onClose }) => {
               color: 'var(--primary-color)',
               fontWeight: 700,
               letterSpacing: '0.6px',
-              marginBottom: '8px'
+              marginBottom: '8px',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}>
-              Software & Web Developer | Photo Editor | Digital Creator
+              {isBangla ? 'সফটওয়্যার ও ওয়েব ডেভেলপার | ফটো এডিটর | ডিজিটাল ক্রিয়েটর' : 'Software & Web Developer | Photo Editor | Digital Creator'}
             </div>
 
             {/* Location Tag */}
@@ -265,10 +269,11 @@ const AboutModal = ({ onClose }) => {
               borderRadius: '20px',
               background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
               border: '1px solid var(--card-border)',
-              marginBottom: '18px'
+              marginBottom: '18px',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}>
               <MapPin size={14} color="#FF1744" />
-              <span>Natun Pollan Para, Teknaf, Cox's Bazar, Bangladesh</span>
+              <span>{isBangla ? 'নতুন পল্লান পাড়া, টেকনাফ, কক্সবাজার, বাংলাদেশ' : "Natun Pollan Para, Teknaf, Cox's Bazar, Bangladesh"}</span>
             </div>
 
             {/* Quick Contact Chips Row */}
@@ -322,7 +327,7 @@ const AboutModal = ({ onClose }) => {
             </div>
           </div>
 
-          {/* 2. Structured Information Cards (All Clean Default English) */}
+          {/* 2. Structured Information Cards */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -332,10 +337,11 @@ const AboutModal = ({ onClose }) => {
 
             {/* Card 1: Professional Career & Media Roles */}
             <SectionCard 
-              title="Professional Career & Media Roles" 
-              subtitle="Work Experience & Digital Administration" 
+              title={isBangla ? 'কর্মজীবন ও অভিজ্ঞতা' : 'Professional Career & Media Roles'} 
+              subtitle={isBangla ? 'পেশাগত ভূমিকা ও ডিজিটাল প্রশাসন' : 'Work Experience & Digital Administration'} 
               icon={Briefcase} 
               color="#00f0ff"
+              isBangla={isBangla}
             >
               {/* Primary Profession: MFS Employee */}
               <div style={{
@@ -350,13 +356,16 @@ const AboutModal = ({ onClose }) => {
                 <Building2 size={20} color="#00f0ff" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div>
                   <div style={{ fontSize: '0.94rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Employee • Mobile Financial Services (MFS)
+                    {isBangla ? 'কর্মী • মোবাইল ফাইন্যান্সিয়াল সার্ভিসেস (MFS)' : 'Employee • Mobile Financial Services (MFS)'}
                   </div>
                   <div style={{ fontSize: '0.82rem', color: 'var(--primary-color)', fontWeight: 600, marginTop: '2px' }}>
-                    Private Mobile Financial Services Company
+                    {isBangla ? 'একটি বেসরকারি মোবাইল ফাইন্যান্সিয়াল সার্ভিসেস প্রতিষ্ঠান' : 'Private Mobile Financial Services Company'}
                   </div>
                   <p style={{ margin: '6px 0 0 0', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-                    Serving as an active employee at a renowned private Mobile Financial Services (MFS) institution, ensuring smooth financial transactions, operational excellence, and customer support.
+                    {isBangla 
+                      ? 'একটি স্বনামধন্য বেসরকারি মোবাইল ফাইন্যান্সিয়াল সার্ভিসেস (MFS) প্রতিষ্ঠানে সক্রিয়ভাবে কর্মরত, যেখানে আর্থিক লেনদেনের মসৃণতা ও প্রাতিষ্ঠানিক উৎকর্ষ নিশ্চিত করা হয়।'
+                      : 'Serving as an active employee at a renowned private Mobile Financial Services (MFS) institution, ensuring smooth financial transactions, operational excellence, and customer support.'
+                    }
                   </p>
                 </div>
               </div>
@@ -368,7 +377,7 @@ const AboutModal = ({ onClose }) => {
                 gap: '10px'
               }}>
                 <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
-                  Media & Community Administration:
+                  {isBangla ? 'মিডিয়া ও কমিউনিটি প্রশাসন:' : 'Media & Community Administration:'}
                 </div>
 
                 <div style={{
@@ -392,10 +401,10 @@ const AboutModal = ({ onClose }) => {
                         Naf Vision
                       </div>
                       <div style={{ fontSize: '0.76rem', color: 'var(--primary-color)', fontWeight: 600 }}>
-                        Lead Visual Designer & Administrator
+                        {isBangla ? 'প্রধান ভিজ্যুয়াল ডিজাইনার ও এডমিন' : 'Lead Visual Designer & Administrator'}
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
-                        Prominent local news and media platform of Teknaf.
+                        {isBangla ? 'টেকনাফের শীর্ষস্থানীয় স্থানীয় সংবাদ ও মিডিয়া প্ল্যাটফর্ম।' : 'Prominent local news and media platform of Teknaf.'}
                       </div>
                     </div>
                   </div>
@@ -416,10 +425,10 @@ const AboutModal = ({ onClose }) => {
                         Naf Sports
                       </div>
                       <div style={{ fontSize: '0.76rem', color: '#00E676', fontWeight: 600 }}>
-                        Lead Visual Designer & Administrator
+                        {isBangla ? 'প্রধান ভিজ্যুয়াল ডিজাইনার ও এডমিন' : 'Lead Visual Designer & Administrator'}
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
-                        Premier sports news and tournament media hub of Teknaf.
+                        {isBangla ? 'টেকনাফের প্রধান ক্রীড়া সংবাদ ও টুর্নামেন্ট মিডিয়া হাব।' : 'Premier sports news and tournament media hub of Teknaf.'}
                       </div>
                     </div>
                   </div>
@@ -439,10 +448,13 @@ const AboutModal = ({ onClose }) => {
                 <Code2 size={20} color="#00E676" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Independent Software Development & Digital Visual Art
+                    {isBangla ? 'স্বাধীন সফটওয়্যার ডেভেলপমেন্ট ও ডিজিটাল ভিজ্যুয়াল আর্ট' : 'Independent Software Development & Digital Visual Art'}
                   </div>
                   <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-                    Crafting cross-platform mobile apps (Flutter/Dart), full-stack web platforms (React, Node, Firebase), and high-precision digital photo editing and visual branding.
+                    {isBangla 
+                      ? 'ক্রস-প্ল্যাটফর্ম মোবাইল অ্যাপস (Flutter/Dart), ফুল-স্ট্যাক ওয়েব প্ল্যাটফর্ম (React, Node, Firebase), এবং নিখুঁত ফটো এডিটিং ও ভিজ্যুয়াল ব্র্যান্ডিং তৈরি করা।'
+                      : 'Crafting cross-platform mobile apps (Flutter/Dart), full-stack web platforms (React, Node, Firebase), and high-precision digital photo editing and visual branding.'
+                    }
                   </p>
                 </div>
               </div>
@@ -450,10 +462,11 @@ const AboutModal = ({ onClose }) => {
 
             {/* Card 2: Family Background */}
             <SectionCard 
-              title="Family Background" 
-              subtitle="Heritage & Family Values" 
+              title={isBangla ? 'পারিবারিক পরিচয়' : 'Family Background'} 
+              subtitle={isBangla ? 'ঐতিহ্য ও পারিবারিক মূল্যবোধ' : 'Heritage & Family Values'} 
               icon={Home} 
               color="#FFAA00"
+              isBangla={isBangla}
             >
               <div style={{
                 display: 'grid',
@@ -468,13 +481,13 @@ const AboutModal = ({ onClose }) => {
                   border: '1px solid var(--card-border)'
                 }}>
                   <div style={{ fontSize: '0.74rem', color: '#FFAA00', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Father
+                    {isBangla ? 'পিতা' : 'Father'}
                   </div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '3px' }}>
-                    Businessman
+                    {isBangla ? 'ব্যবসায়ী' : 'Businessman'}
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    Dedicated to honest business and community ethics.
+                    {isBangla ? 'সৎ ব্যবসা এবং সামাজিক নীতি ও মূল্যবোধে নিবেদিতপ্রাণ।' : 'Dedicated to honest business and community ethics.'}
                   </div>
                 </div>
 
@@ -486,13 +499,13 @@ const AboutModal = ({ onClose }) => {
                   border: '1px solid var(--card-border)'
                 }}>
                   <div style={{ fontSize: '0.74rem', color: '#FF007F', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    Mother
+                    {isBangla ? 'মাতা' : 'Mother'}
                   </div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '3px' }}>
-                    Homemaker
+                    {isBangla ? 'গৃহিণী' : 'Homemaker'}
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    The core source of care, moral values, and compassion.
+                    {isBangla ? 'পরিবারের স্নেহ, মমতা ও নৈতিক মূল্যবোধের মূল উৎস।' : 'The core source of care, moral values, and compassion.'}
                   </div>
                 </div>
               </div>
@@ -510,21 +523,25 @@ const AboutModal = ({ onClose }) => {
                 <Users size={20} color="#FFAA00" style={{ flexShrink: 0, marginTop: '2px' }} />
                 <div>
                   <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Siblings: Two Brothers & Two Sisters
+                    {isBangla ? 'পরিবার: দুই ভাই ও দুই বোন' : 'Siblings: Two Brothers & Two Sisters'}
                   </div>
                   <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-                    Raised together in a warm, loving, and supportive environment built on mutual respect and shared dreams.
+                    {isBangla 
+                      ? 'পারস্পরিক শ্রদ্ধা, ভালোবাসা এবং যৌথ স্বপ্নের ওপর ভিত্তি করে গড়ে ওঠা সুন্দর পরিবেশে একসাথে বড় হওয়া।'
+                      : 'Raised together in a warm, loving, and supportive environment built on mutual respect and shared dreams.'
+                    }
                   </p>
                 </div>
               </div>
             </SectionCard>
 
-            {/* Card 3: Education (Restored Exact Screenshot Content) */}
+            {/* Card 3: Education */}
             <SectionCard 
-              title="Education" 
-              subtitle="Academic Background & Institutions" 
+              title={isBangla ? 'শিক্ষাগত যোগ্যতা' : 'Education'} 
+              subtitle={isBangla ? 'প্রাতিষ্ঠানিক শিক্ষা ও একাডেমি' : 'Academic Background & Institutions'} 
               icon={GraduationCap} 
               color="#00E676"
+              isBangla={isBangla}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* 1. Supia Nuria Dhakil Madrasah */}
@@ -540,12 +557,12 @@ const AboutModal = ({ onClose }) => {
                   <CheckCircle2 size={18} color="#00E676" style={{ flexShrink: 0 }} />
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Supia Nuria Dhakil Madrasah
+                      {isBangla ? 'সুফিয়া নূরিয়া দাখিল মাদ্রাসা' : 'Supia Nuria Dhakil Madrasah'}
                     </div>
                   </div>
                 </div>
 
-                {/* 2. Teknaf Model Pailot High School */}
+                {/* 2. Teknaf Model Pilot High School */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -558,7 +575,7 @@ const AboutModal = ({ onClose }) => {
                   <CheckCircle2 size={18} color="#00E676" style={{ flexShrink: 0 }} />
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Teknaf Model Pailot High School
+                      {isBangla ? 'টেকনাফ মডেল পাইলট উচ্চ বিদ্যালয়' : 'Teknaf Model Pailot High School'}
                     </div>
                   </div>
                 </div>
@@ -576,22 +593,23 @@ const AboutModal = ({ onClose }) => {
                   <CheckCircle2 size={18} color="#00E676" style={{ flexShrink: 0 }} />
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Teknaf Degree College
+                      {isBangla ? 'টেকনাফ ডিগ্রি কলেজ' : 'Teknaf Degree College'}
                     </div>
                   </div>
                 </div>
               </div>
             </SectionCard>
 
-            {/* Card 4: Courses & Certifications (Restored Exact Screenshot Content) */}
+            {/* Card 4: Courses & Certifications */}
             <SectionCard 
-              title="Courses & Certifications" 
-              subtitle="Specialized Training & Mastery" 
+              title={isBangla ? 'কোর্স ও প্রশিক্ষণ' : 'Courses & Certifications'} 
+              subtitle={isBangla ? 'বিশেষায়িত প্রশিক্ষণ ও দক্ষতা' : 'Specialized Training & Mastery'} 
               icon={Monitor} 
               color="#FFAA00"
+              isBangla={isBangla}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {/* 1. Programming Hero Specialized Learning */}
+                {/* 1. Programming Hero */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -603,7 +621,7 @@ const AboutModal = ({ onClose }) => {
                 }}>
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Programming Hero Specialized Learning
+                      {isBangla ? 'প্রোগ্রামিং হিরো বিশেষায়িত লার্নিং' : 'Programming Hero Specialized Learning'}
                     </div>
                   </div>
                   <span style={{ fontSize: '0.78rem', color: 'var(--primary-color)', fontWeight: 600 }}>
@@ -611,7 +629,7 @@ const AboutModal = ({ onClose }) => {
                   </span>
                 </div>
 
-                {/* 2. Web Dev & Competitive Programming */}
+                {/* 2. Phitron */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -623,7 +641,7 @@ const AboutModal = ({ onClose }) => {
                 }}>
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Web Dev & Competitive Programming
+                      {isBangla ? 'ওয়েব ডেভেলপমেন্ট ও কম্পিটিটিভ প্রোগ্রামিং' : 'Web Dev & Competitive Programming'}
                     </div>
                   </div>
                   <span style={{ fontSize: '0.78rem', color: 'var(--primary-color)', fontWeight: 600 }}>
@@ -631,7 +649,7 @@ const AboutModal = ({ onClose }) => {
                   </span>
                 </div>
 
-                {/* 3. Photo Editing & Digital Art Mastery */}
+                {/* 3. Photo Editing */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -643,11 +661,11 @@ const AboutModal = ({ onClose }) => {
                 }}>
                   <div>
                     <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      Photo Editing & Digital Art Mastery
+                      {isBangla ? 'ফটো এডিটিং ও ডিজিটাল আর্ট দক্ষতা' : 'Photo Editing & Digital Art Mastery'}
                     </div>
                   </div>
                   <span style={{ fontSize: '0.78rem', color: '#FFAA00', fontWeight: 600 }}>
-                    Self-taught Excellence
+                    {isBangla ? 'স্ব-উদ্যোগে অর্জিত দক্ষতা' : 'Self-taught Excellence'}
                   </span>
                 </div>
               </div>
@@ -655,10 +673,11 @@ const AboutModal = ({ onClose }) => {
 
             {/* Card 5: Vision & Community Mission */}
             <SectionCard 
-              title="Vision & Community Mission" 
-              subtitle="Guiding Philosophy & Purpose" 
+              title={isBangla ? 'ভিশন ও সামাজিক অঙ্গীকার' : 'Vision & Community Mission'} 
+              subtitle={isBangla ? 'মূল দর্শন ও উদ্দেশ্য' : 'Guiding Philosophy & Purpose'} 
               icon={HeartHandshake} 
               color="#FF1744"
+              isBangla={isBangla}
             >
               {/* Quote Highlight */}
               <div style={{
@@ -673,7 +692,10 @@ const AboutModal = ({ onClose }) => {
                 textAlign: 'center',
                 boxShadow: isDark ? '0 0 25px rgba(255, 23, 68, 0.15)' : 'none'
               }}>
-                "Always serve humanity through simplicity, honesty, and persistent empathy."
+                {isBangla 
+                  ? '“সরলতা, সততা এবং মানবিক সহমর্মিতার সাথে সর্বদা মানুষের সেবা করাই আমার অঙ্গীকার।”'
+                  : '"Always serve humanity through simplicity, honesty, and persistent empathy."'
+                }
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -683,7 +705,10 @@ const AboutModal = ({ onClose }) => {
                   lineHeight: 1.65,
                   color: 'var(--text-primary)'
                 }}>
-                  My core philosophy is rooted in simple living, honest dedication, and actively serving humanity. I believe technology is a transformative tool designed to empower individuals and solve real-world problems.
+                  {isBangla 
+                    ? 'আমার মূল দর্শন সাধারণ জীবনযাপন, সৎ প্রচেষ্টা এবং মানবকল্যাণে সক্রিয় ভূমিকা পালনের ওপর প্রতিষ্ঠিত। প্রযুক্তি মানুষের জীবনযাত্রাকে সহজ করার একটি শক্তিশালী মাধ্যম।'
+                    : 'My core philosophy is rooted in simple living, honest dedication, and actively serving humanity. I believe technology is a transformative tool designed to empower individuals and solve real-world problems.'
+                  }
                 </p>
                 <p style={{
                   margin: 0,
@@ -691,7 +716,10 @@ const AboutModal = ({ onClose }) => {
                   lineHeight: 1.6,
                   color: 'var(--text-secondary)'
                 }}>
-                  My primary mission is to leverage software engineering, digital design, and media connectivity to uplift the local community of <strong>Natun Pollan Para, Teknaf</strong> and contribute meaningfully to society.
+                  {isBangla 
+                    ? 'আমার স্বপ্ন সফটওয়্যার ইঞ্জিনিয়ারিং ও ডিজিটাল মিডিয়ার মাধ্যমে টেকনাফ ও নতুন পল্লান পাড়ার মানুষের জীবনমান উন্নয়নে কার্যকর অবদান রাখা।'
+                    : 'My primary mission is to leverage software engineering, digital design, and media connectivity to uplift the local community of Natun Pollan Para, Teknaf and contribute meaningfully to society.'
+                  }
                 </p>
               </div>
             </SectionCard>
@@ -718,10 +746,11 @@ const AboutModal = ({ onClose }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '6px',
+                fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
               }}
             >
-              <span>Done / Explore Portfolio</span>
+              <span>{isBangla ? 'সম্পন্ন / পোর্টফোলিও দেখুন' : 'Done / Explore Portfolio'}</span>
             </motion.button>
           </div>
         </motion.div>

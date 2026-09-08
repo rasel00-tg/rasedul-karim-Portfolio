@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Smartphone, Code2, GitBranch, PenTool, Globe, Database, Cpu, Layers, Sparkles, Terminal, FileCode, Palette } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const skills = [
   { name: 'Flutter', icon: <Smartphone size={16} color="#00f0ff" />, glow: 'rgba(0, 240, 255, 0.4)' },
@@ -54,6 +55,8 @@ const SkillChip = ({ skill, index }) => {
 };
 
 const AboutSection = () => {
+  const { isBangla, t } = useLanguage();
+
   return (
     <section 
       id="skills" 
@@ -61,7 +64,7 @@ const AboutSection = () => {
         padding: '40px 5% 50px 5%', 
         display: 'flex', 
         flexDirection: 'column', 
-        justifyContent: 'center',
+        justifyContent: 'center', 
         alignItems: 'center',
         position: 'relative',
         zIndex: 2
@@ -87,9 +90,10 @@ const AboutSection = () => {
           fontWeight: '600',
           letterSpacing: '1px',
           marginBottom: '12px',
-          textTransform: 'uppercase'
+          textTransform: 'uppercase',
+          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
         }}>
-          <Sparkles size={16} /> Tech Expertise
+          <Sparkles size={16} /> {t('skillsSection.tag', 'Tech Expertise')}
         </div>
 
         <h2 style={{ 
@@ -97,9 +101,10 @@ const AboutSection = () => {
           marginBottom: '24px', 
           color: 'var(--text-primary)',
           fontWeight: 800,
-          letterSpacing: '1.5px'
+          letterSpacing: '1.5px',
+          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif"
         }}>
-          MY <span style={{ color: 'var(--primary-color)' }}>SKILLS</span>
+          {t('skillsSection.my', 'MY')} <span style={{ color: 'var(--primary-color)' }}>{t('skillsSection.skills', 'SKILLS')}</span>
         </h2>
 
         {/* Compact Grid/Wrap Badges with subtle glowing borders */}

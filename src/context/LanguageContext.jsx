@@ -9,7 +9,8 @@ export const languages = {
     nativeName: 'English',
     flag: '🇺🇸',
     direction: 'ltr',
-    isDefault: true
+    isDefault: true,
+    font: "'DM Serif Display', serif"
   },
   bn: {
     id: 'bn',
@@ -17,23 +18,7 @@ export const languages = {
     nativeName: 'বাংলা',
     flag: '🇧🇩',
     direction: 'ltr',
-    font: "'LiAdorNoirrit', sans-serif"
-  },
-  ar: {
-    id: 'ar',
-    name: 'Arabic',
-    nativeName: 'العربية',
-    flag: '🇸🇦',
-    direction: 'rtl',
-    font: "'Amiri', 'Segoe UI', Tahoma, sans-serif"
-  },
-  hi: {
-    id: 'hi',
-    name: 'Hindi',
-    nativeName: 'हिन्दी',
-    flag: '🇮🇳',
-    direction: 'ltr',
-    font: "'Noto Sans Devanagari', sans-serif"
+    font: "'Anek Bangla', 'LiAdorNoirrit', sans-serif"
   }
 };
 
@@ -49,13 +34,66 @@ export const translations = {
       setting: 'SETTING',
       settingSub: 'Preferences & Tools',
       selectLanguage: 'Select Language',
-      philosophy: 'Always serve humanity.'
+      languageTitle: 'Language Selection',
+      philosophy: 'Always serve humanity.',
+      themeDark: 'Dark Mode',
+      themeLight: 'Light Mode',
+      adminPanel: 'Admin Dashboard',
+      qrScanner: 'Scan QR Code'
+    },
+    hero: {
+      name: 'Rasedul Karim',
+      bio: 'Just a simple human. Still learning.',
+      location: "Natun Pollan Para, Teknaf, Cox's Bazar",
+      chatInMail: 'Chat in Mail',
+      subscribe: 'Subscribe',
+      visitors: 'Visitors',
+      subscribers: 'Subscribers',
+      verified: 'Verified Profile'
+    },
+    stackedLinks: {
+      webAppsTitle: 'Web Apps & Projects',
+      webAppsSub: 'Live Apps & Websites Portfolio',
+      aboutTitle: 'About Me',
+      aboutSub: 'Education, Skills & Experience',
+      dreamTitle: 'My Dream & Goals',
+      dreamSub: 'Vision for Notun Pollan Para',
+      futureTitle: 'Future Projects (Apps & Websites)',
+      futureSub: 'Upcoming Systems & Architecture'
+    },
+    skillsSection: {
+      tag: 'Tech Expertise',
+      my: 'MY',
+      skills: 'SKILLS'
+    },
+    projects: {
+      tag: 'Portfolio Highlights',
+      title: 'WEB APPS & PROJECTS',
+      webApps: 'WEB APPS &',
+      projects: 'PROJECTS',
+      desc: 'Selected mobile applications and live production websites.',
+      appsTab: 'Mobile Apps',
+      webTab: 'Websites & Portals'
+    },
+    subscribeModal: {
+      title: 'Stay Updated',
+      note: 'If any new updates or projects are released, you will be notified directly via email.',
+      placeholder: 'Enter your email address',
+      cancel: 'Cancel',
+      confirm: 'Confirm Subscription',
+      subscribing: 'Subscribing...',
+      alreadySubscribed: 'Your email is already subscribed!',
+      invalidEmail: 'Please enter a valid email address.',
+      successTitle: 'Subscription Confirmed',
+      successMsg: 'Thank you! You have successfully subscribed to all future updates.',
+      awesome: 'Awesome',
+      ok: 'OK'
     },
     common: {
       close: 'Close',
       done: 'Done / Explore Portfolio',
       readNotice: 'Read Notice',
-      selectLanguageModal: 'Select Language / भाषा নির্বাচন করুন'
+      selectLanguageModal: 'Select Language / ভাষা নির্বাচন করুন'
     }
   },
   bn: {
@@ -69,7 +107,60 @@ export const translations = {
       setting: 'SETTING',
       settingSub: 'অ্যাপ কন্ট্রোল ও সেটিংস',
       selectLanguage: 'Select Language',
-      philosophy: 'Always serve humanity.'
+      languageTitle: 'ভাষা নির্বাচন (Language)',
+      philosophy: 'Always serve humanity.',
+      themeDark: 'ডার্ক মোড',
+      themeLight: 'লাইট মোড',
+      adminPanel: 'এডমিন ড্যাশবোর্ড',
+      qrScanner: 'QR কোড স্ক্যানার'
+    },
+    hero: {
+      name: 'রাশেদুল করিম',
+      bio: 'একজন সাধারণ মানুষ। এখনও শিখছি।',
+      location: 'নতুন পল্লান পাড়া, টেকনাফ, কক্সবাজার',
+      chatInMail: 'মেইলে বার্তা পাঠান',
+      subscribe: 'সাবস্ক্রাইব করুন',
+      visitors: 'ভিজিটর',
+      subscribers: 'সাবস্ক্রাইবার',
+      verified: 'ভেরিফায়েড প্রোফাইল'
+    },
+    stackedLinks: {
+      webAppsTitle: 'ওয়েব অ্যাপস ও প্রজেক্ট',
+      webAppsSub: 'লাইভ অ্যাপস ও ওয়েবসাইট পোর্টফোলিও',
+      aboutTitle: 'আমার পরিচিতি',
+      aboutSub: 'শিক্ষা, দক্ষতা ও অভিজ্ঞতা',
+      dreamTitle: 'আমার স্বপ্ন ও লক্ষ্য',
+      dreamSub: 'টেকনাফ ও নতুন পল্লান পাড়ার উন্নয়ন রূপরেখা',
+      futureTitle: 'ভবিষ্যৎ পরিকল্পনা (অ্যাপস ও ওয়েবসাইট)',
+      futureSub: 'আসন্ন সিস্টেম ও প্রযুক্তি আর্কিটেকচার'
+    },
+    skillsSection: {
+      tag: 'টেকনিক্যাল দক্ষতা',
+      my: 'আমার',
+      skills: 'দক্ষতা ও প্রযুক্তি'
+    },
+    projects: {
+      tag: 'পোর্টফোলিও হাইলাইটস',
+      title: 'ওয়েব অ্যাপস ও প্রজেক্ট',
+      webApps: 'ওয়েব অ্যাপস ও',
+      projects: 'প্রজেক্টস',
+      desc: 'নির্বাচিত মোবাইল অ্যাপ্লিকেশন এবং লাইভ প্রোডাকশন ওয়েবসাইট।',
+      appsTab: 'মোবাইল অ্যাপস',
+      webTab: 'ওয়েবসাইট ও পোর্টাল'
+    },
+    subscribeModal: {
+      title: 'যুক্ত থাকুন',
+      note: 'কোনো নতুন আপডেট বা প্রজেক্ট এলে আপনাকে সরাসরি ইমেইলে জানিয়ে দেওয়া হবে।',
+      placeholder: 'আপনার ইমেইল অ্যাড্রেস লিখুন',
+      cancel: 'বাতিল',
+      confirm: 'সাবস্ক্রাইব কনফার্ম করুন',
+      subscribing: 'যুক্ত হচ্ছে...',
+      alreadySubscribed: 'আপনার ইমেইলটি আগেই সাবস্ক্রাইব করা হয়েছে!',
+      invalidEmail: 'দয়া করে একটি সঠিক ইমেইল অ্যাড্রেস লিখুন।',
+      successTitle: 'সাবস্ক্রিপশন সম্পন্ন হয়েছে',
+      successMsg: 'ধন্যবাদ! আপনি সফলভাবে ভবিষ্যৎ সকল আপডেটের জন্য যুক্ত হয়েছেন।',
+      awesome: 'ঠিক আছে',
+      ok: 'ঠিক আছে'
     },
     common: {
       close: 'বন্ধ করুন',
@@ -77,70 +168,50 @@ export const translations = {
       readNotice: 'বার্তা দেখুন',
       selectLanguageModal: 'Select Language / ভাষা নির্বাচন করুন'
     }
-  },
-  ar: {
-    nav: {
-      about: 'ABOUT',
-      aboutSub: 'السيرة الذاتية والمسيرة المهنية',
-      skill: 'SKILL',
-      skillSub: 'الخبرات التقنية والمهارات',
-      dream: 'DREAM',
-      dreamSub: 'الرؤية والأهداف المستقبلية',
-      setting: 'SETTING',
-      settingSub: 'التفضيلات والإعدادات',
-      selectLanguage: 'Select Language',
-      philosophy: 'Always serve humanity.'
-    },
-    common: {
-      close: 'إغلاق',
-      done: 'تم / استكشاف المعرض',
-      readNotice: 'قراءة الإشعار',
-      selectLanguageModal: 'Select Language / اختر اللغة'
-    }
-  },
-  hi: {
-    nav: {
-      about: 'ABOUT',
-      aboutSub: 'जीवनी और करियर यात्रा',
-      skill: 'SKILL',
-      skillSub: 'तकनीकी दक्षता और कौशल',
-      dream: 'DREAM',
-      dreamSub: 'विजन और भविष्य के लक्ष्य',
-      setting: 'SETTING',
-      settingSub: 'प्राथमिकताएं और सेटिंग्स',
-      selectLanguage: 'Select Language',
-      philosophy: 'Always serve humanity.'
-    },
-    common: {
-      close: 'बंद करें',
-      done: 'पूर्ण / पोर्टफोलियो देखें',
-      readNotice: 'सूचना पढ़ें',
-      selectLanguageModal: 'Select Language / भाषा का चयन करें'
-    }
   }
 };
 
 export const LanguageProvider = ({ children }) => {
   const [language, setLanguageState] = useState(() => {
-    return localStorage.getItem('portfolio_lang') || 'en';
+    const saved = localStorage.getItem('portfolio_lang');
+    return saved === 'bn' || saved === 'en' ? saved : 'en';
   });
 
   const currentLang = languages[language] || languages.en;
-  const isRTL = currentLang.direction === 'rtl';
+  const isBangla = language === 'bn';
+  const isEnglish = language === 'en';
+  const isRTL = false; // strictly LTR for EN and BN
 
   const setLanguage = (langCode) => {
-    if (languages[langCode]) {
-      setLanguageState(langCode);
-      localStorage.setItem('portfolio_lang', langCode);
-      document.documentElement.lang = langCode;
-      document.documentElement.dir = languages[langCode].direction;
+    const code = langCode === 'bn' ? 'bn' : 'en';
+    setLanguageState(code);
+    localStorage.setItem('portfolio_lang', code);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = code;
+      document.documentElement.setAttribute('data-lang', code);
+      if (document.body) {
+        document.body.setAttribute('data-lang', code);
+        document.body.classList.toggle('bangla-mode', code === 'bn');
+        document.body.classList.toggle('english-mode', code === 'en');
+      }
     }
   };
 
+  const toggleLanguage = () => {
+    setLanguage(language === 'en' ? 'bn' : 'en');
+  };
+
   useEffect(() => {
-    document.documentElement.lang = language;
-    document.documentElement.dir = currentLang.direction;
-  }, [language, currentLang.direction]);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = language;
+      document.documentElement.setAttribute('data-lang', language);
+      if (document.body) {
+        document.body.setAttribute('data-lang', language);
+        document.body.classList.toggle('bangla-mode', language === 'bn');
+        document.body.classList.toggle('english-mode', language === 'en');
+      }
+    }
+  }, [language]);
 
   const t = (keyPath, fallback = '') => {
     const keys = keyPath.split('.');
@@ -163,11 +234,16 @@ export const LanguageProvider = ({ children }) => {
   return (
     <LanguageContext.Provider value={{
       language,
+      currentLocale: language,
       currentLang,
       setLanguage,
+      changeLanguage: setLanguage,
+      toggleLanguage,
+      isBangla,
+      isEnglish,
       isRTL,
       t,
-      languagesList: Object.values(languages)
+      languagesList: [languages.en, languages.bn]
     }}>
       {children}
     </LanguageContext.Provider>

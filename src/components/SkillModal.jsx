@@ -15,12 +15,13 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 
-const ProgressBar = ({ label, percentage, subtitle, tags = [], color = '#00E5FF' }) => {
+const ProgressBar = ({ label, percentage, subtitle, tags = [], color = '#00E5FF', isBangla = false }) => {
   const { isDark } = useTheme();
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span style={{
           fontSize: '0.88rem',
@@ -101,7 +102,7 @@ const ProgressBar = ({ label, percentage, subtitle, tags = [], color = '#00E5FF'
   );
 };
 
-const SkillDomainCard = ({ title, icon: Icon, color = '#00E5FF', overview, skills = [] }) => {
+const SkillDomainCard = ({ title, icon: Icon, color = '#00E5FF', overview, skills = [], isBangla = false }) => {
   const { isDark } = useTheme();
 
   return (
@@ -158,7 +159,7 @@ const SkillDomainCard = ({ title, icon: Icon, color = '#00E5FF', overview, skill
         <h3 style={{
           margin: 0,
           fontSize: '1.06rem',
-          fontFamily: "'Space Grotesk', sans-serif",
+          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
           fontWeight: 800,
           letterSpacing: '0.4px',
           color: 'var(--text-primary)',
@@ -174,7 +175,8 @@ const SkillDomainCard = ({ title, icon: Icon, color = '#00E5FF', overview, skill
           margin: 0,
           fontSize: '0.83rem',
           lineHeight: 1.55,
-          color: 'var(--text-secondary)'
+          color: 'var(--text-secondary)',
+          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
         }}>
           {overview}
         </p>
@@ -196,6 +198,7 @@ const SkillDomainCard = ({ title, icon: Icon, color = '#00E5FF', overview, skill
             subtitle={item.subtitle}
             tags={item.tags}
             color={color}
+            isBangla={isBangla}
           />
         ))}
       </div>
@@ -205,6 +208,7 @@ const SkillDomainCard = ({ title, icon: Icon, color = '#00E5FF', overview, skill
 
 const SkillModal = ({ onClose }) => {
   const { isDark } = useTheme();
+  const { isBangla, t } = useLanguage();
   const [showNoticeModal, setShowNoticeModal] = useState(true);
 
   return (
@@ -331,20 +335,21 @@ const SkillModal = ({ onClose }) => {
                       fontWeight: 800,
                       letterSpacing: '1.5px',
                       color: 'var(--primary-color)',
-                      textTransform: 'uppercase'
+                      textTransform: 'uppercase',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
-                      Authentic Self-Assessment
+                      {isBangla ? 'বাস্তবধর্মী আত্মমূল্যায়ন' : 'Authentic Self-Assessment'}
                     </span>
                     <h2 style={{
                       margin: 0,
-                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
                       fontSize: 'clamp(1.1rem, 4vw, 1.35rem)',
                       fontWeight: 900,
                       letterSpacing: '0.8px',
                       color: 'var(--text-primary)',
                       lineHeight: 1.2
                     }}>
-                      PLEASE READ THIS FIRST
+                      {isBangla ? 'দয়া করে আগে এটি পড়ুন' : 'PLEASE READ THIS FIRST'}
                     </h2>
                   </div>
                 </div>
@@ -361,9 +366,13 @@ const SkillModal = ({ onClose }) => {
                     fontSize: '0.9rem',
                     lineHeight: 1.65,
                     color: 'var(--text-primary)',
-                    fontStyle: 'italic'
+                    fontStyle: 'italic',
+                    fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                   }}>
-                    "Learning has no end. I do not claim to know or master everything. We are all on a continuous journey of learning and personal growth. I consider myself a very ordinary person and make no claims to extraordinary skills. Below is simply a modest overview of the technical areas and creative workflows I am steadily working on."
+                    {isBangla 
+                      ? '“শেখার কোনো শেষ নেই। আমি সবকিছু জানি বা সবকিছুতে পারদর্শী—এমন কোনো দাবি আমার নেই। আমরা প্রত্যেকেই প্রতিনিয়ত শিখছি এবং নতুন অভিজ্ঞতার মধ্য দিয়ে এগিয়ে যাচ্ছি। আমি নিজেকে একজন অত্যন্ত সাধারণ মানুষ মনে করি এবং অসাধারণ কোনো দক্ষতার দাবি করি না। নিচে কেবল আমার কাজের ক্ষেত্র ও শেখার অভিজ্ঞতার একটি সংক্ষিপ্ত রূপরেখা তুলে ধরা হলো।”'
+                      : '"Learning has no end. I do not claim to know or master everything. We are all on a continuous journey of learning and personal growth. I consider myself a very ordinary person and make no claims to extraordinary skills. Below is simply a modest overview of the technical areas and creative workflows I am steadily working on."'
+                    }
                   </p>
                 </div>
 
@@ -387,11 +396,12 @@ const SkillModal = ({ onClose }) => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px'
+                    gap: '8px',
+                    fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                   }}
                 >
                   <ShieldCheck size={18} />
-                  <span>I Understand & Continue to Skills</span>
+                  <span>{isBangla ? '🛡️ আমি বুঝেছি ও স্কিলস দেখুন' : '🛡️ I Understand & Continue to Skills'}</span>
                 </motion.button>
               </motion.div>
             </motion.div>
@@ -430,11 +440,11 @@ const SkillModal = ({ onClose }) => {
               cursor: 'pointer', 
               color: 'var(--text-primary)',
               borderRadius: '50%', 
-              width: '42px',
-              height: '42px',
+              width: '42px', 
+              height: '42px', 
               display: 'flex', 
               alignItems: 'center', 
-              justifyContent: 'center',
+              justifyContent: 'center', 
               zIndex: 100000,
               boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
             }}
@@ -459,13 +469,14 @@ const SkillModal = ({ onClose }) => {
               fontWeight: 800,
               letterSpacing: '1.2px',
               textTransform: 'uppercase',
-              marginBottom: '6px'
+              marginBottom: '6px',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}>
               <Sparkles size={14} />
-              <span>Technical Skills & Expertise</span>
+              <span>{isBangla ? 'টেকনিক্যাল দক্ষতা ও অভিজ্ঞতা' : 'Technical Skills & Expertise'}</span>
             </div>
             <h1 style={{
-              fontFamily: "'Space Grotesk', sans-serif",
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
               fontSize: 'clamp(1.6rem, 5vw, 2.2rem)',
               fontWeight: 900,
               letterSpacing: '0.8px',
@@ -473,7 +484,7 @@ const SkillModal = ({ onClose }) => {
               margin: 0,
               lineHeight: 1.2
             }}>
-              Skills & Practical Capabilities
+              {isBangla ? 'দক্ষতা ও কাজের ক্ষেত্র' : 'Skills & Practical Capabilities'}
             </h1>
           </div>
 
@@ -493,17 +504,18 @@ const SkillModal = ({ onClose }) => {
               justifyContent: 'space-between',
               cursor: 'pointer',
               marginBottom: '20px',
-              boxShadow: '0 4px 15px rgba(0, 229, 255, 0.08)'
+              boxShadow: '0 4px 15px rgba(0, 229, 255, 0.08)',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Info size={18} color="#00E5FF" />
               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                Guiding Mindset & Humility Notice (Click to read again)
+                {isBangla ? 'বিনম্র আত্মমূল্যায়ন বার্তা (পুনরায় পড়তে ক্লিক করুন)' : 'Guiding Mindset & Humility Notice (Click to read again)'}
               </span>
             </div>
             <span style={{ fontSize: '0.76rem', color: 'var(--primary-color)', fontWeight: 700 }}>
-              Read Notice
+              {isBangla ? 'বার্তা দেখুন' : 'Read Notice'}
             </span>
           </motion.div>
 
@@ -517,27 +529,31 @@ const SkillModal = ({ onClose }) => {
 
             {/* Card 1: Modern Web Engineering & Responsive Platforms */}
             <SkillDomainCard
-              title="Modern Web Engineering & Responsive Platforms"
+              title={isBangla ? 'আধুনিক ওয়েব ইঞ্জিনিয়ারিং ও রেসপন্সিভ প্ল্যাটফর্ম' : 'Modern Web Engineering & Responsive Platforms'}
               icon={Globe}
               color="#00E5FF"
-              overview="Foundational practices for building responsive, cross-device websites and performant web interfaces."
+              isBangla={isBangla}
+              overview={isBangla 
+                ? 'রেসপন্সিভ, ক্রস-ডিভাইস ওয়েবসাইট এবং হাই-পারফরম্যান্স ওয়েব ইন্টারফেস তৈরির ব্যবহারিক ভিত্তি।'
+                : 'Foundational practices for building responsive, cross-device websites and performant web interfaces.'
+              }
               skills={[
                 {
-                  label: 'Frontend UI & Responsive Layouts',
+                  label: isBangla ? 'ফ্রন্টএন্ড UI ও রেসপন্সিভ লেআউট' : 'Frontend UI & Responsive Layouts',
                   percentage: 65,
-                  subtitle: 'Modern Flexbox, CSS Grid & mobile-first viewports.',
+                  subtitle: isBangla ? 'আধুনিক Flexbox, CSS Grid এবং মোবাইল-ফার্স্ট ভিউপোর্ট ডিজাইন।' : 'Modern Flexbox, CSS Grid & mobile-first viewports.',
                   tags: ['HTML5', 'CSS3', 'Flexbox', 'Tailwind CSS']
                 },
                 {
-                  label: 'Interactive Logic & Component Systems',
+                  label: isBangla ? 'ইন্টারেক্টিভ লজিক ও কম্পোনেন্ট আর্কিটেকচার' : 'Interactive Logic & Component Systems',
                   percentage: 58,
-                  subtitle: 'Component state handling, DOM events & API consumption.',
+                  subtitle: isBangla ? 'স্টেট হ্যান্ডলিং, DOM ইভেন্টস এবং API ইন্টিগ্রেশন।' : 'Component state handling, DOM events & API consumption.',
                   tags: ['JavaScript ES6+', 'React.js Fundamentals']
                 },
                 {
-                  label: 'CMS Integration & Deployment',
+                  label: isBangla ? 'CMS ইন্টিগ্রেশন ও ক্লাউড ডেপ্লয়মেন্ট' : 'CMS Integration & Deployment',
                   percentage: 54,
-                  subtitle: 'CMS content structuring and cloud hosting setups.',
+                  subtitle: isBangla ? 'কন্টেন্ট ম্যানেজমেন্ট এবং ক্লাউড হোস্টিং কনফিগারেশন।' : 'CMS content structuring and cloud hosting setups.',
                   tags: ['WordPress', 'Netlify', 'Web Hosting Management']
                 }
               ]}
@@ -545,27 +561,31 @@ const SkillModal = ({ onClose }) => {
 
             {/* Card 2: Mobile Application & Software Development */}
             <SkillDomainCard
-              title="Mobile Application & Software Development"
+              title={isBangla ? 'মোবাইল অ্যাপ্লিকেশন ও সফটওয়্যার ডেভেলপমেন্ট' : 'Mobile Application & Software Development'}
               icon={Smartphone}
               color="#10B981"
-              overview="Cross-platform mobile solutions and cloud-connected application architecture."
+              isBangla={isBangla}
+              overview={isBangla 
+                ? 'ক্রস-প্ল্যাটফর্ম মোবাইল সলিউশন এবং ক্লাউড-সংযুক্ত আধুনিক অ্যাপ আর্কিটেকচার।'
+                : 'Cross-platform mobile solutions and cloud-connected application architecture.'
+              }
               skills={[
                 {
-                  label: 'Cross-Platform Development',
+                  label: isBangla ? 'ক্রস-প্ল্যাটফর্ম ডেভেলপমেন্ট' : 'Cross-Platform Development',
                   percentage: 62,
-                  subtitle: 'Clean UI hierarchy, widget management & responsive rendering.',
+                  subtitle: isBangla ? 'পরিচ্ছন্ন UI হায়ারার্কি, উইজেট ম্যানেজমেন্ট ও রেসপন্সিভ রেন্ডারিং।' : 'Clean UI hierarchy, widget management & responsive rendering.',
                   tags: ['Flutter & Dart Widget Architecture']
                 },
                 {
-                  label: 'Backend as a Service (BaaS)',
+                  label: isBangla ? 'ক্লাউড ব্যাকএন্ড (BaaS)' : 'Backend as a Service (BaaS)',
                   percentage: 60,
-                  subtitle: 'Real-time database streams, security rules & auth flows.',
+                  subtitle: isBangla ? 'রিয়েল-টাইম ডাটাবেস স্ট্রিম, সিকিউরিটি রুলস ও অথেনটিকেশন।' : 'Real-time database streams, security rules & auth flows.',
                   tags: ['Firebase Firestore', 'Real-time Streams', 'Auth']
                 },
                 {
-                  label: 'Local Storage & State Persistence',
+                  label: isBangla ? 'লোকাল স্টোরেজ ও স্টেট পারসিস্টেন্স' : 'Local Storage & State Persistence',
                   percentage: 55,
-                  subtitle: 'Offline caching, structured key-value & database storage.',
+                  subtitle: isBangla ? 'অফলাইন ক্যাশিং এবং স্ট্রাকচার্ড লোকাল ডাটাবেস।' : 'Offline caching, structured key-value & database storage.',
                   tags: ['SQLite', 'SharedPreferences', 'Cache Handling']
                 }
               ]}
@@ -573,27 +593,31 @@ const SkillModal = ({ onClose }) => {
 
             {/* Card 3: Applied Generative AI & Prompt Engineering */}
             <SkillDomainCard
-              title="Applied Generative AI & Prompt Engineering"
+              title={isBangla ? 'প্রয়োগিক জেনারেটিভ এআই ও প্রম্পট ইঞ্জিনিয়ারিং' : 'Applied Generative AI & Prompt Engineering'}
               icon={Bot}
               color="#A855F7"
-              overview="Leveraging artificial intelligence systems and precision prompting to accelerate engineering workflows and creative synthesis."
+              isBangla={isBangla}
+              overview={isBangla 
+                ? 'এআই সিস্টেম ও প্রিসিশন প্রম্পটিং ব্যবহার করে ডেভেলপমেন্ট ওয়ার্কফ্লো এবং ক্রিয়েটিভ কাজ দ্রুত সম্পন্ন করা।'
+                : 'Leveraging artificial intelligence systems and precision prompting to accelerate engineering workflows and creative synthesis.'
+              }
               skills={[
                 {
-                  label: 'Structured Prompt Architecture',
+                  label: isBangla ? 'স্ট্রাকচার্ড প্রম্পট আর্কিটেকচার' : 'Structured Prompt Architecture',
                   percentage: 74,
-                  subtitle: 'Context engineering, system role framing & chained prompting.',
+                  subtitle: isBangla ? 'কনটেক্সট ইঞ্জিনিয়ারিং, সিস্টেম রোল ফ্রেমিং ও চেইন্ড প্রম্পট।' : 'Context engineering, system role framing & chained prompting.',
                   tags: ['Context Engineering', 'System Role Framing', 'Chained Prompting']
                 },
                 {
-                  label: 'AI-Assisted Development Workflows',
+                  label: isBangla ? 'এআই-সহায়ক ডেভেলপমেন্ট ওয়ার্কফ্লো' : 'AI-Assisted Development Workflows',
                   percentage: 70,
-                  subtitle: 'Rapid debugging, code optimization & IDE AI integrations.',
+                  subtitle: isBangla ? 'দ্রুত ডিবাগিং, কোড অপ্টিমাইজেশন ও আইডিই ইন্টিগ্রেশন।' : 'Rapid debugging, code optimization & IDE AI integrations.',
                   tags: ['Windsurf', 'Trae', 'Cursor', 'VS Code AI']
                 },
                 {
-                  label: 'Generative Media & Creative Direction',
+                  label: isBangla ? 'জেনারেটিভ মিডিয়া ও ক্রিয়েটিভ ডিরেকশন' : 'Generative Media & Creative Direction',
                   percentage: 66,
-                  subtitle: 'High-fidelity visual asset drafting and prompt refinement.',
+                  subtitle: isBangla ? 'উচ্চমানের ভিজ্যুয়াল অ্যাসেট ড্রাফটিং ও প্যারামিটার রিফাইনমেন্ট।' : 'High-fidelity visual asset drafting and prompt refinement.',
                   tags: ['AI Visual Asset Drafting', 'Parameter Refinement']
                 }
               ]}
@@ -601,27 +625,31 @@ const SkillModal = ({ onClose }) => {
 
             {/* Card 4: Visual Media Branding & Creative Design */}
             <SkillDomainCard
-              title="Visual Media Branding & Creative Design"
+              title={isBangla ? 'ভিজ্যুয়াল মিডিয়া ব্র্যান্ডিং ও ক্রিয়েটিভ ডিজাইন' : 'Visual Media Branding & Creative Design'}
               icon={Palette}
               color="#F43F5E"
-              overview="Crafting impactful digital graphics, social media banners, and brand visual identities for community platforms."
+              isBangla={isBangla}
+              overview={isBangla 
+                ? 'আকর্ষণীয় ডিজিটাল গ্রাফিক্স, সোশ্যাল মিডিয়া ব্যানার এবং কমিউনিটি প্ল্যাটফর্মের ভিজ্যুয়াল পরিচয় তৈরি।'
+                : 'Crafting impactful digital graphics, social media banners, and brand visual identities for community platforms.'
+              }
               skills={[
                 {
-                  label: 'Editorial & News Banner Design',
+                  label: isBangla ? 'সংবাদ ও এডিটোরিয়াল ব্যানার ডিজাইন' : 'Editorial & News Banner Design',
                   percentage: 72,
-                  subtitle: 'Proven editorial designs for local media platforms.',
+                  subtitle: isBangla ? 'স্থানীয় মিডিয়া প্ল্যাটফর্মের জন্য মানসম্মত এডিটোরিয়াল ব্যানার।' : 'Proven editorial designs for local media platforms.',
                   tags: ['Naf Vision News', 'Naf Sports Media']
                 },
                 {
-                  label: 'Digital Photo Retouching & Compositing',
+                  label: isBangla ? 'ডিজিটাল ফটো রিটাচিং ও কম্পোজিটিং' : 'Digital Photo Retouching & Compositing',
                   percentage: 65,
-                  subtitle: 'Portrait lighting adjustment, color grading & canvas balancing.',
+                  subtitle: isBangla ? 'পোর্ট্রেট লাইটিং অ্যাডজাস্টমেন্ট, কালার গ্রেডিং ও ব্যালেন্সিং।' : 'Portrait lighting adjustment, color grading & canvas balancing.',
                   tags: ['Adobe Photoshop Principles', 'Lightroom', 'Canva Pro']
                 },
                 {
-                  label: 'Brand Typography & Logo Concepts',
+                  label: isBangla ? 'ব্র্যান্ড টাইপোগ্রাফি ও লোগো কনসেপ্ট' : 'Brand Typography & Logo Concepts',
                   percentage: 58,
-                  subtitle: 'Vector badges, minimal icon marks & social identity systems.',
+                  subtitle: isBangla ? 'ভেক্টর ব্যাজ, মিনিমাল আইকন এবং সোশ্যাল আইডেন্টিটি সিস্টেম।' : 'Vector badges, minimal icon marks & social identity systems.',
                   tags: ['Vector Badges', 'Minimal Icon Marks', 'Social Identity']
                 }
               ]}
@@ -649,10 +677,11 @@ const SkillModal = ({ onClose }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '6px'
+                gap: '6px',
+                fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
               }}
             >
-              <span>Done / Explore Portfolio</span>
+              <span>{isBangla ? 'সম্পন্ন / পোর্টফোলিও দেখুন' : 'Done / Explore Portfolio'}</span>
             </motion.button>
           </div>
         </motion.div>

@@ -72,6 +72,11 @@ const Footer = ({ onOpenDream, onOpenAbout, onOpenAdmin }) => {
           </a>
           <a 
             href="#skills" 
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById('skills');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
             style={{ color: '#94A3B8', textDecoration: 'none', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = '#00f0ff'}
             onMouseLeave={e => e.target.style.color = '#94A3B8'}
@@ -80,6 +85,11 @@ const Footer = ({ onOpenDream, onOpenAbout, onOpenAdmin }) => {
           </a>
           <a 
             href="#community" 
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById('community');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
             style={{ color: '#94A3B8', textDecoration: 'none', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = '#00f0ff'}
             onMouseLeave={e => e.target.style.color = '#94A3B8'}
@@ -88,6 +98,11 @@ const Footer = ({ onOpenDream, onOpenAbout, onOpenAdmin }) => {
           </a>
           <a 
             href="#projects" 
+            onClick={(e) => {
+              e.preventDefault();
+              const el = document.getElementById('projects');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
             style={{ color: '#94A3B8', textDecoration: 'none', transition: 'color 0.2s' }}
             onMouseEnter={e => e.target.style.color = '#00f0ff'}
             onMouseLeave={e => e.target.style.color = '#94A3B8'}

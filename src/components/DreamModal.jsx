@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -229,6 +229,105 @@ const visionPillars = [
   }
 ];
 
+const LanguageToggleSwitch = ({ isBangla, onToggle }) => {
+  const { isDark } = useTheme();
+
+  return (
+    <motion.button
+      type="button"
+      onClick={onToggle}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.94 }}
+      style={{
+        position: 'relative',
+        width: '78px',
+        height: '32px',
+        padding: '2.5px',
+        borderRadius: '20px',
+        background: isDark ? 'rgba(22, 27, 34, 0.92)' : 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: `1.2px solid ${isBangla ? '#A855F7' : '#00E5FF'}`,
+        boxShadow: isDark
+          ? `0 0 14px ${isBangla ? 'rgba(168, 85, 247, 0.35)' : 'rgba(0, 229, 255, 0.35)'}`
+          : `0 2px 10px ${isBangla ? 'rgba(168, 85, 247, 0.2)' : 'rgba(0, 229, 255, 0.2)'}`,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        outline: 'none',
+        overflow: 'hidden',
+        transition: 'border-color 0.28s ease, box-shadow 0.28s ease'
+      }}
+      title={isBangla ? 'Switch to English' : 'বাংলায় দেখুন'}
+      aria-label="Toggle Language"
+    >
+      {/* Smooth Sliding Active Thumb Capsule */}
+      <motion.div
+        animate={{
+          x: isBangla ? 37 : 0
+        }}
+        transition={{
+          type: 'spring',
+          stiffness: 420,
+          damping: 28
+        }}
+        style={{
+          position: 'absolute',
+          top: '2.5px',
+          left: '2.5px',
+          width: '35px',
+          height: '25px',
+          borderRadius: '14px',
+          background: isBangla
+            ? 'linear-gradient(135deg, #A855F7 0%, #EC4899 100%)'
+            : 'linear-gradient(135deg, #00E5FF 0%, #0284C7 100%)',
+          boxShadow: isBangla
+            ? '0 0 10px rgba(236, 72, 153, 0.55)'
+            : '0 0 10px rgba(0, 229, 255, 0.55)',
+          zIndex: 1
+        }}
+      />
+
+      {/* Text Labels Overlay */}
+      <div style={{
+        position: 'relative',
+        zIndex: 2,
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        userSelect: 'none',
+        pointerEvents: 'none'
+      }}>
+        <div style={{
+          width: '35px',
+          textAlign: 'center',
+          fontSize: '0.72rem',
+          fontWeight: 800,
+          fontFamily: "'Space Grotesk', sans-serif",
+          color: !isBangla ? '#FFFFFF' : (isDark ? '#94A3B8' : '#64748B'),
+          transition: 'color 0.2s ease',
+          letterSpacing: '0.2px'
+        }}>
+          EN
+        </div>
+        <div style={{
+          width: '35px',
+          textAlign: 'center',
+          fontSize: '0.74rem',
+          fontWeight: 800,
+          fontFamily: "'LiAdorNoirrit', sans-serif",
+          color: isBangla ? '#FFFFFF' : (isDark ? '#94A3B8' : '#64748B'),
+          transition: 'color 0.2s ease'
+        }}>
+          বাং
+        </div>
+      </div>
+    </motion.button>
+  );
+};
+
 const AccordionCard = ({ pillar, isBangla, isOpen, onToggle }) => {
   const { isDark } = useTheme();
   const Icon = pillar.icon;
@@ -392,10 +491,34 @@ const DreamModal = ({ onClose }) => {
   const { language, setLanguage } = useLanguage();
   const isBangla = language === 'bn';
 
-  // On-entry patriotic notice popup
+  // On-entry patriotic notice popup & 10-second countdown
   const [showNoticePopup, setShowNoticePopup] = useState(true);
+  const [noticeCountdown, setNoticeCountdown] = useState(10);
   // Manage expanded accordion card (Pillar 1 open by default)
   const [openPillarId, setOpenPillarId] = useState(1);
+
+  // 10-Second Auto-Dismiss Countdown Mechanism
+  useEffect(() => {
+    if (!showNoticePopup) return;
+
+    setNoticeCountdown(10);
+    const interval = setInterval(() => {
+      setNoticeCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setShowNoticePopup(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showNoticePopup]);
+
+  const handleDismissNotice = () => {
+    setShowNoticePopup(false);
+  };
 
   const togglePillar = (id) => {
     setOpenPillarId(prev => (prev === id ? null : id));
@@ -439,7 +562,7 @@ const DreamModal = ({ onClose }) => {
         `}</style>
 
         {/* ========================================================================= */}
-        {/* 1. On-Entry Patriotic Bangla Notice Popup                                  */}
+        {/* 1. On-Entry Patriotic Bangla Notice Popup with 10s Countdown Auto-Dismiss  */}
         {/* ========================================================================= */}
         <AnimatePresence>
           {showNoticePopup && (
@@ -448,16 +571,16 @@ const DreamModal = ({ onClose }) => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              onClick={() => setShowNoticePopup(false)}
+              onClick={handleDismissNotice}
               style={{
                 position: 'fixed',
                 top: 0,
                 left: 0,
                 width: '100vw',
                 height: '100vh',
-                background: 'rgba(0, 0, 0, 0.8)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
+                background: 'rgba(0, 0, 0, 0.82)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
                 zIndex: 100002,
                 display: 'flex',
                 alignItems: 'center',
@@ -474,22 +597,25 @@ const DreamModal = ({ onClose }) => {
                 style={{
                   width: '100%',
                   maxWidth: '520px',
-                  background: isDark ? '#111722' : '#FFFFFF',
-                  border: '1px solid rgba(255, 0, 127, 0.4)',
+                  background: isDark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.96)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(239, 68, 68, 0.45)',
                   borderRadius: '24px',
-                  padding: '28px 24px 24px 24px',
+                  padding: '28px 24px 22px 24px',
                   boxShadow: isDark 
-                    ? '0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(255, 0, 127, 0.25)' 
+                    ? '0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(239, 68, 68, 0.3)' 
                     : '0 20px 50px rgba(0, 0, 0, 0.2)',
                   position: 'relative',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '16px'
+                  gap: '16px',
+                  overflow: 'hidden'
                 }}
               >
                 {/* Crisp Glowing Top-Right Close (X) Button */}
                 <motion.button
-                  onClick={() => setShowNoticePopup(false)}
+                  onClick={handleDismissNotice}
                   whileHover={{ scale: 1.1, rotate: 90 }}
                   whileTap={{ scale: 0.9 }}
                   style={{
@@ -500,14 +626,15 @@ const DreamModal = ({ onClose }) => {
                     height: '36px',
                     borderRadius: '50%',
                     background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                    border: '1px solid rgba(255, 0, 127, 0.3)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
                     color: 'var(--text-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    boxShadow: '0 0 12px rgba(255, 0, 127, 0.25)',
-                    transition: 'all 0.2s'
+                    boxShadow: '0 0 12px rgba(239, 68, 68, 0.25)',
+                    transition: 'all 0.2s',
+                    zIndex: 2
                   }}
                   aria-label="Close Notice"
                 >
@@ -517,90 +644,118 @@ const DreamModal = ({ onClose }) => {
                 {/* Patriotic Icon & Header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '12px',
-                    background: 'rgba(255, 0, 127, 0.15)',
-                    border: '1px solid rgba(255, 0, 127, 0.45)',
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '14px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.45)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#FF007F',
-                    boxShadow: '0 0 16px rgba(255, 0, 127, 0.35)',
+                    color: '#EF4444',
+                    boxShadow: '0 0 18px rgba(239, 68, 68, 0.35)',
                     flexShrink: 0
                   }}>
-                    <Flag size={22} />
+                    <Flag size={24} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{
-                      fontSize: '0.72rem',
+                      fontSize: '0.74rem',
                       fontWeight: 800,
                       letterSpacing: '1.2px',
-                      color: '#FF007F',
-                      textTransform: 'uppercase'
+                      color: '#EF4444',
+                      textTransform: 'uppercase',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
-                      দেশপ্রেম ও নাগরিক বার্তা
+                      {isBangla ? 'দেশপ্রেম ও নাগরিক বার্তা' : 'Patriotic Civic Message'}
                     </span>
                     <h2 style={{
                       margin: 0,
-                      fontFamily: "'LiAdorNoirrit', sans-serif",
-                      fontSize: 'clamp(1.1rem, 4vw, 1.35rem)',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
+                      fontSize: 'clamp(1.15rem, 4.2vw, 1.4rem)',
                       fontWeight: 700,
                       color: 'var(--text-primary)',
                       lineHeight: 1.2
                     }}>
-                      জন্মভূমি রক্ষার দ্বায়িত্ব
+                      {isBangla ? 'জন্মভূমি রক্ষার দায়িত্ব' : 'Duty to Protect the Motherland'}
                     </h2>
                   </div>
                 </div>
 
-                {/* Exact Requested Bengali Notice Content */}
+                {/* Exact Requested Bilingual Notice Content with Quotes */}
                 <div style={{
                   padding: '18px 16px',
                   borderRadius: '16px',
-                  background: isDark ? 'rgba(255, 0, 127, 0.05)' : 'rgba(255, 0, 127, 0.04)',
-                  border: '1px solid rgba(255, 0, 127, 0.2)',
-                  textAlign: 'center'
+                  background: isDark ? 'rgba(239, 68, 68, 0.06)' : 'rgba(239, 68, 68, 0.04)',
+                  border: '1px solid rgba(239, 68, 68, 0.22)',
+                  textAlign: 'center',
+                  position: 'relative'
                 }}>
                   <p style={{
                     margin: 0,
-                    fontSize: '1rem',
-                    lineHeight: 1.7,
+                    fontSize: '1.02rem',
+                    lineHeight: 1.75,
                     color: 'var(--text-primary)',
-                    fontFamily: "'LiAdorNoirrit', sans-serif",
+                    fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit',
                     fontWeight: 700,
-                    letterSpacing: '0.3px'
+                    letterSpacing: '0.3px',
+                    fontStyle: !isBangla ? 'italic' : 'normal'
                   }}>
-                    "অন্যায় দেখে নীরব থাকা মানেই অন্যায়কে সমর্থন করা। তাই জন্মভূমি রক্ষা করা আপনারও দ্বায়িত্ব।"
+                    {isBangla 
+                      ? '“অন্যায় দেখে নীরব থাকা মানেই অন্যায়কে সমর্থন করা। তাই জন্মভূমি রক্ষা করা আপনারও দায়িত্ব।”'
+                      : '"Remaining silent in the face of injustice means supporting it. Therefore, protecting the motherland is your responsibility too."'
+                    }
                   </p>
                 </div>
 
-                {/* Dismiss Action Button */}
+                {/* Dismiss Action Button with Realtime Countdown Seconds */}
                 <motion.button
-                  onClick={() => setShowNoticePopup(false)}
+                  onClick={handleDismissNotice}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: '13px',
                     borderRadius: '16px',
-                    background: 'linear-gradient(135deg, #FF007F 0%, #00F0FF 100%)',
+                    background: 'linear-gradient(135deg, #EF4444 0%, #A855F7 100%)',
                     border: 'none',
                     color: '#FFFFFF',
                     fontWeight: 800,
-                    fontSize: '0.9rem',
+                    fontSize: '0.92rem',
                     letterSpacing: '0.4px',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 18px rgba(255, 0, 127, 0.35)',
+                    boxShadow: '0 4px 18px rgba(239, 68, 68, 0.35)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '8px'
+                    gap: '8px',
+                    fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                   }}
                 >
                   <ShieldCheck size={18} />
-                  <span>আমি বুঝেছি ও এগিয়ে যাই</span>
+                  <span>{isBangla ? `আমি বুঝেছি ও এগিয়ে যাই (${noticeCountdown}s)` : `I Understand & Proceed (${noticeCountdown}s)`}</span>
                 </motion.button>
+
+                {/* Slim (3px) Linear Countdown Progress Bar along bottom border */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '3.5px',
+                  background: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+                  overflow: 'hidden'
+                }}>
+                  <motion.div
+                    animate={{ width: `${(noticeCountdown / 10) * 100}%` }}
+                    transition={{ duration: 1, ease: 'linear' }}
+                    style={{
+                      height: '100%',
+                      background: 'linear-gradient(90deg, #EF4444 0%, #A855F7 100%)',
+                      boxShadow: '0 0 8px rgba(239, 68, 68, 0.6)'
+                    }}
+                  />
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -621,47 +776,20 @@ const DreamModal = ({ onClose }) => {
             flexDirection: 'column',
             alignItems: 'center',
             position: 'relative',
-            padding: '36px 18px 80px 18px'
+            padding: '24px 16px 80px 16px'
           }}
         >
-          {/* Top Controls Container (Close Button & Language Switcher) */}
+          {/* Top App Bar Header Row: Left Close Button, Center Category Badge, Right Animated Toggle Switch */}
           <div style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
+            width: '100%',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: '10px',
-            zIndex: 100000
+            marginBottom: '20px',
+            padding: '0 2px'
           }}>
-            {/* Language Switcher Pill */}
-            <motion.button
-              onClick={() => setLanguage(isBangla ? 'en' : 'bn')}
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
-              style={{
-                background: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.9)',
-                border: '1px solid var(--primary-color)',
-                borderRadius: '20px',
-                padding: '8px 14px',
-                color: 'var(--text-primary)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '0.82rem',
-                fontWeight: 700,
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                boxShadow: '0 4px 18px rgba(0, 0, 0, 0.25)'
-              }}
-              title={isBangla ? 'Switch to English' : 'বাংলায় দেখুন'}
-            >
-              <Languages size={16} color="var(--primary-color)" />
-              <span>{isBangla ? 'EN' : 'বাং'}</span>
-            </motion.button>
-
-            {/* Top Floating Close Button */}
+            {/* Left: Close Button */}
             <motion.button 
               onClick={onClose}
               whileHover={{ scale: 1.1, rotate: 90 }}
@@ -672,52 +800,67 @@ const DreamModal = ({ onClose }) => {
                 cursor: 'pointer', 
                 color: 'var(--text-primary)',
                 borderRadius: '50%', 
-                width: '42px',
-                height: '42px',
+                width: '38px',
+                height: '38px',
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)'
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                flexShrink: 0
               }}
               aria-label="Close modal"
             >
-              <X size={20} />
+              <X size={18} />
             </motion.button>
-          </div>
 
-          {/* Header Title */}
-          <div style={{
-            width: '100%',
-            textAlign: 'center',
-            marginBottom: '24px',
-            marginTop: '8px'
-          }}>
+            {/* Center: Category Badge */}
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              fontSize: '0.78rem',
-              color: 'var(--primary-color)',
+              fontSize: 'clamp(0.68rem, 2vw, 0.78rem)',
+              color: isBangla ? '#A855F7' : 'var(--primary-color)',
               fontWeight: 800,
-              letterSpacing: '1.2px',
+              letterSpacing: '1px',
               textTransform: 'uppercase',
-              marginBottom: '6px'
+              padding: '6px 14px',
+              borderRadius: '20px',
+              background: isBangla 
+                ? (isDark ? 'rgba(168, 85, 247, 0.12)' : 'rgba(168, 85, 247, 0.08)')
+                : (isDark ? 'rgba(0, 229, 255, 0.12)' : 'rgba(0, 119, 182, 0.08)'),
+              border: `1px solid ${isBangla ? 'rgba(168, 85, 247, 0.3)' : 'rgba(0, 229, 255, 0.3)'}`,
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              boxShadow: isBangla ? '0 0 14px rgba(168, 85, 247, 0.15)' : '0 0 14px rgba(0, 229, 255, 0.15)',
+              textAlign: 'center',
+              flexShrink: 1
             }}>
               <Target size={14} />
               <span>{isBangla ? 'ভিশন ও সামাজিক রূপরেখা' : 'Vision & Community Roadmaps'}</span>
             </div>
-            <h1 style={{
-              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
-              fontSize: 'clamp(1.7rem, 5.2vw, 2.4rem)',
-              fontWeight: 900,
-              letterSpacing: '0.8px',
-              color: 'var(--text-primary)',
-              margin: 0,
-              lineHeight: 1.2
-            }}>
-              {isBangla ? 'টেকনাফ নিয়ে আমার স্বপ্ন ও লক্ষ্য' : 'My Dream & Goals for Teknaf'}
-            </h1>
+
+            {/* Right: Premium Animated Language Toggle Switch */}
+            <div style={{ flexShrink: 0 }}>
+              <LanguageToggleSwitch 
+                isBangla={isBangla} 
+                onToggle={() => setLanguage(isBangla ? 'en' : 'bn')} 
+              />
+            </div>
           </div>
+
+          {/* Main Headline Title */}
+          <h1 style={{
+            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
+            fontSize: 'clamp(1.6rem, 5.2vw, 2.3rem)',
+            fontWeight: 900,
+            letterSpacing: '0.8px',
+            color: 'var(--text-primary)',
+            margin: '0 0 20px 0',
+            textAlign: 'center',
+            lineHeight: 1.2
+          }}>
+            {isBangla ? 'টেকনাফ নিয়ে আমার স্বপ্ন ও লক্ষ্য' : 'My Dream & Goals for Teknaf'}
+          </h1>
 
           {/* Re-open Patriotic Notice Strip */}
           <motion.div
@@ -728,18 +871,18 @@ const DreamModal = ({ onClose }) => {
               width: '100%',
               padding: '12px 18px',
               borderRadius: '16px',
-              background: isDark ? 'rgba(255, 0, 127, 0.06)' : 'rgba(255, 0, 127, 0.05)',
-              border: '1px solid rgba(255, 0, 127, 0.25)',
+              background: isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.06)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               cursor: 'pointer',
               marginBottom: '20px',
-              boxShadow: '0 4px 15px rgba(255, 0, 127, 0.08)'
+              boxShadow: '0 4px 15px rgba(239, 68, 68, 0.12)'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Flag size={18} color="#FF007F" />
+              <Flag size={18} color="#EF4444" />
               <span style={{ 
                 fontSize: '0.82rem', 
                 fontWeight: 700, 
@@ -751,7 +894,7 @@ const DreamModal = ({ onClose }) => {
                   : 'Patriotic Civic Message (Click to read again)'}
               </span>
             </div>
-            <span style={{ fontSize: '0.76rem', color: '#FF007F', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.76rem', color: '#EF4444', fontWeight: 700 }}>
               {isBangla ? 'বার্তা দেখুন' : 'Read Notice'}
             </span>
           </motion.div>

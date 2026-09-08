@@ -23,6 +23,7 @@ import {
   Sparkles as SparkleIcon 
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useLanguage } from '../context/LanguageContext';
 import { recordUniqueVisit, listenVisitorCount, formatVisitorCount } from '../services/visitorService';
 import { listenSubscriberCount, formatSubscriberCount, subscribeEmail } from '../services/subscriptionService';
 
@@ -138,6 +139,7 @@ const MatrixCodeRain = ({ isDark }) => {
 
 const HeroSection = ({ isDreamOpen }) => {
   const { isDark } = useTheme();
+  const { isBangla, t } = useLanguage();
   const [visitorCount, setVisitorCount] = useState(123300);
   const [subscriberCount, setSubscriberCount] = useState(10340);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
@@ -379,6 +381,8 @@ const HeroSection = ({ isDreamOpen }) => {
                 <img 
                   src="/profile.jpeg" 
                   alt="Rasedul Karim" 
+                  loading="eager"
+                  fetchPriority="high"
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
               </div>
@@ -401,10 +405,10 @@ const HeroSection = ({ isDreamOpen }) => {
                 flexShrink: 0
               }}>
                 <h1 style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
                   fontSize: '11.8px',
                   fontWeight: 700,
-                  letterSpacing: '0.4px',
+                  letterSpacing: isBangla ? '0.2px' : '0.4px',
                   color: 'var(--text-primary)',
                   margin: 0,
                   whiteSpace: 'nowrap',
@@ -413,7 +417,7 @@ const HeroSection = ({ isDreamOpen }) => {
                   flexShrink: 0,
                   textShadow: isDark ? '0 0 8px rgba(0, 240, 255, 0.25)' : 'none'
                 }}>
-                  Rasedul Karim
+                  {t('hero.name', isBangla ? 'রাশেদুল করিম' : 'Rasedul Karim')}
                 </h1>
 
                 {/* Enlarged Authentic Facebook-Style 16-Point Scalloped Rosette Verified Badge (19px) */}
@@ -473,7 +477,7 @@ const HeroSection = ({ isDreamOpen }) => {
               </div>
             </div>
 
-            {/* 3. English Humble Bio */}
+            {/* 3. Humble Bio (Bilingual) */}
             <div style={{
               fontSize: 'clamp(0.8rem, 2.5vw, 0.88rem)',
               color: '#94A3B8',
@@ -481,12 +485,13 @@ const HeroSection = ({ isDreamOpen }) => {
               marginTop: '4px',
               lineHeight: 1.4,
               letterSpacing: '0.2px',
-              padding: '0 8px'
+              padding: '0 8px',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}>
-              Just a simple human. Still learning.
+              {t('hero.bio', 'Just a simple human. Still learning.')}
             </div>
 
-            {/* 4. Centered Default English Location Tag */}
+            {/* 4. Location Tag (Bilingual) */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -494,14 +499,15 @@ const HeroSection = ({ isDreamOpen }) => {
               gap: '5px',
               fontSize: 'clamp(0.72rem, 2.1vw, 0.8rem)',
               color: 'var(--text-secondary)',
-              marginTop: '4px'
+              marginTop: '4px',
+              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
             }}>
               <MapPin size={12} color="var(--primary-color)" />
-              <span>Natun Pollan Para, Teknaf, Cox's Bazar</span>
+              <span>{t('hero.location', "Natun Pollan Para, Teknaf, Cox's Bazar")}</span>
             </div>
           </div>
 
-          {/* 3. Action Row: [ Chat in Mail ] (Google Chat Flow) & [ Subscribe ] */}
+          {/* 3. Action Row: [ Chat in Mail ] & [ Subscribe ] */}
           <div style={{
             display: 'flex',
             gap: '10px',
@@ -509,7 +515,7 @@ const HeroSection = ({ isDreamOpen }) => {
             alignItems: 'center',
             width: '100%'
           }}>
-            {/* [ Chat in Mail ] Button (Triggers Warning Policy Agreement) */}
+            {/* [ Chat in Mail ] Button */}
             <motion.button
               onClick={() => setIsWarningOpen(true)}
               whileHover={{ scale: 1.03 }}
@@ -533,11 +539,12 @@ const HeroSection = ({ isDreamOpen }) => {
                 boxShadow: isDark 
                   ? '0 4px 15px rgba(0, 240, 255, 0.2), inset 0 0 10px rgba(0, 240, 255, 0.08)' 
                   : '0 4px 15px rgba(0,0,0,0.06)',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
               }}
             >
               <Mail size={15} color="var(--primary-color)" />
-              <span>Chat in Mail</span>
+              <span>{t('hero.chatInMail', 'Chat in Mail')}</span>
             </motion.button>
 
             {/* [ Subscribe ] Button */}
@@ -560,11 +567,12 @@ const HeroSection = ({ isDreamOpen }) => {
                 gap: '6px',
                 cursor: 'pointer',
                 boxShadow: '0 4px 18px rgba(255, 23, 68, 0.45)',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
+                fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
               }}
             >
               <Bell size={14} />
-              <span>Subscribe</span>
+              <span>{t('hero.subscribe', 'Subscribe')}</span>
             </motion.button>
           </div>
 
@@ -602,7 +610,8 @@ const HeroSection = ({ isDreamOpen }) => {
                   fontWeight: 600,
                   color: isDark ? '#00f0ff' : '#0077b6',
                   boxShadow: '0 0 10px rgba(0, 240, 255, 0.12)',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}
               >
                 <span style={{
@@ -614,7 +623,7 @@ const HeroSection = ({ isDreamOpen }) => {
                   boxShadow: '0 0 6px #00E676'
                 }} />
                 <Eye size={12} />
-                <span>Visitors: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatVisitorCount(visitorCount)}</strong></span>
+                <span>{t('hero.visitors', 'Visitors')}: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatVisitorCount(visitorCount)}</strong></span>
               </motion.div>
 
               {/* 2. Live Subscribers Counter Pill (10.34K Baseline) */}
@@ -635,7 +644,8 @@ const HeroSection = ({ isDreamOpen }) => {
                   fontWeight: 600,
                   color: '#FF1744',
                   boxShadow: '0 0 10px rgba(255, 23, 68, 0.15)',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}
               >
                 <span style={{
@@ -647,7 +657,7 @@ const HeroSection = ({ isDreamOpen }) => {
                   boxShadow: '0 0 6px #FF1744'
                 }} />
                 <Bell size={12} />
-                <span>Subscribers: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatSubscriberCount(subscriberCount)}</strong></span>
+                <span>{t('hero.subscribers', 'Subscribers')}: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatSubscriberCount(subscriberCount)}</strong></span>
               </motion.div>
             </div>
 
@@ -715,160 +725,239 @@ const HeroSection = ({ isDreamOpen }) => {
               onClick={() => setIsWarningOpen(false)}
             >
               <motion.div
-                initial={{ opacity: 0, scale: 0.85, y: 20 }}
+                initial={{ opacity: 0, scale: 0.9, y: 25 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.85, y: 20 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                exit={{ opacity: 0, scale: 0.9, y: 25 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 280 }}
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
-                  maxWidth: '380px',
-                  background: 'var(--card-bg)',
-                  border: '1px solid rgba(255, 23, 68, 0.35)',
-                  borderRadius: '24px',
-                  padding: '24px 20px',
+                  maxWidth: '420px',
+                  background: isDark ? 'linear-gradient(145deg, #111827 0%, #161B22 100%)' : '#FFFFFF',
+                  border: isDark ? '1.5px solid rgba(0, 229, 255, 0.35)' : '1px solid rgba(0, 229, 255, 0.3)',
+                  borderRadius: '28px',
+                  padding: '30px 24px 24px 24px',
                   textAlign: 'center',
                   boxShadow: isDark 
-                    ? '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 23, 68, 0.3)' 
-                    : '0 25px 60px rgba(0, 0, 0, 0.25)',
+                    ? '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(0, 229, 255, 0.2)' 
+                    : '0 20px 50px rgba(0, 0, 0, 0.18)',
                   position: 'relative',
-                  maxHeight: '90vh',
+                  maxHeight: '92vh',
                   overflowY: 'auto'
                 }}
               >
-                <button
+                {/* Top-Right Clean Rounded Close Button */}
+                <motion.button
                   onClick={() => setIsWarningOpen(false)}
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
                   style={{
                     position: 'absolute',
-                    top: '16px',
-                    right: '16px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-secondary)',
+                    top: '18px',
+                    right: '18px',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                    border: '1px solid var(--card-border)',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     cursor: 'pointer',
-                    padding: '4px'
+                    transition: 'all 0.2s'
                   }}
                   aria-label="Close modal"
                 >
-                  <X size={20} />
-                </button>
+                  <X size={16} />
+                </motion.button>
 
-                {/* Warning Shield Icon */}
+                {/* Modern Digital Header Illustration Composition (Envelope + Security Badge + Floating Particles) */}
                 <div style={{
-                  width: '52px',
-                  height: '52px',
-                  borderRadius: '50%',
-                  background: 'rgba(255, 23, 68, 0.12)',
-                  border: '1px solid rgba(255, 23, 68, 0.4)',
+                  position: 'relative',
+                  width: '76px',
+                  height: '76px',
+                  margin: '0 auto 18px auto',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 12px auto',
-                  boxShadow: '0 0 20px rgba(255, 23, 68, 0.3)'
+                  justifyContent: 'center'
                 }}>
-                  <ShieldAlert size={26} color="#FF1744" />
+                  {/* Outer Glowing Circle Backdrop */}
+                  <motion.div
+                    animate={{
+                      scale: [1, 1.06, 1],
+                      boxShadow: [
+                        '0 0 20px rgba(0, 229, 255, 0.25)',
+                        '0 0 35px rgba(0, 229, 255, 0.45)',
+                        '0 0 20px rgba(0, 229, 255, 0.25)'
+                      ]
+                    }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{
+                      width: '76px',
+                      height: '76px',
+                      borderRadius: '50%',
+                      background: isDark 
+                        ? 'linear-gradient(135deg, rgba(0, 229, 255, 0.18) 0%, rgba(16, 185, 129, 0.12) 100%)' 
+                        : 'linear-gradient(135deg, rgba(0, 229, 255, 0.15) 0%, rgba(0, 119, 182, 0.1) 100%)',
+                      border: '1.5px solid rgba(0, 229, 255, 0.45)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative'
+                    }}
+                  >
+                    <Mail size={34} color="#00E5FF" />
+
+                    {/* Corner Security Shield Badge */}
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '-2px',
+                      right: '-2px',
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '50%',
+                      background: '#111827',
+                      border: '1.5px solid #FF1744',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 0 10px rgba(255, 23, 68, 0.5)'
+                    }}>
+                      <ShieldAlert size={14} color="#FF1744" />
+                    </div>
+                  </motion.div>
                 </div>
 
+                {/* Primary Bold Headline */}
                 <h3 style={{
                   fontFamily: "'Space Grotesk', sans-serif",
-                  fontSize: '1.15rem',
-                  fontWeight: 800,
+                  fontSize: '1.25rem',
+                  fontWeight: 900,
+                  letterSpacing: '0.3px',
                   color: 'var(--text-primary)',
-                  margin: '0 0 6px 0'
+                  margin: '0 0 8px 0',
+                  lineHeight: 1.2
                 }}>
                   Communication Policy Notice
                 </h3>
 
+                {/* Subtext & Guidelines */}
                 <p style={{
-                  fontSize: '0.84rem',
+                  fontSize: '0.86rem',
                   color: 'var(--text-secondary)',
-                  lineHeight: 1.5,
-                  margin: '0 0 12px 0'
+                  lineHeight: 1.55,
+                  margin: '0 0 16px 0',
+                  padding: '0 6px',
+                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}>
-                  Notice: Please review our Communication & Messaging Policy before proceeding to direct chat.
+                  {isBangla 
+                    ? 'বিজ্ঞপ্তি: সরাসরি চ্যাটে যাওয়ার আগে অনুগ্রহ করে আমাদের যোগাযোগ ও মেসেজিং নীতিমালা পর্যালোচনা করুন।'
+                    : 'Notice: Please review our Communication & Messaging Policy before proceeding to direct chat.'}
                 </p>
 
-                {/* Link to Open Full Policy Modal */}
-                <button
-                  onClick={() => {
-                    setIsWarningOpen(false);
-                    setIsPolicyDetailOpen(true);
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--primary-color)',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    marginBottom: '16px',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  <FileText size={14} /> Read Full Policy / সম্পূর্ণ নীতিমালা পড়ুন
-                </button>
+                {/* Slim Hyperlink Pill for Full Policy */}
+                <div style={{ marginBottom: '20px' }}>
+                  <motion.button
+                    onClick={() => {
+                      setIsWarningOpen(false);
+                      setIsPolicyDetailOpen(true);
+                    }}
+                    whileHover={{ scale: 1.04, y: -1 }}
+                    whileTap={{ scale: 0.96 }}
+                    style={{
+                      background: isDark ? 'rgba(0, 229, 255, 0.08)' : 'rgba(0, 119, 182, 0.08)',
+                      border: '1px solid rgba(0, 229, 255, 0.35)',
+                      color: 'var(--primary-color)',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      borderRadius: '20px',
+                      padding: '7px 16px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 2px 10px rgba(0, 229, 255, 0.1)',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                    }}
+                  >
+                    <FileText size={14} /> 
+                    <span>Read Full Policy / সম্পূর্ণ নীতিমালা পড়ুন</span>
+                  </motion.button>
+                </div>
 
-                {/* Agreement Checkbox */}
+                {/* Consent Checkbox Box */}
                 <label style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  fontSize: '0.82rem',
+                  gap: '10px',
+                  fontSize: '0.84rem',
                   color: 'var(--text-primary)',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: 'pointer',
-                  marginBottom: '18px',
-                  padding: '8px 10px',
-                  borderRadius: '12px',
-                  background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
-                  border: '1px solid var(--card-border)'
+                  marginBottom: '20px',
+                  padding: '12px 14px',
+                  borderRadius: '16px',
+                  background: hasAgreedPolicy 
+                    ? (isDark ? 'rgba(0, 229, 255, 0.1)' : 'rgba(0, 119, 182, 0.08)')
+                    : (isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)'),
+                  border: hasAgreedPolicy 
+                    ? '1.5px solid rgba(0, 229, 255, 0.55)' 
+                    : '1px solid var(--card-border)',
+                  boxShadow: hasAgreedPolicy ? '0 0 15px rgba(0, 229, 255, 0.18)' : 'none',
+                  transition: 'all 0.25s ease',
+                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                 }}>
                   <input 
                     type="checkbox"
                     checked={hasAgreedPolicy}
                     onChange={(e) => setHasAgreedPolicy(e.target.checked)}
                     style={{
-                      width: '16px',
-                      height: '16px',
+                      width: '18px',
+                      height: '18px',
                       cursor: 'pointer',
-                      accentColor: '#FF1744'
+                      accentColor: '#00E5FF'
                     }}
                   />
-                  <span>I have read and agree to the Warning Policy.</span>
+                  <span>
+                    {isBangla 
+                      ? 'আমি সতর্কবার্তা ও নীতিমালা পড়েছি এবং সম্মত আছি।' 
+                      : 'I have read and agree to the Warning Policy.'}
+                  </span>
                 </label>
 
-                {/* Proceed to Google Chat Button */}
+                {/* Full-Width Rounded Capsule Proceed Button */}
                 <motion.button
                   onClick={handleOpenGoogleChat}
                   disabled={!hasAgreedPolicy}
-                  whileHover={hasAgreedPolicy ? { scale: 1.03 } : {}}
-                  whileTap={hasAgreedPolicy ? { scale: 0.97 } : {}}
+                  whileHover={hasAgreedPolicy ? { scale: 1.02, y: -2 } : {}}
+                  whileTap={hasAgreedPolicy ? { scale: 0.98 } : {}}
                   style={{
                     width: '100%',
-                    padding: '11px',
+                    padding: '13px 20px',
                     borderRadius: '30px',
                     background: hasAgreedPolicy 
-                      ? 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)' 
-                      : 'rgba(255, 255, 255, 0.1)',
+                      ? 'linear-gradient(135deg, #00F0FF 0%, #00E676 100%)' 
+                      : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'),
                     border: 'none',
                     color: hasAgreedPolicy ? '#000000' : 'var(--text-secondary)',
-                    fontWeight: 800,
-                    fontSize: '0.86rem',
+                    fontWeight: 900,
+                    fontSize: '0.92rem',
+                    letterSpacing: '0.4px',
                     cursor: hasAgreedPolicy ? 'pointer' : 'not-allowed',
                     opacity: hasAgreedPolicy ? 1 : 0.45,
-                    boxShadow: hasAgreedPolicy ? '0 4px 18px rgba(0, 240, 255, 0.35)' : 'none',
+                    boxShadow: hasAgreedPolicy ? '0 6px 25px rgba(0, 240, 255, 0.45)' : 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '6px'
+                    gap: '8px',
+                    transition: 'all 0.25s ease',
+                    fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif"
                   }}
                 >
                   <span>Proceed to Google Chat</span>
-                  <ExternalLink size={15} />
+                  <ExternalLink size={16} strokeWidth={2.5} />
                 </motion.button>
               </motion.div>
             </div>
@@ -1133,9 +1222,10 @@ const HeroSection = ({ isDreamOpen }) => {
                       fontSize: '0.88rem',
                       color: 'var(--text-secondary)',
                       lineHeight: 1.55,
-                      margin: '0 0 22px 0'
+                      margin: '0 0 22px 0',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
-                      Your email is already subscribed!
+                      {t('subscribeModal.alreadySubscribed', 'Your email is already subscribed!')}
                     </p>
 
                     <motion.button
@@ -1156,10 +1246,11 @@ const HeroSection = ({ isDreamOpen }) => {
                         fontWeight: 800,
                         fontSize: '0.88rem',
                         cursor: 'pointer',
-                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)'
+                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)',
+                        fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                       }}
                     >
-                      OK
+                      {t('subscribeModal.ok', 'OK')}
                     </motion.button>
                   </div>
                 ) : subResult?.success ? (
@@ -1181,22 +1272,23 @@ const HeroSection = ({ isDreamOpen }) => {
                     </div>
 
                     <h3 style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
                       fontSize: '1.25rem',
                       fontWeight: 800,
                       color: 'var(--text-primary)',
                       margin: '0 0 8px 0'
                     }}>
-                      Subscription Confirmed
+                      {t('subscribeModal.successTitle', 'Subscription Confirmed')}
                     </h3>
 
                     <p style={{
                       fontSize: '0.88rem',
                       color: 'var(--text-secondary)',
                       lineHeight: 1.55,
-                      margin: '0 0 22px 0'
+                      margin: '0 0 22px 0',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
-                      Thank you! You have successfully subscribed to all future updates.
+                      {t('subscribeModal.successMsg', 'Thank you! You have successfully subscribed to all future updates.')}
                     </p>
 
                     <motion.button
@@ -1217,10 +1309,11 @@ const HeroSection = ({ isDreamOpen }) => {
                         fontWeight: 800,
                         fontSize: '0.88rem',
                         cursor: 'pointer',
-                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)'
+                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)',
+                        fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                       }}
                     >
-                      Awesome
+                      {t('subscribeModal.awesome', 'Awesome')}
                     </motion.button>
                   </div>
                 ) : (
@@ -1243,13 +1336,13 @@ const HeroSection = ({ isDreamOpen }) => {
                     </div>
 
                     <h3 style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
                       fontSize: '1.2rem',
                       fontWeight: 800,
                       color: 'var(--text-primary)',
                       margin: '0 0 8px 0'
                     }}>
-                      Stay Updated
+                      {t('subscribeModal.title', 'Stay Updated')}
                     </h3>
 
                     {/* Notice / Disclosure */}
@@ -1258,9 +1351,10 @@ const HeroSection = ({ isDreamOpen }) => {
                       color: 'var(--text-secondary)',
                       lineHeight: 1.5,
                       margin: '0 0 16px 0',
-                      padding: '0 6px'
+                      padding: '0 6px',
+                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                     }}>
-                      If any new updates or projects are released, you will be notified directly via email.
+                      {t('subscribeModal.note', 'If any new updates or projects are released, you will be notified directly via email.')}
                     </p>
 
                     {/* Feedback Alert for Duplicate / Invalid Email */}
@@ -1280,11 +1374,12 @@ const HeroSection = ({ isDreamOpen }) => {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '6px'
+                          gap: '6px',
+                          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                         }}
                       >
                         <AlertCircle size={14} />
-                        <span>{subResult.message}</span>
+                        <span>{subResult.alreadySubscribed ? t('subscribeModal.alreadySubscribed', subResult.message) : subResult.message}</span>
                       </motion.div>
                     )}
 
@@ -1293,7 +1388,7 @@ const HeroSection = ({ isDreamOpen }) => {
                       <input
                         type="email"
                         required
-                        placeholder="Enter your email address"
+                        placeholder={t('subscribeModal.placeholder', 'Enter your email address')}
                         value={subEmailInput}
                         onChange={(e) => {
                           setSubEmailInput(e.target.value);
@@ -1308,7 +1403,8 @@ const HeroSection = ({ isDreamOpen }) => {
                           color: 'var(--text-primary)',
                           fontSize: '0.88rem',
                           outline: 'none',
-                          boxSizing: 'border-box'
+                          boxSizing: 'border-box',
+                          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                         }}
                       />
 
@@ -1329,10 +1425,11 @@ const HeroSection = ({ isDreamOpen }) => {
                             color: 'var(--text-secondary)',
                             fontWeight: 700,
                             fontSize: '0.85rem',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                           }}
                         >
-                          Cancel
+                          {t('subscribeModal.cancel', 'Cancel')}
                         </button>
 
                         <motion.button
@@ -1354,16 +1451,17 @@ const HeroSection = ({ isDreamOpen }) => {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '6px'
+                            gap: '6px',
+                            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
                           }}
                         >
                           {subLoading ? (
                             <>
                               <Loader2 size={14} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
-                              <span>Subscribing...</span>
+                              <span>{t('subscribeModal.subscribing', 'Subscribing...')}</span>
                             </>
                           ) : (
-                            <span>Confirm Subscription</span>
+                            <span>{t('subscribeModal.confirm', 'Confirm Subscription')}</span>
                           )}
                         </motion.button>
                       </div>

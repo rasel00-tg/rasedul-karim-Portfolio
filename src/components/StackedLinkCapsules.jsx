@@ -10,14 +10,17 @@ import {
   ExternalLink,
   Sparkles
 } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
+  const { isBangla, t } = useLanguage();
+
   const links = [
     {
       id: 'projects',
       icon: <Globe size={18} color="#00f0ff" />,
-      title: 'Web Apps & Projects',
-      subtitle: 'Live Apps & Websites Portfolio',
+      title: t('stackedLinks.webAppsTitle', 'Web Apps & Projects'),
+      subtitle: t('stackedLinks.webAppsSub', 'Live Apps & Websites Portfolio'),
       actionType: 'scroll',
       href: '#projects',
       badgeColor: '#00f0ff'
@@ -25,8 +28,8 @@ const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
     {
       id: 'about',
       icon: <User size={18} color="#ff007f" />,
-      title: 'About Me',
-      subtitle: 'Education, Skills & Experience',
+      title: t('stackedLinks.aboutTitle', 'About Me'),
+      subtitle: t('stackedLinks.aboutSub', 'Education, Skills & Experience'),
       actionType: 'modal',
       onClick: onOpenAbout,
       badgeColor: '#ff007f'
@@ -34,8 +37,8 @@ const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
     {
       id: 'dream',
       icon: <Target size={18} color="#00f0ff" />,
-      title: 'My Dream & Goals',
-      subtitle: 'Vision for Notun Pollan Para',
+      title: t('stackedLinks.dreamTitle', 'My Dream & Goals'),
+      subtitle: t('stackedLinks.dreamSub', 'Vision for Notun Pollan Para'),
       actionType: 'modal',
       onClick: onOpenDream,
       badgeColor: '#00f0ff'
@@ -43,8 +46,8 @@ const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
     {
       id: 'future-projects',
       icon: <FolderGit2 size={18} color="#ffaa00" />,
-      title: 'Future Projects (Apps & Websites)',
-      subtitle: 'Upcoming Systems & Architecture',
+      title: t('stackedLinks.futureTitle', 'Future Projects (Apps & Websites)'),
+      subtitle: t('stackedLinks.futureSub', 'Upcoming Systems & Architecture'),
       actionType: 'scroll',
       href: '#projects',
       badgeColor: '#ffaa00'
@@ -83,6 +86,14 @@ const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
               {isLink ? (
                 <a
                   href={item.href}
+                  onClick={(e) => {
+                    if (item.actionType === 'scroll') {
+                      e.preventDefault();
+                      const targetId = item.href.replace('#', '');
+                      const el = document.getElementById(targetId);
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -125,7 +136,7 @@ const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
                       {item.icon}
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit' }}>
                       <span style={{
                         fontSize: 'clamp(0.85rem, 2.6vw, 0.98rem)',
                         fontWeight: 700,
@@ -208,7 +219,7 @@ const StackedLinkCapsules = ({ onOpenAbout, onOpenDream }) => {
                       {item.icon}
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, textAlign: 'left' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, textAlign: 'left', fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit' }}>
                       <span style={{
                         fontSize: 'clamp(0.85rem, 2.6vw, 0.98rem)',
                         fontWeight: 700,

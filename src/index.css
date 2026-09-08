@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@100..800&family=DM+Serif+Display:ital@0;1&display=swap');
+
 @font-face {
   font-family: 'MyCustomFont';
   src: url('/Arizonia-Regular.ttf') format('truetype');
@@ -10,6 +12,39 @@
   src: url('/dream-font/dream-bangla.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+}
+
+/* DM Serif Display Classes */
+.dm-serif-display-regular {
+  font-family: "DM Serif Display", serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.dm-serif-display-regular-italic {
+  font-family: "DM Serif Display", serif;
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* 100% Comprehensive English Font Cascade ("DM Serif Display") */
+[data-lang="en"],
+[data-lang="en"] *,
+.english-mode,
+.english-mode * {
+  font-family: "DM Serif Display", serif !important;
+}
+
+/* 100% Comprehensive Bengali Font Cascade ("Anek Bangla") */
+[data-lang="bn"],
+[data-lang="bn"] *,
+.bangla-mode,
+.bangla-mode *,
+.anek-bangla,
+.anek-bangla * {
+  font-family: "Anek Bangla", 'LiAdorNoirrit', sans-serif !important;
+  font-optical-sizing: auto;
+  font-variation-settings: "wdth" 100;
 }
 
 :root {
