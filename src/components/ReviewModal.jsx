@@ -366,41 +366,15 @@ const ReviewModal = ({ onClose }) => {
           padding: '0'
         }}
       >
-        {/* Floating Ambient Amber / Violet Orbs */}
-        <div style={{
-          position: 'fixed',
-          top: '-10%',
-          left: '-5%',
-          width: '500px',
-          height: '500px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-          pointerEvents: 'none',
-          zIndex: 0
-        }} />
-        <div style={{
-          position: 'fixed',
-          bottom: '-10%',
-          right: '-5%',
-          width: '520px',
-          height: '520px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(217, 119, 6, 0.16) 0%, transparent 70%)',
-          filter: 'blur(80px)',
-          pointerEvents: 'none',
-          zIndex: 0
-        }} />
-
         {/* Modal Container */}
         <motion.div
-          initial={{ scale: 0.96, opacity: 0, y: 15 }}
+          initial={{ scale: 0.96, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.96, opacity: 0, y: 15 }}
+          exit={{ scale: 0.96, opacity: 0, y: 20 }}
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
           style={{
             width: '100%',
-            maxWidth: '680px',
+            maxWidth: '1100px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -445,7 +419,7 @@ const ReviewModal = ({ onClose }) => {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '8px',
-            marginBottom: '14px',
+            marginBottom: '18px',
             marginTop: '8px'
           }}>
             {/* Average Rating Mini Pill */}
@@ -560,28 +534,30 @@ const ReviewModal = ({ onClose }) => {
             </div>
           </div>
 
-          {/* 2. SUBMISSION FORM CARD (Vibrant Amber & Gold Theme - Instant Viewport Fit) */}
-          <div style={{
-            width: '100%',
-            background: isDark ? 'rgba(15, 23, 42, 0.92)' : '#FFFFFF',
-            backdropFilter: 'blur(24px)',
-            border: '1.5px solid rgba(245, 158, 11, 0.45)',
-            borderRadius: '22px',
-            padding: '22px 20px 24px 20px',
-            boxShadow: isDark 
-              ? '0 15px 45px rgba(0, 0, 0, 0.65), 0 0 28px -4px rgba(245, 158, 11, 0.2)' 
-              : '0 12px 35px rgba(245, 158, 11, 0.12)',
-            marginBottom: '26px'
-          }}>
-            {/* Form Title & Clean Header */}
-            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-              <h2 style={{
-                margin: '0 0 4px 0',
-                fontSize: 'clamp(1.35rem, 3.2vw, 1.65rem)',
-                fontWeight: 900,
-                color: 'var(--text-primary)',
-                fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
-              }}>
+          {/* Desktop 2-Column Split View: Left Form (5 cols), Right Live Feed (7 cols) */}
+          <div className="review-split-grid" style={{ width: '100%', marginBottom: '20px' }}>
+            {/* 2. SUBMISSION FORM CARD (Vibrant Amber & Gold Theme - Instant Viewport Fit) */}
+            <div style={{
+              width: '100%',
+              background: isDark ? 'rgba(15, 23, 42, 0.92)' : '#FFFFFF',
+              backdropFilter: 'blur(24px)',
+              border: '1.5px solid rgba(245, 158, 11, 0.45)',
+              borderRadius: '22px',
+              padding: '22px 20px 24px 20px',
+              boxShadow: isDark 
+                ? '0 15px 45px rgba(0, 0, 0, 0.65), 0 0 28px -4px rgba(245, 158, 11, 0.2)' 
+                : '0 12px 35px rgba(245, 158, 11, 0.12)',
+              marginBottom: '20px'
+            }}>
+              {/* Form Title & Clean Header */}
+              <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+                <h2 style={{
+                  margin: '0 0 4px 0',
+                  fontSize: 'clamp(1.35rem, 3.2vw, 1.65rem)',
+                  fontWeight: 900,
+                  color: 'var(--text-primary)',
+                  fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
+                }}>
                 {isBangla ? 'আপনার মতামত দিন' : 'Submit Feedback'}
               </h2>
               <p style={{
@@ -895,6 +871,7 @@ const ReviewModal = ({ onClose }) => {
               ))}
             </div>
           </div>
+        </div>
 
           {/* Bottom Close Button */}
           <div style={{ marginTop: '28px', width: '100%', maxWidth: '220px' }}>

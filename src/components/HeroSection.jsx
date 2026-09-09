@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Canvas } from '@react-three/fiber';
-import { Environment, Sparkles } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, 
@@ -20,135 +18,92 @@ import {
   Users, 
   CheckCircle2, 
   Loader2, 
-  Sparkles as SparkleIcon,
-  Code2,
-  Braces,
-  Smartphone,
-  Database,
-  Terminal,
-  PenTool,
-  Layers,
-  Crop,
-  Palette,
-  Wand2
+  Sun,
+  Moon,
+  Menu,
+  Sparkles
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { recordUniqueVisit, listenVisitorCount, formatVisitorCount } from '../services/visitorService';
 import { listenSubscriberCount, formatSubscriberCount, subscribeEmail } from '../services/subscriptionService';
+import BentoGridSection from './StackedLinkCapsules';
 
-const SceneBg = ({ isDreamOpen }) => {
+const CleanAmbientBackdrop = ({ isDark }) => {
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100%', zIndex: -1 }}>
-      <Canvas 
-        camera={{ position: [0, 0, 7], fov: 50 }} 
-        dpr={[1, 1.5]} 
-        frameloop={isDreamOpen ? 'never' : 'always'}
-      >
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[10, 10, 5]} intensity={2} color="#00f0ff" />
-        <directionalLight position={[-10, -10, -5]} intensity={2} color="#ff007f" />
-        <Sparkles count={90} scale={12} size={2} speed={0.4} opacity={0.4} color="#00f0ff" />
-        <Environment preset="city" />
-      </Canvas>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', pointerEvents: 'none', zIndex: -1, overflow: 'hidden' }}>
+      {/* Top-Left Ambient Flare */}
+      <motion.div
+        animate={{ 
+          x: [-10, 20, -10],
+          y: [-10, 25, -10],
+          scale: [1, 1.1, 1]
+        }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+        style={{
+          position: 'absolute',
+          top: '-60px',
+          left: '-50px',
+          width: '360px',
+          height: '360px',
+          borderRadius: '50%',
+          background: isDark 
+            ? 'radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(147, 51, 234, 0.12) 50%, transparent 75%)' 
+            : 'radial-gradient(circle, rgba(0, 180, 255, 0.32) 0%, rgba(56, 189, 248, 0.12) 50%, transparent 75%)',
+          filter: 'blur(55px)'
+        }}
+      />
+
+      {/* Top-Right Ambient Flare */}
+      <motion.div
+        animate={{ 
+          x: [15, -15, 15],
+          y: [0, -20, 0],
+          scale: [1, 1.08, 1]
+        }}
+        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
+        style={{
+          position: 'absolute',
+          top: '-40px',
+          right: '-40px',
+          width: '320px',
+          height: '320px',
+          borderRadius: '50%',
+          background: isDark 
+            ? 'radial-gradient(circle, rgba(0, 240, 255, 0.22) 0%, rgba(14, 74, 89, 0.08) 55%, transparent 75%)' 
+            : 'radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(186, 230, 253, 0.1) 55%, transparent 75%)',
+          filter: 'blur(50px)'
+        }}
+      />
+
+      {/* Center-Bottom Luminous Horizon Glow */}
+      <div style={{
+        position: 'absolute',
+        bottom: '-90px',
+        left: '15%',
+        right: '15%',
+        height: '260px',
+        borderRadius: '50%',
+        background: isDark 
+          ? 'radial-gradient(ellipse at bottom, rgba(192, 132, 252, 0.38) 0%, rgba(168, 85, 247, 0.18) 45%, transparent 75%)' 
+          : 'radial-gradient(ellipse at bottom, rgba(0, 180, 255, 0.38) 0%, rgba(125, 211, 252, 0.18) 45%, transparent 75%)',
+        filter: 'blur(60px)'
+      }} />
     </div>
   );
 };
 
-const MatrixCodeRain = ({ isDark }) => {
-  const canvasRef = React.useRef(null);
-
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationFrameId;
-
-    let width = (canvas.width = canvas.offsetWidth);
-    let height = (canvas.height = canvas.offsetHeight);
-
-    const handleResize = () => {
-      if (!canvas) return;
-      width = canvas.width = canvas.offsetWidth;
-      height = canvas.height = canvas.offsetHeight;
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    const characters = '01{}<>/=+-*$const let function=>0xFFif return async await void 01010101';
-    const fontSize = 13;
-    const columns = Math.max(15, Math.floor(width / fontSize));
-    const drops = [];
-
-    for (let i = 0; i < columns; i++) {
-      drops[i] = Math.floor(Math.random() * -20);
-    }
-
-    let lastTime = 0;
-    const fps = 24;
-    const interval = 1000 / fps;
-
-    const render = (currentTime) => {
-      animationFrameId = requestAnimationFrame(render);
-      const delta = currentTime - lastTime;
-      if (delta < interval) return;
-      lastTime = currentTime - (delta % interval);
-
-      ctx.fillStyle = isDark ? 'rgba(10, 15, 26, 0.24)' : 'rgba(240, 246, 252, 0.24)';
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
-
-      for (let i = 0; i < drops.length; i++) {
-        const text = characters.charAt(Math.floor(Math.random() * characters.length));
-        const x = i * fontSize;
-        const y = drops[i] * fontSize;
-
-        if (Math.random() > 0.88) {
-          ctx.fillStyle = isDark ? '#FFFFFF' : '#0077B6';
-          ctx.shadowColor = '#00E5FF';
-          ctx.shadowBlur = 6;
-        } else {
-          ctx.fillStyle = isDark ? 'rgba(0, 229, 255, 0.65)' : 'rgba(0, 119, 182, 0.55)';
-          ctx.shadowBlur = 0;
-        }
-
-        ctx.fillText(text, x, y);
-
-        if (y > height && Math.random() > 0.975) {
-          drops[i] = 0;
-        }
-        drops[i]++;
-      }
-    };
-
-    animationFrameId = requestAnimationFrame(render);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [isDark]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        opacity: isDark ? 0.75 : 0.45,
-        zIndex: 1
-      }}
-    />
-  );
-};
-
-const HeroSection = ({ isDreamOpen }) => {
-  const { isDark } = useTheme();
+const HeroSection = ({ 
+  isDreamOpen, 
+  onOpenProjects,
+  onOpenAbout, 
+  onOpenDream, 
+  onOpenSkill, 
+  onOpenReview, 
+  onOpenQR,
+  onOpenDrawer
+}) => {
+  const { isDark, toggleTheme } = useTheme();
   const { isBangla, t } = useLanguage();
   const [visitorCount, setVisitorCount] = useState(123300);
   const [subscriberCount, setSubscriberCount] = useState(10340);
@@ -160,6 +115,15 @@ const HeroSection = ({ isDreamOpen }) => {
   const [isPolicyDetailOpen, setIsPolicyDetailOpen] = useState(false);
   const [hasAgreedPolicy, setHasAgreedPolicy] = useState(false);
   const [policyLanguage, setPolicyLanguage] = useState('en');
+
+  // Instant Zero-Lag Asset Pre-caching Pipeline
+  useEffect(() => {
+    const assetSources = ['/profile.jpeg', '/about.png', '/add1.png', '/add2.png', '/app1.png', '/app2.png'];
+    assetSources.forEach((src) => {
+      const img = new Image();
+      img.src = src;
+    });
+  }, []);
 
   // Initialize unique visit tracking & live listeners (Visitors 123.3K baseline, Subscribers 10.34K baseline)
   useEffect(() => {
@@ -197,9 +161,9 @@ const HeroSection = ({ isDreamOpen }) => {
       name: 'Facebook',
       url: 'https://www.facebook.com/share/1CiNH7Gnt6/',
       borderColor: '#1877F2',
-      glow: '0 0 12px rgba(24, 119, 242, 0.75), inset 0 0 8px rgba(24, 119, 242, 0.3)',
+      glow: '0 0 10px rgba(24, 119, 242, 0.5)',
       icon: (
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="#1877F2">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="#1877F2">
           <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
         </svg>
       )
@@ -209,9 +173,9 @@ const HeroSection = ({ isDreamOpen }) => {
       name: 'WhatsApp',
       url: 'https://wa.me/8801871176267',
       borderColor: '#25D366',
-      glow: '0 0 12px rgba(37, 211, 102, 0.75), inset 0 0 8px rgba(37, 211, 102, 0.3)',
+      glow: '0 0 10px rgba(37, 211, 102, 0.5)',
       icon: (
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="#25D366">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="#25D366">
           <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
         </svg>
       )
@@ -221,9 +185,9 @@ const HeroSection = ({ isDreamOpen }) => {
       name: 'Telegram',
       url: 'https://t.me/rasedulkarim',
       borderColor: '#229ED9',
-      glow: '0 0 12px rgba(34, 158, 217, 0.75), inset 0 0 8px rgba(34, 158, 217, 0.3)',
+      glow: '0 0 10px rgba(34, 158, 217, 0.5)',
       icon: (
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="#229ED9">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="#229ED9">
           <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.34-.635.34l.213-3.053 5.56-5.023c.24-.213-.054-.334-.373-.121l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.458c.538-.196 1.006.128.832.894z"/>
         </svg>
       )
@@ -233,9 +197,9 @@ const HeroSection = ({ isDreamOpen }) => {
       name: 'YouTube',
       url: 'https://youtube.com/@its.rasel.bro143?feature=shared',
       borderColor: '#FF0000',
-      glow: '0 0 12px rgba(255, 0, 0, 0.75), inset 0 0 8px rgba(255, 0, 0, 0.3)',
+      glow: '0 0 10px rgba(255, 0, 0, 0.5)',
       icon: (
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="#FF0000">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="#FF0000">
           <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
         </svg>
       )
@@ -245,9 +209,9 @@ const HeroSection = ({ isDreamOpen }) => {
       name: 'Instagram',
       url: 'https://www.instagram.com/rasedulkarim.00?stkn=MWZ3ZHZiYm15dW12cA==',
       borderColor: '#E4405F',
-      glow: '0 0 12px rgba(228, 64, 95, 0.75), inset 0 0 8px rgba(228, 64, 95, 0.3)',
+      glow: '0 0 10px rgba(228, 64, 95, 0.5)',
       icon: (
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="#E4405F">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="#E4405F">
           <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
         </svg>
       )
@@ -257,9 +221,9 @@ const HeroSection = ({ isDreamOpen }) => {
       name: 'Twitter (X)',
       url: 'https://x.com/rasedulkarim0',
       borderColor: '#F8FAFC',
-      glow: '0 0 12px rgba(248, 250, 252, 0.65), inset 0 0 8px rgba(248, 250, 252, 0.25)',
+      glow: '0 0 10px rgba(248, 250, 252, 0.4)',
       icon: (
-        <svg width="19" height="19" viewBox="0 0 24 24" fill={isDark ? '#FFFFFF' : '#000000'}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill={isDark ? '#FFFFFF' : '#000000'}>
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
         </svg>
       )
@@ -277,625 +241,297 @@ const HeroSection = ({ isDreamOpen }) => {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        zIndex: 2
+        zIndex: 2,
+        minHeight: '100vh',
+        boxSizing: 'border-box'
       }}
     >
-      <SceneBg isDreamOpen={isDreamOpen} />
+      {/* Clean Ambient Floating 3D Backdrop */}
+      <CleanAmbientBackdrop isDark={isDark} />
 
-      {/* 1. Seamless Full-Bleed Top Cover Section (Edge-to-Edge with Matrix Code Rain) */}
-      <div style={{
-        width: '100%',
-        position: 'relative',
-        height: 'clamp(185px, 26vw, 235px)',
-        background: isDark
-          ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.4) 0%, rgba(10, 15, 26, 0.96) 50%, rgba(255, 0, 127, 0.35) 100%)'
-          : 'linear-gradient(135deg, rgba(0, 119, 182, 0.3) 0%, rgba(241, 245, 249, 0.95) 50%, rgba(217, 4, 41, 0.25) 100%)',
-        borderBottom: '1px solid var(--card-border)',
-        overflow: 'hidden'
-      }}>
-        {/* Matrix Code Stream Canvas Animation */}
-        <MatrixCodeRain isDark={isDark} />
-
-        {/* Shimmer light sweep overlay */}
-        <motion.div
-          animate={{ x: ['-100%', '200%'] }}
-          transition={{ repeat: Infinity, duration: 6, ease: 'linear' }}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '50%',
-            height: '100%',
-            background: 'linear-gradient(90deg, transparent 0%, rgba(0, 240, 255, 0.12) 50%, transparent 100%)',
-            pointerEvents: 'none',
-            zIndex: 2
-          }}
-        />
-
-        {/* Subtle decorative radial glow */}
-        <div style={{
-          position: 'absolute',
-          top: '-40%',
-          left: '20%',
-          width: '320px',
-          height: '320px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, transparent 70%)',
-          filter: 'blur(35px)',
-          pointerEvents: 'none',
-          zIndex: 1
-        }} />
-      </div>
-
-      {/* 2. Digital Profile Main Card Content (Wide Modern Dashboard on Desktop) */}
+      {/* Main Single-Screen Responsive Container */}
       <div className="hero-responsive-container">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, type: 'spring', bounce: 0.25 }}
-          style={{
-            width: '100%',
-            background: 'var(--card-bg)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid var(--card-border)',
-            borderRadius: '24px',
-            boxShadow: 'var(--card-shadow)',
-            overflow: 'visible',
-            position: 'relative',
-            marginTop: '-52px',
-            padding: '0 20px 26px 20px',
-            willChange: 'transform'
-          }}
-        >
-          {/* Centered Avatar & Profile Info Column */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            width: '100%',
-            marginTop: '-54px'
-          }}>
-            {/* 1. Prominent Centered Circular Profile Avatar with Dual-Ring 10-Point Orbit Satellite System */}
-            <div style={{
-              position: 'relative',
-              width: 'clamp(195px, 45vw, 218px)',
-              height: 'clamp(195px, 45vw, 218px)',
+        
+        {/* Top Header Action Bar: Mobile Only (Desktop uses top pinned navbar) */}
+        <div className="hero-mobile-header-bar">
+          {/* Left: Sun / Moon Mode Toggle Button */}
+          <motion.button
+            onClick={toggleTheme}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid var(--card-border)',
+              color: 'var(--primary-color)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '4px'
-            }}>
-              {/* Subtle Track 1: Inner Orbit Guide (Creative Track) */}
-              <div style={{
-                position: 'absolute',
-                width: 'clamp(168px, 39vw, 184px)',
-                height: 'clamp(168px, 39vw, 184px)',
-                borderRadius: '50%',
-                border: '1px dashed rgba(255, 0, 127, 0.22)',
-                boxShadow: '0 0 12px rgba(255, 0, 127, 0.08) inset',
-                pointerEvents: 'none'
-              }} />
+              cursor: 'pointer',
+              boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.05)'
+            }}
+            title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label="Toggle Theme"
+          >
+            {isDark ? <Sun size={17} /> : <Moon size={17} />}
+          </motion.button>
 
-              {/* Subtle Track 2: Outer Orbit Guide (Dev Track) */}
+          {/* Right: Hamburger Drawer Menu Button */}
+          <motion.button
+            onClick={onOpenDrawer}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid var(--card-border)',
+              color: 'var(--text-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(0,0,0,0.05)'
+            }}
+            title="Open Menu"
+            aria-label="Open Menu"
+          >
+            <Menu size={18} />
+          </motion.button>
+        </div>
+
+        {/* 2-Column Split Bento Grid: Left Profile Hub (Col Span 5), Right Feature Bento & Carousel (Col Span 7) */}
+        <div className="hero-bento-desktop-layout">
+          {/* LEFT HUB: Profile, Verified Name, Dual Action Buttons, Counters & Social Media */}
+          <div className="hero-left-hub">
+            {/* Circular Avatar (Responsive: 118px Mobile -> 150px Desktop) */}
+            <motion.div
+              className="hero-profile-avatar-wrapper"
+              whileHover={{ scale: 1.03 }}
+              style={{
+                background: 'linear-gradient(135deg, #FF6B35 0%, #0E4A59 100%)',
+                boxShadow: isDark 
+                  ? '0 8px 32px rgba(255, 107, 53, 0.4), 0 0 24px rgba(14, 74, 89, 0.35)' 
+                  : '0 8px 24px rgba(0, 0, 0, 0.12), 0 0 18px rgba(255, 107, 53, 0.25)',
+              }}
+            >
               <div style={{
-                position: 'absolute',
                 width: '100%',
                 height: '100%',
                 borderRadius: '50%',
-                border: '1px dashed rgba(0, 240, 255, 0.22)',
-                boxShadow: '0 0 15px rgba(0, 240, 255, 0.08) inset',
-                pointerEvents: 'none'
-              }} />
-
-              {/* Ring 1: Inner Creative Editing Track (5 Badges, Clockwise 20s) */}
-              <motion.div
-                animate={{ rotate: [0, 360] }}
-                transition={{
-                  duration: 20,
-                  repeat: Infinity,
-                  ease: "linear"
-                }}
-                style={{
-                  position: 'absolute',
-                  width: 'clamp(168px, 39vw, 184px)',
-                  height: 'clamp(168px, 39vw, 184px)',
-                  borderRadius: '50%',
-                  pointerEvents: 'none',
-                  zIndex: 6
-                }}
-              >
-                {[
-                  { icon: PenTool, name: 'Vector Pen Tool', color: '#FF007F', angle: 0 },
-                  { icon: Layers, name: 'Layers & Compositing', color: '#00F0FF', angle: 72 },
-                  { icon: Crop, name: 'Crop & Framing', color: '#FFB300', angle: 144 },
-                  { icon: Palette, name: 'Color Palette & Grading', color: '#B388FF', angle: 216 },
-                  { icon: Wand2, name: 'Magic Wand & Retouch', color: '#00E676', angle: 288 }
-                ].map((badge, idx) => {
-                  const rad = ((badge.angle - 90) * Math.PI) / 180;
-                  const left = `${50 + 50 * Math.cos(rad)}%`;
-                  const top = `${50 + 50 * Math.sin(rad)}%`;
-                  const IconComp = badge.icon;
-                  return (
-                    <div
-                      key={`inner-${idx}`}
-                      style={{
-                        position: 'absolute',
-                        top,
-                        left,
-                        transform: 'translate(-50%, -50%)',
-                        width: '21px',
-                        height: '21px'
-                      }}
-                    >
-                      <motion.div
-                        animate={{ rotate: [0, -360] }}
-                        transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          borderRadius: '50%',
-                          background: 'rgba(15, 23, 42, 0.9)',
-                          backdropFilter: 'blur(6px)',
-                          border: `1px solid ${badge.color}aa`,
-                          boxShadow: `0 0 8px ${badge.color}60, 0 2px 6px rgba(0,0,0,0.6)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: badge.color
-                        }}
-                        title={badge.name}
-                      >
-                        <IconComp size={10} strokeWidth={2.2} />
-                      </motion.div>
-                    </div>
-                  );
-                })}
-              </motion.div>
-
-              {/* Ring 2: Outer Development & Coding Track (5 Badges, Counter-Clockwise 26s) */}
-              <motion.div
-                animate={{ rotate: [360, 0] }}
-                transition={{
-                  duration: 26,
-                  repeat: Infinity,
-                  ease: "linear"
-                }}
-                style={{
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  pointerEvents: 'none',
-                  zIndex: 7
-                }}
-              >
-                {[
-                  { icon: Code2, name: 'React / Code', color: '#00F0FF', angle: 36 },
-                  { icon: Braces, name: 'JavaScript / Scripting', color: '#FFD600', angle: 108 },
-                  { icon: Smartphone, name: 'Flutter / Mobile Apps', color: '#29B6F6', angle: 180 },
-                  { icon: Database, name: 'Database / Firebase', color: '#FF6D00', angle: 252 },
-                  { icon: Terminal, name: 'Terminal / CLI', color: '#00E676', angle: 324 }
-                ].map((badge, idx) => {
-                  const rad = ((badge.angle - 90) * Math.PI) / 180;
-                  const left = `${50 + 50 * Math.cos(rad)}%`;
-                  const top = `${50 + 50 * Math.sin(rad)}%`;
-                  const IconComp = badge.icon;
-                  return (
-                    <div
-                      key={`outer-${idx}`}
-                      style={{
-                        position: 'absolute',
-                        top,
-                        left,
-                        transform: 'translate(-50%, -50%)',
-                        width: '23px',
-                        height: '23px'
-                      }}
-                    >
-                      <motion.div
-                        animate={{ rotate: [0, 360] }}
-                        transition={{ duration: 26, repeat: Infinity, ease: 'linear' }}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          borderRadius: '50%',
-                          background: 'rgba(15, 23, 42, 0.92)',
-                          backdropFilter: 'blur(6px)',
-                          border: `1.2px solid ${badge.color}bb`,
-                          boxShadow: `0 0 9px ${badge.color}66, 0 3px 8px rgba(0,0,0,0.65)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: badge.color
-                        }}
-                        title={badge.name}
-                      >
-                        <IconComp size={11} strokeWidth={2.2} />
-                      </motion.div>
-                    </div>
-                  );
-                })}
-              </motion.div>
-
-              {/* Central Profile Avatar (Further Enlarged: 145px–158px) */}
-              <motion.div
-                whileHover={{ scale: 1.03 }}
-                style={{
-                  width: 'clamp(145px, 34vw, 158px)',
-                  height: 'clamp(145px, 34vw, 158px)',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-green))',
-                  padding: '4px',
-                  boxShadow: isDark 
-                    ? '0 0 40px rgba(0, 240, 255, 0.58), 0 0 18px rgba(0, 200, 83, 0.42)' 
-                    : '0 12px 35px rgba(0, 119, 182, 0.32)',
-                  position: 'relative',
-                  zIndex: 5
-                }}
-              >
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  overflow: 'hidden',
-                  background: '#0D1117'
-                }}>
-                  <img 
-                    src="/profile.jpeg" 
-                    alt="Rasedul Karim" 
-                    loading="eager"
-                    fetchPriority="high"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
-                </div>
-              </motion.div>
-            </div>
-
-            {/* 2. Absolute Micro-Scale Title Case Name (~7.5px) + Decoupled Rotating Rosette Ring with Static Checkmark */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              width: '100%', 
-              padding: '4px 24px 3px 24px',
-              boxSizing: 'border-box'
-            }}>
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                flexShrink: 0
+                overflow: 'hidden',
+                background: '#0D1117'
               }}>
-                <h1 
-                  className="hero-profile-name"
-                  style={{
-                    fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
-                    color: 'var(--text-primary)',
-                    margin: 0,
-                    whiteSpace: 'nowrap',
-                    overflow: 'visible',
-                    flexShrink: 0,
-                    textShadow: isDark ? '0 0 8px rgba(0, 240, 255, 0.25)' : 'none'
+                <img 
+                  src="/about.png" 
+                  alt="Rasedul Karim" 
+                  loading="eager"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  onError={(e) => {
+                    if (e.target.src.includes('/about.png')) {
+                      e.target.src = '/profile.jpeg';
+                    }
                   }}
-                >
-                  {t('hero.name', isBangla ? 'রাশেদুল করিম' : 'Rasedul Karim')}
-                </h1>
+                />
+              </div>
+            </motion.div>
 
-                {/* Decoupled Verified Badge (Rotating Outer Sawtooth Ring + Strictly Stationary Center Checkmark) */}
-                <div 
-                  className="hero-verified-badge"
+            {/* Name & Decoupled Verified Badge (Responsive Typography 11.5px mobile to 27px desktop & 30px Rosette Badge) */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              marginTop: '8px'
+            }}>
+              <h1 
+                className="hero-profile-name"
+                style={{
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
+                  fontWeight: 800,
+                  color: 'var(--text-primary)',
+                  margin: 0,
+                  lineHeight: 1.2,
+                  letterSpacing: isBangla ? '0' : '0.3px'
+                }}
+              >
+                {t('hero.name', isBangla ? 'রাশেদুল করিম' : 'Rasedul Karim')}
+              </h1>
+
+              {/* Rotating Rosette Verified Badge (Responsive Enlarged Rosette Badge) */}
+              <div 
+                className="hero-verified-badge"
+                style={{
+                  position: 'relative',
+                  flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title={t('hero.verified', 'Verified Profile')}
+              >
+                <motion.div
+                  animate={{ rotate: [0, 360] }}
+                  transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
                   style={{
-                    position: 'relative',
-                    aspectRatio: '1 / 1',
-                    flexShrink: 0,
-                    display: 'inline-flex',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    willChange: 'transform',
+                    transform: 'translate3d(0, 0, 0)'
                   }}
-                  title={t('hero.verified', 'Verified Profile')}
                 >
-                  {/* Layer 1: Rotating Outer Sawtooth/Scalloped Red Rosette Ring */}
-                  <motion.div
-                    animate={{
-                      rotate: [0, 360],
-                      filter: [
-                        'drop-shadow(0 0 3px rgba(255, 23, 68, 0.8)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))',
-                        'drop-shadow(0 0 7px rgba(255, 23, 68, 0.98)) drop-shadow(0 0 12px rgba(255, 23, 68, 0.65))',
-                        'drop-shadow(0 0 3px rgba(255, 23, 68, 0.8)) drop-shadow(0 0 6px rgba(255, 23, 68, 0.45))'
-                      ]
-                    }}
-                    transition={{
-                      rotate: {
-                        duration: 9,
-                        repeat: Infinity,
-                        ease: "linear"
-                      },
-                      filter: {
-                        duration: 2.8,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }
-                    }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      willChange: 'transform, filter'
-                    }}
-                  >
-                    <svg 
-                      width="24" 
-                      height="24" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      xmlns="http://www.w3.org/2000/svg"
-                      style={{ width: '100%', height: '100%', display: 'block' }}
-                    >
-                      {/* 16-Point Scalloped Rosette Contour */}
-                      <path 
-                        d="M 12.00 1.50 A 2.95 2.95 0 0 1 16.02 2.30 A 2.95 2.95 0 0 1 19.42 4.58 A 2.95 2.95 0 0 1 21.70 7.98 A 2.95 2.95 0 0 1 22.50 12.00 A 2.95 2.95 0 0 1 21.70 16.02 A 2.95 2.95 0 0 1 19.42 19.42 A 2.95 2.95 0 0 1 16.02 21.70 A 2.95 2.95 0 0 1 12.00 22.50 A 2.95 2.95 0 0 1 7.98 21.70 A 2.95 2.95 0 0 1 4.58 19.42 A 2.95 2.95 0 0 1 2.30 16.02 A 2.95 2.95 0 0 1 1.50 12.00 A 2.95 2.95 0 0 1 2.30 7.98 A 2.95 2.95 0 0 1 4.58 4.58 A 2.95 2.95 0 0 1 7.98 2.30 A 2.95 2.95 0 0 1 12.00 1.50 Z" 
-                        fill="#FF1744" 
-                      />
-                    </svg>
-                  </motion.div>
-
-                  {/* Layer 2: Strictly Stationary (Non-Rotating) Center Checkmark */}
-                  <div 
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      pointerEvents: 'none',
-                      zIndex: 2
-                    }}
-                  >
-                    <svg 
-                      width="24" 
-                      height="24" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      xmlns="http://www.w3.org/2000/svg"
-                      style={{ width: '100%', height: '100%', display: 'block' }}
-                    >
-                      <path 
-                        d="M8.2 12.3L10.8 14.9L16.2 9.5" 
-                        stroke="#FFFFFF" 
-                        strokeWidth="2.5" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                      />
-                    </svg>
-                  </div>
+                  <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none">
+                    <path 
+                      d="M 12.00 1.50 A 2.95 2.95 0 0 1 16.02 2.30 A 2.95 2.95 0 0 1 19.42 4.58 A 2.95 2.95 0 0 1 21.70 7.98 A 2.95 2.95 0 0 1 22.50 12.00 A 2.95 2.95 0 0 1 21.70 16.02 A 2.95 2.95 0 0 1 19.42 19.42 A 2.95 2.95 0 0 1 16.02 21.70 A 2.95 2.95 0 0 1 12.00 22.50 A 2.95 2.95 0 0 1 7.98 21.70 A 2.95 2.95 0 0 1 4.58 19.42 A 2.95 2.95 0 0 1 2.30 16.02 A 2.95 2.95 0 0 1 1.50 12.00 A 2.95 2.95 0 0 1 2.30 7.98 A 2.95 2.95 0 0 1 4.58 4.58 A 2.95 2.95 0 0 1 7.98 2.30 A 2.95 2.95 0 0 1 12.00 1.50 Z" 
+                      fill="#FF1744" 
+                    />
+                  </svg>
+                </motion.div>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="100%" height="100%" viewBox="0 0 24 24" fill="none">
+                    <path d="M8.2 12.3L10.8 14.9L16.2 9.5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </div>
               </div>
             </div>
 
-            {/* 3. Humble Bio (Bilingual) */}
-            <div style={{
-              fontSize: 'clamp(0.8rem, 2.5vw, 0.88rem)',
-              color: '#94A3B8',
-              fontWeight: 500,
-              marginTop: '4px',
-              lineHeight: 1.4,
-              letterSpacing: '0.2px',
-              padding: '0 8px',
-              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-            }}>
-              {t('hero.bio', 'Just a simple human. Still learning.')}
-            </div>
-
-            {/* 4. Location Tag (Bilingual) */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '5px',
-              fontSize: 'clamp(0.72rem, 2.1vw, 0.8rem)',
-              color: 'var(--text-secondary)',
-              marginTop: '4px',
-              fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-            }}>
-              <MapPin size={12} color="var(--primary-color)" />
-              <span>{t('hero.location', "Natun Pollan Para, Teknaf, Cox's Bazar")}</span>
-            </div>
-          </div>
-
-          {/* 3. Action Row: [ Chat in Mail ] & [ Subscribe ] */}
-          <div style={{
-            display: 'flex',
-            gap: '10px',
-            marginTop: '16px',
-            alignItems: 'center',
-            width: '100%'
-          }}>
-            {/* [ Chat in Mail ] Button */}
-            <motion.button
-              onClick={() => setIsWarningOpen(true)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+            {/* Line 1: Designation (Responsive 12px -> 14px, High Contrast) */}
+            <div 
+              className="hero-designation-text"
               style={{
-                flex: 1.2,
-                padding: '11px 16px',
-                borderRadius: '30px',
-                background: isDark 
-                  ? 'linear-gradient(135deg, rgba(13, 17, 23, 0.95), rgba(22, 27, 34, 0.95))' 
-                  : 'linear-gradient(135deg, #f8fafc, #e2e8f0)',
-                border: '1px solid var(--card-border)',
-                color: 'var(--text-primary)',
-                fontWeight: 700,
-                fontSize: 'clamp(0.75rem, 2.3vw, 0.85rem)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '7px',
-                cursor: 'pointer',
-                boxShadow: isDark 
-                  ? '0 4px 15px rgba(0, 240, 255, 0.2), inset 0 0 10px rgba(0, 240, 255, 0.08)' 
-                  : '0 4px 15px rgba(0,0,0,0.06)',
-                whiteSpace: 'nowrap',
-                fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                color: isDark ? '#F1F5F9' : '#0A192F',
+                fontWeight: 800,
+                fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
               }}
             >
-              <Mail size={15} color="var(--primary-color)" />
-              <span>{t('hero.chatInMail', 'Chat in Mail')}</span>
-            </motion.button>
+              <span>{t('hero.bio', 'Software & Web Developer | Photo Editor | Digital Creator')}</span>
+            </div>
 
-            {/* [ Subscribe ] Button */}
-            <motion.button
-              onClick={() => setIsSubscribeOpen(true)}
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
+            {/* Line 2: Location & Address (Responsive 11px -> 13px, High Contrast) */}
+            <div 
+              className="hero-location-text"
               style={{
-                flex: 1,
-                padding: '11px 16px',
-                borderRadius: '30px',
-                background: 'linear-gradient(135deg, #FF1744 0%, #D50000 100%)',
-                border: 'none',
-                color: '#FFFFFF',
-                fontWeight: 700,
-                fontSize: 'clamp(0.75rem, 2.3vw, 0.85rem)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 18px rgba(255, 23, 68, 0.45)',
-                whiteSpace: 'nowrap',
-                fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                color: isDark ? '#CBD5E1' : '#1E293B',
+                fontWeight: 600,
+                fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
               }}
             >
-              <Bell size={14} />
-              <span>{t('hero.subscribe', 'Subscribe')}</span>
-            </motion.button>
-          </div>
+              <MapPin size={13} color="var(--primary-color)" style={{ flexShrink: 0 }} />
+              <span>{t('hero.location', "Natun Pollan Para, Teknaf, Cox's Bazar, Bangladesh")}</span>
+            </div>
 
-          {/* 4. Communication & Analytics Hub */}
-          <div style={{
-            marginTop: '10px',
-            borderTop: '1px solid var(--card-border)',
-            paddingTop: '10px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px'
-          }}>
-            {/* Live Analytics Status Row (Visitors 123.3K & Subscribers 10.34K) */}
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              justifyContent: 'center',
-              width: '100%'
-            }}>
-              {/* 1. Live Visitor Counter Pill (123.3K Baseline) */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+            {/* RESTORED: [ Chat in Mail ] & [ Subscribe ] Dual Action Buttons */}
+            <div className="hero-action-buttons-row">
+              {/* Button 1: Chat in Mail (High Contrast Surface) */}
+              <motion.button
+                onClick={() => setIsWarningOpen(true)}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                className="hero-action-btn"
                 style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '7px 12px',
-                  borderRadius: '20px',
-                  background: isDark ? 'rgba(0, 240, 255, 0.08)' : 'rgba(0, 119, 182, 0.08)',
-                  border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.25)' : 'rgba(0, 119, 182, 0.25)'}`,
-                  fontSize: 'clamp(0.68rem, 2vw, 0.76rem)',
-                  fontWeight: 600,
-                  color: isDark ? '#00f0ff' : '#0077b6',
-                  boxShadow: '0 0 10px rgba(0, 240, 255, 0.12)',
-                  whiteSpace: 'nowrap',
-                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                  background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  border: isDark ? '1px solid rgba(255, 255, 255, 0.16)' : '1.5px solid rgba(0, 180, 255, 0.35)',
+                  color: isDark ? '#FFFFFF' : '#0A192F',
+                  boxShadow: isDark ? '0 4px 14px rgba(0,0,0,0.3)' : '0 4px 15px rgba(0, 160, 255, 0.12)',
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
                 }}
               >
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#00E676',
+                <Mail size={16} color={isDark ? 'var(--primary-color)' : '#00B4D8'} />
+                <span style={{ fontWeight: 800 }}>{t('hero.chatInMail', 'Chat in Mail')}</span>
+              </motion.button>
+
+              {/* Button 2: Subscribe */}
+              <motion.button
+                onClick={() => setIsSubscribeOpen(true)}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+                className="hero-action-btn"
+                style={{
+                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  color: '#FFFFFF',
+                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)',
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
+                }}
+              >
+                <Bell size={16} color="#FFFFFF" />
+                <span>{t('hero.subscribe', 'Subscribe')}</span>
+              </motion.button>
+            </div>
+
+            {/* Realtime Live Counter Badges (Visitors & Subscribers - Responsive 13.5px -> 14.5px) */}
+            <div className="hero-counters-container">
+              {/* Visitors Pill */}
+              <div 
+                className="hero-counter-pill"
+                style={{
+                  background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(14, 74, 89, 0.09)',
+                  border: `1.5px solid ${isDark ? 'rgba(0, 240, 255, 0.35)' : 'rgba(14, 74, 89, 0.25)'}`,
+                  color: isDark ? '#00f0ff' : '#0E4A59',
+                  boxShadow: isDark ? '0 2px 8px rgba(0, 240, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.04)',
+                }}
+              >
+                <span style={{ 
+                  width: '8px', 
+                  height: '8px', 
+                  borderRadius: '50%', 
+                  background: '#00E676', 
                   display: 'inline-block',
                   boxShadow: '0 0 6px #00E676'
                 }} />
-                <Eye size={12} />
-                <span>{t('hero.visitors', 'Visitors')}: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatVisitorCount(visitorCount)}</strong></span>
-              </motion.div>
+                <span>{t('hero.visitors', 'Visitors')}: <strong style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0E4A59' }}>{formatVisitorCount(visitorCount)}</strong></span>
+              </div>
 
-              {/* 2. Live Subscribers Counter Pill (10.34K Baseline) */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
+              {/* Subscribers Pill */}
+              <div 
+                className="hero-counter-pill"
                 style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '7px 12px',
-                  borderRadius: '20px',
-                  background: 'rgba(255, 23, 68, 0.08)',
-                  border: '1px solid rgba(255, 23, 68, 0.3)',
-                  fontSize: 'clamp(0.68rem, 2vw, 0.76rem)',
-                  fontWeight: 600,
+                  background: 'rgba(255, 23, 68, 0.1)',
+                  border: '1.5px solid rgba(255, 23, 68, 0.35)',
                   color: '#FF1744',
-                  boxShadow: '0 0 10px rgba(255, 23, 68, 0.15)',
-                  whiteSpace: 'nowrap',
-                  fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
+                  boxShadow: '0 2px 8px rgba(255, 23, 68, 0.15)',
                 }}
               >
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#FF1744',
+                <span style={{ 
+                  width: '8px', 
+                  height: '8px', 
+                  borderRadius: '50%', 
+                  background: '#FF1744', 
                   display: 'inline-block',
                   boxShadow: '0 0 6px #FF1744'
                 }} />
-                <Bell size={12} />
-                <span>{t('hero.subscribers', 'Subscribers')}: <strong style={{ color: 'var(--text-primary)', fontWeight: 800 }}>{formatSubscriberCount(subscriberCount)}</strong></span>
-              </motion.div>
+                <span>{t('hero.subscribers', 'Subscribers')}: <strong style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#D50000' }}>{formatSubscriberCount(subscriberCount)}</strong></span>
+              </div>
             </div>
 
-            {/* Social Icons Row (42px x 42px with vivid brand neon glow rings) */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '12px',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              marginTop: '2px'
-            }}>
+            {/* Enlarged Social Icons Row (Responsive 38px -> 44px on Desktop) */}
+            <div className="hero-social-links-row">
               {socialLinks.map((item) => (
                 <motion.a
                   key={item.id}
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  whileHover={{ scale: 1.18, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.15, y: -2 }}
+                  whileTap={{ scale: 0.92 }}
+                  className="hero-social-badge"
                   style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '50%',
                     background: isDark ? 'rgba(13, 17, 23, 0.92)' : 'rgba(255, 255, 255, 0.95)',
                     border: `1.5px solid ${item.borderColor}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                     boxShadow: item.glow,
-                    cursor: 'pointer',
-                    transition: 'all 0.25s ease'
                   }}
                   title={item.name}
                 >
@@ -904,8 +540,20 @@ const HeroSection = ({ isDreamOpen }) => {
               ))}
             </div>
           </div>
-        </motion.div>
+
+        {/* RIGHT HUB: 6 Feature Bento Tabs & 6-Slide Auto-Scrolling Carousel */}
+        <div className="hero-right-hub">
+          <BentoGridSection
+            onOpenProjects={onOpenProjects}
+            onOpenAbout={onOpenAbout}
+            onOpenDream={onOpenDream}
+            onOpenSkill={onOpenSkill}
+            onOpenReview={onOpenReview}
+            onOpenSubscribe={() => setIsSubscribeOpen(true)}
+          />
+        </div>
       </div>
+    </div>
 
       {/* 5. Warning Policy Agreement Modal Dialog (Rendered via Portal to Document Body with z-index 999999) */}
       {typeof document !== 'undefined' && createPortal(

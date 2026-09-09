@@ -771,7 +771,7 @@ const DreamModal = ({ onClose }) => {
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
           style={{
             width: '100%',
-            maxWidth: '860px',
+            maxWidth: '1100px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -985,15 +985,9 @@ const DreamModal = ({ onClose }) => {
           </motion.div>
 
           {/* ========================================================================= */}
-          {/* 4. Interactive 9 Vision Cards (Accordion List)                           */}
+          {/* 4. Interactive 9 Vision Cards (2-Column Bento Grid on Desktop)             */}
           {/* ========================================================================= */}
-          <div style={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            marginBottom: '26px'
-          }}>
+          <div className="dream-pillars-grid" style={{ marginBottom: '26px' }}>
             {visionPillars.map((pillar) => (
               <AccordionCard
                 key={pillar.id}

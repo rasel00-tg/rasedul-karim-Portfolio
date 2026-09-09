@@ -20,8 +20,19 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 
-const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill, onOpenReview }) => {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+const Navbar = ({ 
+  onOpenDream, 
+  onOpenAbout, 
+  onOpenAdmin, 
+  onOpenQR, 
+  onOpenSkill, 
+  onOpenReview,
+  isDrawerOpen: propDrawerOpen,
+  setIsDrawerOpen: propSetDrawerOpen
+}) => {
+  const [localDrawerOpen, setLocalDrawerOpen] = useState(false);
+  const isDrawerOpen = propDrawerOpen !== undefined ? propDrawerOpen : localDrawerOpen;
+  const setIsDrawerOpen = propSetDrawerOpen || setLocalDrawerOpen;
   const [activeItem, setActiveItem] = useState('ABOUT');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
@@ -139,15 +150,15 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill, 
           left: 0,
           right: 0,
           height: '64px',
-          background: isDark ? 'rgba(13, 17, 23, 0.88)' : 'rgba(255, 255, 255, 0.92)',
+          background: 'rgba(15, 3, 28, 0.78)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.2)' : 'rgba(0, 119, 182, 0.2)'}`,
+          borderBottom: '1px solid rgba(168, 85, 247, 0.25)',
           zIndex: 1000,
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '0 32px',
-          boxShadow: isDark ? '0 8px 32px rgba(0, 0, 0, 0.45)' : '0 4px 20px rgba(0, 0, 0, 0.08)'
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.65), 0 0 20px rgba(168, 85, 247, 0.15)'
         }}
       >
         {/* Left: Brand Identity Logo & Name with Live Date */}
@@ -157,8 +168,8 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill, 
             height: '40px',
             borderRadius: '50%',
             padding: '2px',
-            background: 'linear-gradient(135deg, #00F0FF 0%, #00E676 50%, #FF007F 100%)',
-            boxShadow: '0 0 16px rgba(0, 240, 255, 0.55)',
+            background: 'linear-gradient(135deg, #A855F7 0%, #00F0FF 50%, #FF007F 100%)',
+            boxShadow: '0 0 16px rgba(168, 85, 247, 0.55)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -181,14 +192,14 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill, 
               fontSize: '1.2rem',
               fontWeight: 900,
               letterSpacing: '2px',
-              color: 'var(--text-primary)',
+              color: '#FFFFFF',
               lineHeight: 1.1
             }}>
               RASHED
             </span>
             <span style={{
               fontSize: '0.7rem',
-              color: 'var(--primary-color)',
+              color: '#C084FC',
               letterSpacing: '0.3px',
               fontWeight: 700,
               marginTop: '2px',
@@ -218,10 +229,10 @@ const Navbar = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenQR, onOpenSkill, 
                   gap: '8px',
                   padding: '8px 16px',
                   borderRadius: '12px',
-                  background: activeItem === item.id ? item.bgTint : 'rgba(255, 255, 255, 0.03)',
-                  border: `1px solid ${activeItem === item.id ? item.borderTint : 'rgba(255, 255, 255, 0.08)'}`,
+                  background: activeItem === item.id ? item.bgTint : 'rgba(168, 85, 247, 0.08)',
+                  border: `1px solid ${activeItem === item.id ? item.borderTint : 'rgba(168, 85, 247, 0.2)'}`,
                   boxShadow: activeItem === item.id ? item.glowShadow : 'none',
-                  color: activeItem === item.id ? item.color : 'var(--text-primary)',
+                  color: activeItem === item.id ? item.color : '#FFFFFF',
                   cursor: 'pointer',
                   fontWeight: 700,
                   fontSize: '0.85rem',

@@ -418,7 +418,7 @@ const SkillModal = ({ onClose }) => {
           transition={{ type: 'spring', damping: 25, stiffness: 220 }}
           style={{
             width: '100%',
-            maxWidth: '820px',
+            maxWidth: '1100px',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -519,13 +519,8 @@ const SkillModal = ({ onClose }) => {
             </span>
           </motion.div>
 
-          {/* Individual Categorized Skill Cards (4 Separate Cards) */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '18px',
-            width: '100%'
-          }}>
+          {/* Individual Categorized Skill Cards (2-Column Bento Grid on Desktop) */}
+          <div className="skill-cards-grid" style={{ width: '100%' }}>
 
             {/* Card 1: Modern Web Engineering & Responsive Platforms */}
             <SkillDomainCard
