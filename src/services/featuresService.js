@@ -14,6 +14,7 @@ export const COLLECTIONS = {
   UPCOMING_PROJECTS: 'features_upcoming_projects',
   FAVORITE_TOOLS: 'features_favorite_tools',
   DEALS_DISCOUNTS: 'features_deals_discounts',
+  COUPON_REDEMPTIONS: 'coupon_redemptions'
 };
 
 // 1. Baseline Seed Data for Design Projects
@@ -390,3 +391,126 @@ export const deleteFeatureItem = async (collectionName, itemId, idToken = null) 
 
   return true;
 };
+
+/**
+ * Check if a coupon code has already been redeemed by a specific email for a specific deal
+ * @param {string} email
+ * @param {string} couponCode
+ * @param {string} dealId
+ * @returns {Promise<{ alreadyRedeemed: boolean, details?: object }>}
+ */
+export const checkCouponRedemption = async (email, couponCode, dealId = '') => {
+  if (!email || !couponCode) return { alreadyRedeemed: false };
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanCode = couponCode.trim().toUpperCase();
+  const cleanDealId = (dealId || '').trim();
+
+  // Primary key tracks per-email per-deal redemption
+  const perDealKey = cleanDealId 
+    ? `${cleanEmail}_${cleanDealId}_${cleanCode}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    : `${cleanEmail}_${cleanCode}`.replace(/[^a-zA-Z0-9_]/g, '_');
+
+  // 1. Check local client cache
+  try {
+    const localStore = JSON.parse(localStorage.getItem('coupon_redemptions') || '{}');
+    if (localStore[perDealKey]) {
+      return { alreadyRedeemed: true, details: localStore[perDealKey] };
+    }
+  } catch (e) {
+    // ignore local storage error
+  }
+
+  // 2. Check Firestore via SDK
+  try {
+    const { db } = await initFirebase();
+    if (db) {
+      const { doc, getDoc, collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      
+      // Check document by key
+      const docRef = doc(db, COLLECTIONS.COUPON_REDEMPTIONS, perDealKey);
+      const snapshot = await getDoc(docRef);
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        return { alreadyRedeemed: true, details: data };
+      }
+
+      // Check query with dealId and email
+      if (cleanDealId) {
+        const q = query(
+          collection(db, COLLECTIONS.COUPON_REDEMPTIONS),
+          where('email', '==', cleanEmail),
+          where('dealId', '==', cleanDealId)
+        );
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+          return { alreadyRedeemed: true, details: querySnap.docs[0].data() };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Firestore SDK redemption check notice:', err.message);
+  }
+
+  // 3. Check Firestore via REST
+  try {
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/${COLLECTIONS.COUPON_REDEMPTIONS}/${perDealKey}`;
+    const res = await fetch(baseUrl);
+    if (res.ok) {
+      const doc = await res.json();
+      const unpacked = unpackFirestoreDoc(doc);
+      return { alreadyRedeemed: true, details: unpacked };
+    }
+  } catch (err) {
+    console.warn('Firestore REST redemption check error:', err.message);
+  }
+
+  return { alreadyRedeemed: false };
+};
+
+/**
+ * Record a coupon redemption for an email (Enforcing single-use per email per deal post)
+ */
+export const recordCouponRedemption = async ({ dealId = '', email, couponCode, dealTitle, discountPercent, clientName = '', message = '', idToken = null }) => {
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanCode = couponCode.trim().toUpperCase();
+  const cleanDealId = (dealId || '').trim();
+
+  const redemptionKey = cleanDealId 
+    ? `${cleanEmail}_${cleanDealId}_${cleanCode}`.replace(/[^a-zA-Z0-9_]/g, '_')
+    : `${cleanEmail}_${cleanCode}`.replace(/[^a-zA-Z0-9_]/g, '_');
+
+  const now = new Date().toISOString();
+
+  // First verify if already redeemed
+  const check = await checkCouponRedemption(cleanEmail, cleanCode, cleanDealId);
+  if (check.alreadyRedeemed) {
+    throw new Error('This coupon code has already been redeemed with this email address for this deal.');
+  }
+
+  const redemptionData = {
+    id: redemptionKey,
+    dealId: cleanDealId,
+    email: cleanEmail,
+    couponCode: cleanCode,
+    dealTitle: dealTitle || 'Exclusive Deal',
+    discountPercent: discountPercent || 'Special Offer',
+    clientName,
+    message,
+    redeemedAt: now
+  };
+
+  // 1. Save to local storage cache immediately
+  try {
+    const localStore = JSON.parse(localStorage.getItem('coupon_redemptions') || '{}');
+    localStore[redemptionKey] = redemptionData;
+    localStorage.setItem('coupon_redemptions', JSON.stringify(localStore));
+  } catch (e) {
+    // ignore
+  }
+
+  // 2. Save to Firestore
+  await saveFeatureItem(COLLECTIONS.COUPON_REDEMPTIONS, redemptionData, idToken);
+
+  return redemptionData;
+};
+

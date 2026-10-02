@@ -1,4 +1,4 @@
-import { initFirebase } from '../firebase/config';
+import { initFirebase, firebaseConfig } from '../firebase/config';
 
 const CACHED_INCREMENT_KEY = 'cached_subscriber_increment';
 export const SUBSCRIBER_BASELINE = 10340; // 10.34K baseline
@@ -99,6 +99,45 @@ export const subscribeEmail = async (rawEmail) => {
         : `Subscription failed: ${err.message || 'Please check your connection and try again.'}`
     };
   }
+};
+
+/**
+ * Check if an email is subscribed in Cloud Firestore
+ * @param {string} rawEmail
+ * @returns {Promise<boolean>}
+ */
+export const isEmailSubscribed = async (rawEmail) => {
+  const cleanEmail = (rawEmail || '').trim().toLowerCase();
+  if (!cleanEmail) return false;
+
+  try {
+    const { db } = await initFirebase();
+    if (db) {
+      const { doc, getDoc, collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      // 1. Direct document lookup (ID is cleanEmail)
+      const subscriberDocRef = doc(db, 'subscribers', cleanEmail);
+      const docSnapshot = await getDoc(subscriberDocRef);
+      if (docSnapshot.exists()) return true;
+
+      // 2. Query lookup by email field
+      const q = query(collection(db, 'subscribers'), where('email', '==', cleanEmail));
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) return true;
+    }
+  } catch (err) {
+    console.warn('Firestore subscription check SDK notice:', err.message);
+  }
+
+  // 3. Fallback check via REST API
+  try {
+    const baseUrl = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/subscribers/${cleanEmail}`;
+    const res = await fetch(baseUrl);
+    if (res.ok) return true;
+  } catch (e) {
+    console.warn('REST subscription check notice:', e.message);
+  }
+
+  return false;
 };
 
 /**
