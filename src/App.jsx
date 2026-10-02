@@ -2,6 +2,7 @@ import React, { useState, Suspense, lazy } from 'react';
 import { FirestoreStreamBuilder } from './firebase/FirestoreStreamBuilder';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
+import Footer from './components/Footer';
 
 // Lazy loading modals for maximum performance
 const DreamModal = lazy(() => import('./components/DreamModal'));
@@ -28,6 +29,7 @@ function App() {
   const [showUpcoming, setShowUpcoming] = useState(false);
   const [showFavorite, setShowFavorite] = useState(false);
   const [showDeals, setShowDeals] = useState(false);
+  const [showSubscribe, setShowSubscribe] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
@@ -44,6 +46,7 @@ function App() {
             onOpenAdmin={() => setShowAdmin(true)}
             onOpenQR={() => setShowQR(true)}
             onOpenReview={() => setShowReview(true)}
+            onOpenSubscribe={() => setShowSubscribe(true)}
           />
           
           {/* Full-Screen Lazy Modals */}
@@ -78,6 +81,16 @@ function App() {
               onOpenUpcoming={() => setShowUpcoming(true)}
               onOpenFavorite={() => setShowFavorite(true)}
               onOpenDeals={() => setShowDeals(true)}
+              isSubscribeOpen={showSubscribe}
+              setIsSubscribeOpen={setShowSubscribe}
+            />
+
+            {/* Global Portfolio Footer */}
+            <Footer 
+              onOpenDream={() => setShowDream(true)}
+              onOpenAbout={() => setShowAbout(true)}
+              onOpenAdmin={() => setShowAdmin(true)}
+              onOpenSubscribe={() => setShowSubscribe(true)}
             />
           </div>
         </>

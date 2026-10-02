@@ -15,7 +15,8 @@ import {
   Globe,
   Check,
   Star,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Bell
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -27,6 +28,7 @@ const Navbar = ({
   onOpenQR, 
   onOpenSkill, 
   onOpenReview,
+  onOpenSubscribe,
   isDrawerOpen: propDrawerOpen,
   setIsDrawerOpen: propSetDrawerOpen
 }) => {
@@ -298,8 +300,32 @@ const Navbar = ({
           ))}
         </nav>
 
-        {/* Right: Language Selector, QR Code & Theme Toggle */}
+        {/* Right: Language Selector, Subscribe, QR Code & Theme Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Subscribe Button */}
+          <motion.button
+            onClick={() => onOpenSubscribe && onOpenSubscribe()}
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.94 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '20px',
+              background: 'linear-gradient(135deg, rgba(255, 23, 68, 0.15) 0%, rgba(213, 0, 0, 0.1) 100%)',
+              border: '1px solid rgba(255, 23, 68, 0.35)',
+              color: '#FF1744',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 800
+            }}
+            title={isBangla ? 'সাবস্ক্রাইব করুন' : 'Subscribe'}
+          >
+            <Bell size={15} color="#FF1744" />
+            <span>{isBangla ? 'সাবস্ক্রাইব' : 'Subscribe'}</span>
+          </motion.button>
+
           {/* Language Switch Button */}
           <motion.button
             onClick={() => setIsLanguageModalOpen(true)}
@@ -763,8 +789,8 @@ const Navbar = ({
                 </motion.button>
               </div>
 
-              {/* 2. Sleek Minimal Language Selector Trigger Pill ("Select Language") */}
-              <div style={{ padding: '14px 20px 10px 20px' }}>
+              {/* 2. Sleek Minimal Language Selector Trigger Pill & Newsletter Button */}
+              <div style={{ padding: '14px 20px 10px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <motion.button
                   onClick={() => setIsLanguageModalOpen(true)}
                   whileHover={{ scale: 1.02, x: 2 }}
@@ -790,6 +816,36 @@ const Navbar = ({
                     </span>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>▾</span>
+                </motion.button>
+
+                <motion.button
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    onOpenSubscribe && onOpenSubscribe();
+                  }}
+                  whileHover={{ scale: 1.02, x: 2 }}
+                  whileTap={{ scale: 0.98 }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: '14px',
+                    background: isDark ? 'rgba(255, 23, 68, 0.1)' : 'rgba(255, 23, 68, 0.07)',
+                    border: '1px solid rgba(255, 23, 68, 0.3)',
+                    color: '#FF1744',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(255, 23, 68, 0.12)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Bell size={16} color="#FF1744" />
+                    <span style={{ fontSize: '0.84rem', fontWeight: 800, letterSpacing: '0.3px', fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit' }}>
+                      {isBangla ? 'সাবস্ক্রাইব ও ওটিপি ভেরিফিকেশন' : 'Subscribe & OTP Verify'}
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '0.70rem', background: '#FF1744', color: '#FFFFFF', padding: '2px 8px', borderRadius: '10px', fontWeight: 800 }}>OTP</span>
                 </motion.button>
               </div>
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ChevronUp, Shield } from 'lucide-react';
 
-const Footer = ({ onOpenDream, onOpenAbout, onOpenAdmin }) => {
+const Footer = ({ onOpenDream, onOpenAbout, onOpenAdmin, onOpenSubscribe }) => {
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -61,6 +61,15 @@ const Footer = ({ onOpenDream, onOpenAbout, onOpenAdmin }) => {
           fontSize: '0.9rem',
           color: '#94A3B8'
         }}>
+          <a 
+            href="#subscribe" 
+            onClick={(e) => { e.preventDefault(); onOpenSubscribe && onOpenSubscribe(); }}
+            style={{ color: '#FF1744', textDecoration: 'none', transition: 'color 0.2s', fontWeight: 800 }}
+            onMouseEnter={e => e.target.style.color = '#FF5252'}
+            onMouseLeave={e => e.target.style.color = '#FF1744'}
+          >
+            🔔 Subscribe
+          </a>
           <a 
             href="#about" 
             onClick={(e) => { e.preventDefault(); onOpenAbout && onOpenAbout(); }}

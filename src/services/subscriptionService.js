@@ -31,10 +31,45 @@ export const formatSubscriberCount = (count) => {
   return num.toLocaleString();
 };
 
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+/**
+ * Send 6-digit OTP to user's email via Nodemailer Gmail SMTP backend (/api/send-otp)
+ */
+export const sendSubscriptionOtp = async (rawEmail, otp) => {
+  const cleanEmail = (rawEmail || '').trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, message: 'Please provide a valid email.' };
+  }
+
+  try {
+    const targetUrl = API_BASE_URL ? `${API_BASE_URL}/api/send-otp` : '/api/send-otp';
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, otp })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        message: data.message || data.error || 'ওটিপি পাঠাতে ব্যর্থ হয়েছে। অনুগ্রহ করে কিছুক্ষণ পর চেষ্টা করুন।'
+      };
+    }
+    return data;
+  } catch (error) {
+    console.error('Fetch Error:', error);
+    return {
+      success: false,
+      message: 'সার্ভারের সাথে সংযোগ করা যায়নি। ব্যাকএন্ড চালু আছে কিনা যাচাই করুন।'
+    };
+  }
+};
+
 /**
  * Subscribe a new email directly with Cloud Firestore document verification & atomic counter increment
  */
-export const subscribeEmail = async (rawEmail) => {
+export const subscribeEmail = async (rawEmail, extraData = {}) => {
   const cleanEmail = (rawEmail || '').trim().toLowerCase();
   
   // 1. Input email validation
@@ -61,8 +96,11 @@ export const subscribeEmail = async (rawEmail) => {
     // 2. Direct truth verification from Cloud Firestore
     const docSnapshot = await getDoc(subscriberDocRef);
     if (docSnapshot.exists()) {
+      if (extraData.isVerified) {
+        await setDoc(subscriberDocRef, { isVerified: true, lastVerifiedAt: serverTimestamp() }, { merge: true });
+      }
       return {
-        success: false,
+        success: true,
         alreadySubscribed: true,
         message: 'Your email is already subscribed!'
       };
@@ -72,7 +110,9 @@ export const subscribeEmail = async (rawEmail) => {
     await setDoc(subscriberDocRef, {
       email: cleanEmail,
       subscribedAt: serverTimestamp(),
-      platform: 'portfolio_web'
+      platform: 'portfolio_web',
+      isVerified: extraData.isVerified ?? true,
+      ...extraData
     });
 
     // 4. Increment subscriber analytics counter

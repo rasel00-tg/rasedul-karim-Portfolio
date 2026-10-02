@@ -33,6 +33,7 @@ import { COLLECTIONS, checkCouponRedemption, recordCouponRedemption } from '../s
 import { isEmailSubscribed, subscribeEmail } from '../services/subscriptionService';
 import { db } from '../firebase/config';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { sendStyledOrderEmail, generateHtmlInvoice, sendOrderReceiptViaBackend } from '../services/emailOrderService';
 
 const DealsDiscountsModal = ({ onClose }) => {
   const { isDark } = useTheme();
@@ -64,7 +65,6 @@ const DealsDiscountsModal = ({ onClose }) => {
   const [checkoutSubmitting, setCheckoutSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
-  const [showOrderToast, setShowOrderToast] = useState(false);
   const [sharedDealId, setSharedDealId] = useState(null);
   const [shareToastMsg, setShareToastMsg] = useState(null);
 
@@ -643,31 +643,101 @@ const DealsDiscountsModal = ({ onClose }) => {
         });
       }
 
-      // Order Record for Client Confirmation
+      // Order Record for Client Confirmation & Detailed Digital Invoice
+      const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
+      const orderDate = new Date().toLocaleString('bn-BD', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      const hasCoupon = !!activeCode;
+
       const orderRecord = {
-        dealTitle: activeDeal.title,
+        orderId,
+        orderDate,
+        hasCoupon,
+        dealTitle: activeDeal.title || (isBangla ? 'এক্সক্লুসিভ ডিল প্রজেক্ট' : 'Exclusive Deal Project'),
+        originalPrice: `৳${pricing.basePrice} BDT`,
+        discountPercentage: String(pricing.rate),
+        discountAmount: `৳${pricing.discountAmount} BDT`,
         finalPrice: pricing.finalPrice,
-        couponCode: activeCode ? activeCode : (isBangla ? 'প্রযোজ্য নয় (রেগুলার মূল্য)' : 'None (Regular Price)'),
+        couponCode: activeCode ? activeCode : null,
         clientName: userName,
         clientEmail: userEmail,
-        message: checkoutMessage.trim(),
+        message: checkoutMessage.trim() || (isBangla ? 'কোনো বিশেষ রিকোয়ারমেন্ট উল্লেখ করা হয়নি।' : 'No special requirement mentioned.'),
         redeemedAt: new Date().toISOString()
       };
 
+      // ৩. ইমেইল ট্রিগার লজিক (সরাসরি মেইল অ্যাপে নিয়ে যাওয়ার জন্য mailto: ব্যাকআপ)
+      const recipient = "rasedul.karim00@gmail.com";
+      const subject = encodeURIComponent(`New Deal Order: ${activeDeal?.title || "Banner design"}`);
+      const body = encodeURIComponent(
+        `নাম: ${userName}\n` +
+        `ইমেইল: ${userEmail}\n` +
+        `প্রজেক্ট: ${activeDeal?.title || "Banner design"}\n` +
+        `কুপন কোড: ${activeCode || "None"}\n` +
+        `পরিশোধযোগ্য মূল্য: ৳${pricing.finalPrice || 5000} BDT\n` +
+        `গ্রাহকের মেসেজ: ${checkoutMessage?.trim() || "কোনো বিশেষ রিকোয়ারমেন্ট নেই"}`
+      );
+
+      try {
+        window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
+      } catch (mailErr) {
+        console.warn('Mailto direct link launch notice:', mailErr);
+      }
+
+      // ৪. সফল হলে ডিজিটাল ইনভয়েস সাকসেস স্টেট দেখাবে (মোডাল বন্ধ হবে না!)
       setCheckoutSuccess(orderRecord);
-      setShowOrderToast(true);
-      setTimeout(() => setShowOrderToast(false), 7000);
       localStorage.setItem('subscriber_deal_email', userEmail);
       setActiveUserEmail(userEmail);
 
-      // সরাসরি মেইল ক্লায়েন্ট ট্রিগার (সাদা পেজ বা ফ্রিজ হওয়া সম্পূর্ণ রোধ করে)
-      sendEmailPayload(activeCode, pricing.finalPrice, userEmail, activeDeal, userName, checkoutMessage);
+      // Backend Gmail SMTP (Node.js/Nodemailer) সরাসরি ডিসপ্যাচ ট্রিগার
+      sendOrderReceiptViaBackend({
+        customerEmail: userEmail,
+        customerName: userName,
+        dealTitle: activeDeal.title || 'Exclusive Deal Project',
+        finalPrice: pricing.finalPrice,
+        couponCode: activeCode || (isBangla ? 'ব্যবহার করা হয়নি' : 'Not applied'),
+        message: checkoutMessage.trim() || (isBangla ? 'কোনো বার্তা নেই' : 'No message'),
+        htmlInvoice: generateHtmlInvoice(orderRecord)
+      }).catch((e) => console.warn('Backend Gmail SMTP dispatch notice:', e));
+
+      // EmailJS ক্লাউড ডিসপ্যাচ ট্রিগার
+      sendStyledOrderEmail({
+        activeDeal,
+        isCouponApplied: !!activeCode,
+        enteredCoupon: activeCode,
+        userName,
+        userEmail,
+        userMessage: checkoutMessage.trim(),
+        pricing
+      }).catch((e) => console.warn('EmailJS cloud dispatch notice:', e));
     } catch (err) {
       setCheckoutError(err.message || (isBangla ? 'অর্ডার প্রসেস করতে ব্যর্থ হয়েছে।' : 'Failed to process order claim.'));
     } finally {
       setCheckoutSubmitting(false);
     }
   };
+
+  // Close Checkout Modal only when user explicitly finishes invoice inspection or cancels
+  const handleCloseCheckoutModal = () => {
+    setSelectedDealForClaim(null);
+    setCheckoutSuccess(null);
+    setCheckoutError(null);
+  };
+
+  // Direct Order Submission Handler - prevents premature close and triggers mail dispatch
+  const handleFinalSubmit = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    await handleConfirmOrderClaim(e);
+  };
+  const handleFinalOrderDispatch = handleFinalSubmit;
+  const handleSendOrderEmail = handleFinalSubmit;
 
   return (
     <AnimatePresence>
@@ -1063,20 +1133,25 @@ const DealsDiscountsModal = ({ onClose }) => {
                   width: '100%',
                   maxWidth: '580px',
                   maxHeight: '92vh',
-                  overflowY: 'auto',
                   borderRadius: '24px',
                   background: isDark ? 'linear-gradient(145deg, #0F172A 0%, #132338 100%)' : '#FFFFFF',
                   border: '1.5px solid rgba(16, 185, 129, 0.4)',
                   boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.25)',
-                  padding: '24px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '18px',
+                  overflow: 'hidden',
                   position: 'relative'
                 }}
               >
-                {/* Checkout Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                {/* 1. Fixed Top Header */}
+                <div style={{
+                  padding: '18px 24px 14px',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexShrink: 0
+                }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{
                       width: '42px',
@@ -1098,16 +1173,23 @@ const DealsDiscountsModal = ({ onClose }) => {
                         color: isDark ? '#FFFFFF' : '#0F172A',
                         fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
                       }}>
-                        {isBangla ? 'অর্ডার চেকআউট ও ডিসকাউন্ট ভ্যালিডেশন' : 'Claim Offer & Discount Checkout'}
+                        {checkoutSuccess 
+                          ? (isBangla ? 'ডিজিটাল রসিদ ও ইনভয়েস' : 'Digital Receipt & Invoice') 
+                          : (isBangla ? 'অর্ডার চেকআউট ও ডিসকাউন্ট ভ্যালিডেশন' : 'Claim Offer & Discount Checkout')}
                       </h3>
                       <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
-                        {isBangla ? 'এক ইমেইলে একবারই প্রযোজ্য' : 'Single-use discount per verified subscriber'}
+                        {checkoutSuccess 
+                          ? (isBangla ? 'অর্ডারটি সফলভাবে গ্রহণ ও নিবন্ধিত হয়েছে' : 'Order successfully placed & recorded') 
+                          : (isBangla ? 'এক ইমেইলে একবারই প্রযোজ্য' : 'Single-use discount per verified subscriber')}
                       </span>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => setSelectedDealForClaim(null)}
+                    onClick={() => {
+                      setSelectedDealForClaim(null);
+                      setCheckoutSuccess(null);
+                    }}
                     style={{
                       width: '34px',
                       height: '34px',
@@ -1125,7 +1207,19 @@ const DealsDiscountsModal = ({ onClose }) => {
                   </button>
                 </div>
 
-                {/* Deal Summary Banner Preview */}
+                {/* 2. Scrollable Middle Body */}
+                <div style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  WebkitOverflowScrolling: 'touch'
+                }}>
+                  {!checkoutSuccess && (
+                    <>
+                      {/* Deal Summary Banner Preview */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -1221,114 +1315,268 @@ const DealsDiscountsModal = ({ onClose }) => {
                     </div>
                   );
                 })()}
+              </>
+            )}
 
-                {/* Validation Error Message Box */}
-                {checkoutError && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: '12px',
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      border: '1.5px solid #EF4444',
-                      color: '#F87171',
-                      fontSize: '0.82rem',
+            {/* Validation Error Message Box */}
+            {checkoutError && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1.5px solid #EF4444',
+                  color: '#F87171',
+                  fontSize: '0.82rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}
+              >
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>{checkoutError}</span>
+              </motion.div>
+            )}
+
+            {/* Directly Show Full Detailed Digital Invoice Card */}
+            {checkoutSuccess ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                  borderRadius: '20px',
+                  overflow: 'hidden',
+                  background: isDark ? '#0F172A' : '#FFFFFF',
+                  border: `1.5px solid ${isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.3)'}`,
+                  boxShadow: '0 20px 45px rgba(0, 0, 0, 0.35)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0'
+                }}
+              >
+                {/* 1. Branding Bar */}
+                <div style={{
+                  padding: '16px 20px',
+                  background: isDark ? '#091124' : '#F8FAFC',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '1rem', fontWeight: 900, letterSpacing: '1.5px', color: '#14B8A6', textTransform: 'uppercase' }}>
+                      RASEDUL KARIM
+                    </div>
+                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', letterSpacing: '0.5px' }}>
+                      PORTFOLIO & DIGITAL SOLUTIONS
+                    </div>
+                  </div>
+                  {checkoutSuccess.hasCoupon ? (
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px solid #10B981',
+                      color: '#10B981',
+                      fontSize: '0.72rem',
                       fontWeight: 800,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '10px'
-                    }}
-                  >
-                    <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                    <span>{checkoutError}</span>
-                  </motion.div>
-                )}
-
-                {/* Order Confirmation Success State */}
-                {checkoutSuccess ? (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    style={{
-                      padding: '20px',
-                      borderRadius: '16px',
-                      background: 'rgba(16, 185, 129, 0.12)',
-                      border: '1.5px solid #10B981',
-                      textAlign: 'center',
+                      gap: '4px'
+                    }}>
+                      <CheckCircle2 size={12} />
+                      {isBangla ? 'অর্ডার ভেরিফাইড' : 'Order Verified'}
+                    </span>
+                  ) : (
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      background: 'rgba(59, 130, 246, 0.15)',
+                      border: '1.5px solid #3B82F6',
+                      color: '#60A5FA',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
                       display: 'flex',
-                      flexDirection: 'column',
                       alignItems: 'center',
-                      gap: '12px'
+                      gap: '4px'
+                    }}>
+                      <CheckCircle2 size={12} />
+                      {isBangla ? 'অর্ডার গৃহীত' : 'Order Received'}
+                    </span>
+                  )}
+                </div>
+
+                {/* 2. Hero Banner (Conditional: Offer vs Regular Order) */}
+                <div style={{
+                  padding: '20px 20px',
+                  background: checkoutSuccess.hasCoupon 
+                    ? 'linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)' 
+                    : 'linear-gradient(135deg, #334155 0%, #1E293B 100%)',
+                  textAlign: 'center',
+                  color: '#FFFFFF'
+                }}>
+                  <div style={{ fontSize: '1.8rem', marginBottom: '4px' }}>
+                    {checkoutSuccess.hasCoupon ? '🎉' : '📦'}
+                  </div>
+                  <h4 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: 900, color: '#FFFFFF' }}>
+                    {checkoutSuccess.hasCoupon 
+                      ? (isBangla ? 'আপনার অফার অর্ডার কনফার্ম হয়েছে!' : 'Your Offer Order is Confirmed!')
+                      : (isBangla ? 'আপনার অর্ডার সফলভাবে গ্রহণ করা হয়েছে!' : 'Your Order is Confirmed!')}
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.76rem', color: checkoutSuccess.hasCoupon ? '#E6FFFA' : '#CBD5E1' }}>
+                    {checkoutSuccess.hasCoupon 
+                      ? (isBangla 
+                          ? 'আপনার স্পেশাল ডিসকাউন্ট ক্লেইম অর্ডারটি গ্রহণ করা হয়েছে।' 
+                          : 'Your special discount claim order was received.')
+                      : (isBangla 
+                          ? 'আপনার প্রজেক্ট রিকোয়েস্টটি সফলভাবে গ্রহণ করা হয়েছে।' 
+                          : 'Your project request was received successfully.')}
+                  </p>
+                </div>
+
+                {/* 3. Order Metadata Row */}
+                <div style={{
+                  padding: '12px 20px',
+                  background: isDark ? '#111E38' : '#F8FAFC',
+                  borderBottom: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.76rem',
+                  color: '#94A3B8'
+                }}>
+                  <div>
+                    {isBangla ? 'অর্ডার নম্বর:' : 'Order ID:'} <strong style={{ color: '#22D3EE', fontFamily: "'Space Grotesk', monospace" }}>#{checkoutSuccess.orderId}</strong>
+                  </div>
+                  <div>
+                    {isBangla ? 'তারিখ:' : 'Date:'} <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{checkoutSuccess.orderDate}</strong>
+                  </div>
+                </div>
+
+                {/* 4. Structured Pricing Table */}
+                <div style={{ padding: '18px 20px' }}>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#22D3EE', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    {isBangla ? '📋 প্রজেক্ট ও প্রাইসিং বিবরণ' : '📋 Project & Pricing Details'}
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '8px', borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}` }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '0.92rem' }}>
+                          {checkoutSuccess.dealTitle}
+                        </div>
+                        {checkoutSuccess.hasCoupon && checkoutSuccess.couponCode && (
+                          <div style={{ fontSize: '0.74rem', color: '#14B8A6', marginTop: '2px' }}>
+                            {isBangla ? 'কুপন কোড:' : 'Coupon:'} <strong>{checkoutSuccess.couponCode}</strong>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{isBangla ? 'পরিমাণ: ১টি' : 'Qty: 1'}</div>
+                        <div style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A', fontFamily: "'Space Grotesk', monospace" }}>
+                          {checkoutSuccess.hasCoupon ? checkoutSuccess.originalPrice : `৳${checkoutSuccess.finalPrice} BDT`}
+                        </div>
+                      </div>
+                    </div>
+
+                    {checkoutSuccess.hasCoupon && (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94A3B8' }}>
+                          <span>{isBangla ? 'প্যাকেজের নিয়মিত মূল্য:' : 'Standard Package Rate:'}</span>
+                          <span style={{ fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.originalPrice}</span>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#10B981', fontWeight: 700 }}>
+                          <span>{isBangla ? `প্রযোজ্য কুপন ছাড় (${checkoutSuccess.discountPercentage}%):` : `Applied Coupon Discount (${checkoutSuccess.discountPercentage}%):`}</span>
+                          <span style={{ fontFamily: "'Space Grotesk', monospace" }}>-{checkoutSuccess.discountAmount}</span>
+                        </div>
+                      </>
+                    )}
+
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingTop: '8px',
+                      borderTop: `1.5px solid ${isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.3)'}`,
+                      fontSize: '0.98rem',
+                      fontWeight: 900,
+                      color: isDark ? '#FFFFFF' : '#0F172A'
+                    }}>
+                      <span>{isBangla ? 'চূড়ান্ত প্রদেয় মূল্য (Total):' : 'Final Net Payable:'}</span>
+                      <span style={{ color: '#10B981', fontSize: '1.2rem', fontFamily: "'Space Grotesk', monospace" }}>
+                        ৳{checkoutSuccess.finalPrice} BDT
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Customer Details Box */}
+                <div style={{ padding: '0 20px 16px' }}>
+                  <div style={{
+                    background: isDark ? '#111E38' : '#F8FAFC',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                    fontSize: '0.78rem'
+                  }}>
+                    <div style={{ fontWeight: 800, color: '#22D3EE', marginBottom: '6px' }}>
+                      {isBangla ? '👤 গ্রাহকের তথ্য ও বার্তা' : '👤 Customer Information'}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8', marginBottom: '3px' }}>
+                      <span>{isBangla ? 'নাম:' : 'Name:'}</span>
+                      <span style={{ color: isDark ? '#FFFFFF' : '#0F172A', fontWeight: 700 }}>{checkoutSuccess.clientName}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8', marginBottom: '5px' }}>
+                      <span>{isBangla ? 'ভেরিফাইড ইমেইল:' : 'Email:'}</span>
+                      <span style={{ color: '#10B981', fontWeight: 700, fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.clientEmail}</span>
+                    </div>
+                    {checkoutSuccess.message && (
+                      <div style={{ color: '#94A3B8', borderTop: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`, paddingTop: '5px', marginTop: '5px' }}>
+                        <span>{isBangla ? 'বার্তা:' : 'Message:'}</span> <span style={{ color: isDark ? '#E2E8F0' : '#334155' }}>{checkoutSuccess.message}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 6. Done / Close Button */}
+                <div style={{ padding: '0 20px 20px' }}>
+                  <button
+                    type="button"
+                    onClick={handleCloseCheckoutModal}
+                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 active:scale-[0.98] text-white font-bold text-base shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer border border-emerald-400/30"
+                    style={{
+                      width: '100%',
+                      minHeight: '50px',
+                      padding: '14px 24px',
+                      borderRadius: '16px',
+                      background: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
+                      color: '#FFFFFF',
+                      fontWeight: 800,
+                      fontSize: '0.98rem',
+                      boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.4)',
+                      border: '1.5px solid rgba(52, 211, 153, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      boxSizing: 'border-box'
                     }}
                   >
-                    <CheckCircle2 size={46} color="#10B981" />
-                    <div>
-                      <h4 style={{ margin: '0 0 6px 0', fontSize: '1.15rem', fontWeight: 900, color: '#10B981' }}>
-                        {isBangla 
-                          ? '✓ আপনার অর্ডার সফলভাবে পাঠানো হয়েছে! শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।' 
-                          : '✓ Your order has been submitted successfully! We will contact you soon.'}
-                      </h4>
-                      <p style={{ margin: 0, fontSize: '0.84rem', color: isDark ? '#E2E8F0' : '#1E293B' }}>
-                        {isBangla 
-                          ? `প্রজেক্ট: ${checkoutSuccess.dealTitle} | চূড়ান্ত প্রদেয় মূল্য: ৳${checkoutSuccess.finalPrice} BDT (${checkoutSuccess.couponCode})` 
-                          : `Project: ${checkoutSuccess.dealTitle} | Net Total: ৳${checkoutSuccess.finalPrice} BDT (${checkoutSuccess.couponCode})`}
-                      </p>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px', width: '100%', marginTop: '6px' }}>
-                      <button
-                        onClick={() => {
-                          sendEmailPayload(
-                            checkoutSuccess.couponCode,
-                            checkoutSuccess.finalPrice,
-                            checkoutSuccess.clientEmail,
-                            selectedDealForClaim,
-                            checkoutSuccess.clientName,
-                            checkoutSuccess.message
-                          );
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: '12px 18px',
-                          borderRadius: '12px',
-                          background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
-                          color: '#FFFFFF',
-                          border: 'none',
-                          fontSize: '0.9rem',
-                          fontWeight: 900,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          boxShadow: '0 4px 16px rgba(16, 185, 129, 0.4)'
-                        }}
-                      >
-                        <Send size={16} />
-                        <span>{isBangla ? 'পুনরায় ইমেইল পাঠান' : 'Resend Email'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => setSelectedDealForClaim(null)}
-                        style={{
-                          padding: '12px 18px',
-                          borderRadius: '12px',
-                          background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)'}`,
-                          color: isDark ? '#FFFFFF' : '#0F172A',
-                          fontSize: '0.9rem',
-                          fontWeight: 800,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {isBangla ? 'বন্ধ করুন' : 'Close'}
-                      </button>
-                    </div>
-                  </motion.div>
-                ) : (
-                  /* Checkout Form Fields */
-                  <form onSubmit={handleConfirmOrderClaim} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <Check className="w-5 h-5 flex-shrink-0" style={{ width: '20px', height: '20px', minWidth: '20px', minHeight: '20px' }} />
+                    <span>{isBangla ? '✓ সম্পন্ন করুন (Done)' : 'Done / Close'}</span>
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              /* Checkout Form Fields */
+              <form id="checkout-claim-form" onSubmit={handleFinalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
                       <label style={{ fontSize: '0.78rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
                         <User size={13} />
@@ -1738,41 +1986,81 @@ const DealsDiscountsModal = ({ onClose }) => {
                       />
                     </div>
 
-                    {/* Action Buttons: "Email / অর্ডার পাঠান" */}
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                    {/* চেকআউট ফর্মের ইনপুট ফিল্ডগুলোর পর একদম নিচে সাবমিট বাটন */}
+                    <div 
+                      className="pt-4 mt-6 border-t border-emerald-500/20"
+                      style={{
+                        paddingTop: '16px',
+                        marginTop: '24px',
+                        borderTop: '1px solid rgba(16, 185, 129, 0.25)',
+                        width: '100%',
+                        boxSizing: 'border-box'
+                      }}
+                    >
                       <button
-                        type="submit"
+                        type="button"
                         disabled={checkoutSubmitting}
+                        onClick={handleFinalSubmit}
+                        className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 active:scale-[0.98] text-white font-bold text-base shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer border border-emerald-400/30"
                         style={{
-                          flex: 1,
-                          padding: '13px 18px',
-                          borderRadius: '12px',
-                          background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
+                          width: '100%',
+                          minHeight: '52px',
+                          padding: '16px 24px',
+                          borderRadius: '16px',
+                          background: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
                           color: '#FFFFFF',
-                          border: 'none',
-                          fontSize: '0.94rem',
-                          fontWeight: 900,
-                          cursor: checkoutSubmitting ? 'not-allowed' : 'pointer',
+                          fontWeight: 800,
+                          fontSize: '1rem',
+                          letterSpacing: '0.5px',
+                          boxShadow: '0 12px 28px -6px rgba(5, 150, 105, 0.45), 0 0 20px rgba(16, 185, 129, 0.25)',
+                          border: '1.5px solid rgba(52, 211, 153, 0.4)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '8px',
-                          boxShadow: '0 4px 16px rgba(16, 185, 129, 0.38)',
-                          opacity: checkoutSubmitting ? 0.7 : 1
+                          gap: '12px',
+                          cursor: checkoutSubmitting ? 'wait' : 'pointer',
+                          opacity: checkoutSubmitting ? 0.75 : 1,
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          outline: 'none',
+                          boxSizing: 'border-box'
                         }}
                       >
                         {checkoutSubmitting ? (
-                          <span>{isBangla ? 'যাচাই করা হচ্ছে...' : 'Verifying...'}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ display: 'inline-block', width: '18px', height: '18px', border: '2px solid #FFFFFF', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                            <span>{isBangla ? 'মেইল পাঠানো হচ্ছে...' : 'Sending Mail & Finalizing...'}</span>
+                          </span>
                         ) : (
                           <>
-                            <Send size={18} />
-                            <span>{isBangla ? 'Email / অর্ডার পাঠান' : 'Email / Submit Order'}</span>
+                            {/* আধুনিক সেন্ড পেপার-প্লেন আইকন */}
+                            <svg 
+                              className="w-5 h-5 flex-shrink-0 text-white animate-pulse" 
+                              fill="currentColor" 
+                              viewBox="0 0 20 20"
+                              style={{
+                                width: '20px',
+                                height: '20px',
+                                minWidth: '20px',
+                                minHeight: '20px',
+                                flexShrink: 0,
+                                color: '#FFFFFF',
+                                fill: '#FFFFFF',
+                                display: 'block'
+                              }}
+                            >
+                              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                            </svg>
+                            <span className="tracking-wide" style={{ color: '#FFFFFF', fontWeight: 800 }}>
+                              Send Mail / Order Submit
+                            </span>
                           </>
                         )}
                       </button>
                     </div>
+
                   </form>
                 )}
+                </div>
               </motion.div>
             </motion.div>
           )}
@@ -1809,43 +2097,6 @@ const DealsDiscountsModal = ({ onClose }) => {
             >
               <CheckCircle2 size={18} color="#34D399" style={{ flexShrink: 0 }} />
               <span>{shareToastMsg}</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {showOrderToast && (
-            <motion.div
-              initial={{ opacity: 0, y: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.9 }}
-              style={{
-                position: 'fixed',
-                bottom: '24px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 100000,
-                background: 'linear-gradient(135deg, #064E3B 0%, #047857 100%)',
-                color: '#FFFFFF',
-                padding: '14px 24px',
-                borderRadius: '50px',
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.4)',
-                border: '1.5px solid rgba(16, 185, 129, 0.6)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                fontSize: '0.88rem',
-                fontWeight: 800,
-                maxWidth: '90vw',
-                textAlign: 'center',
-                pointerEvents: 'none'
-              }}
-            >
-              <CheckCircle2 size={20} color="#34D399" style={{ flexShrink: 0 }} />
-              <span>
-                {isBangla 
-                  ? 'আপনার অর্ডার সফলভাবে পাঠানো হয়েছে! শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।' 
-                  : 'Your order has been submitted successfully! We will contact you soon.'}
-              </span>
             </motion.div>
           )}
         </AnimatePresence>
