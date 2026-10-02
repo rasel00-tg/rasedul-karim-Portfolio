@@ -70,7 +70,7 @@ export const FirestoreStreamBuilder = ({
         const { db } = await initFirebase();
 
         if (db) {
-          const { collection, onSnapshot, query } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+          const { collection, onSnapshot, query } = await import('firebase/firestore');
           const colRef = collection(db, collectionName);
           const q = query(colRef);
 

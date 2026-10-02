@@ -1,6 +1,6 @@
-/**
- * Firebase Web Configuration for Rasedul Karim Portfolio
- */
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+
 export const firebaseConfig = {
   apiKey: "AIzaSyA6u-Gzn-MV0SiuL7bedvY69M5a7akiy_E",
   authDomain: "rasedul-karim-portfolio.firebaseapp.com",
@@ -11,36 +11,13 @@ export const firebaseConfig = {
   measurementId: "G-G4QG91XY3R"
 };
 
-let firebaseApp = null;
-let firestoreDb = null;
+// Initialize Firebase App & Firestore Database
+export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+export const db = getFirestore(app);
 
-// Initialize Firebase SDK dynamically via official ESM with offline persistence cache
+// Asynchronous initializer maintaining backward compatibility
 export const initFirebase = async () => {
-  if (firebaseApp && firestoreDb) {
-    return { app: firebaseApp, db: firestoreDb };
-  }
-
-  try {
-    const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js');
-    const { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
-
-    firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
-    try {
-      firestoreDb = initializeFirestore(firebaseApp, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager()
-        })
-      });
-    } catch (cacheErr) {
-      firestoreDb = getFirestore(firebaseApp);
-    }
-
-    return { app: firebaseApp, db: firestoreDb };
-  } catch (e) {
-    console.log("Firebase initialized in browser environment with provided config:", firebaseConfig.projectId);
-    return { app: firebaseConfig, db: null };
-  }
+  return { app, db };
 };
 
 export default firebaseConfig;

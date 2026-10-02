@@ -6,6 +6,7 @@ import {
   Copy, 
   Check, 
   ExternalLink, 
+  Share2,
   Clock, 
   Sparkles, 
   Tag,
@@ -30,6 +31,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
 import { COLLECTIONS, checkCouponRedemption, recordCouponRedemption } from '../services/featuresService';
 import { isEmailSubscribed, subscribeEmail } from '../services/subscriptionService';
+import { db } from '../firebase/config';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
 const DealsDiscountsModal = ({ onClose }) => {
   const { isDark } = useTheme();
@@ -49,7 +52,7 @@ const DealsDiscountsModal = ({ onClose }) => {
   });
   const [checkoutCouponCode, setCheckoutCouponCode] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
-  const [checkoutBasePrice] = useState(100); // Standard base package rate in USD
+  const [checkoutBasePrice] = useState(5000); // Standard base package rate in BDT (৳)
   const [isCouponApplied, setIsCouponApplied] = useState(false);
   const [appliedCouponCode, setAppliedCouponCode] = useState('');
   const [couponChecking, setCouponChecking] = useState(false);
@@ -62,6 +65,8 @@ const DealsDiscountsModal = ({ onClose }) => {
   const [checkoutError, setCheckoutError] = useState(null);
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
   const [showOrderToast, setShowOrderToast] = useState(false);
+  const [sharedDealId, setSharedDealId] = useState(null);
+  const [shareToastMsg, setShareToastMsg] = useState(null);
 
   // PopScope / Browser Back Interception to return to Homebar
   useEffect(() => {
@@ -86,34 +91,71 @@ const DealsDiscountsModal = ({ onClose }) => {
     setTimeout(() => setCopiedCode(null), 2500);
   };
 
+  // Native Social Media Web Share API with Clipboard Fallback
+  const handleShareDeal = async (deal) => {
+    const rawRate = deal?.discountPercentage || deal?.discountPercent || '75%';
+    const match = String(rawRate).match(/(\d+)/);
+    const discountText = match ? match[1] : '75';
+    const dealTitle = deal.title || (isBangla ? 'এক্সক্লুসিভ অফার ও ডিল' : 'Exclusive Deal & Discount');
+
+    const shareData = {
+      title: dealTitle,
+      text: isBangla 
+        ? `🔥 ${dealTitle} - পাচ্ছেন ${discountText}% ছাড়! অফারটি দ্রুত ক্লেইম করুন:` 
+        : `🔥 ${dealTitle} - Get ${discountText}% OFF! Claim this exclusive deal now:`,
+      url: window.location.href,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setSharedDealId(deal.id);
+        setTimeout(() => setSharedDealId(null), 2500);
+      } else {
+        await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+        setSharedDealId(deal.id);
+        setShareToastMsg(isBangla ? '✓ লিংক ও অফারের তথ্য ক্লিপবোর্ডে কপি করা হয়েছে!' : '✓ Deal link and offer copied to clipboard!');
+        setTimeout(() => {
+          setSharedDealId(null);
+          setShareToastMsg(null);
+        }, 3000);
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        console.error("Error sharing deal:", error);
+      }
+    }
+  };
+
   // Helper to parse numerical discount percentage
   const parseDiscountRate = (deal) => {
-    const rawRate = deal?.discountPercent || '20%';
-    const match = rawRate.match(/(\d+)/);
+    const rawRate = deal?.discountPercentage || deal?.discountPercent || '20%';
+    const match = String(rawRate).match(/(\d+)/);
     return match ? Math.min(100, Math.max(1, parseInt(match[1], 10))) : 20;
   };
 
-  // Dynamic Pricing Calculation
-  const calculatePricing = (deal, applyDiscount = false, base = checkoutBasePrice) => {
+  // Dynamic Pricing Calculation (in BDT ৳)
+  const calculatePricing = (deal, applyDiscount = false) => {
+    const base = deal?.originalPrice ? Number(deal.originalPrice) : checkoutBasePrice;
     const rate = parseDiscountRate(deal);
     if (!applyDiscount) {
       return {
         rate: 0,
         rateFormatted: '0%',
-        basePrice: base.toFixed(2),
-        discountAmount: '0.00',
-        finalPrice: base.toFixed(2),
+        basePrice: Math.round(base).toString(),
+        discountAmount: '0',
+        finalPrice: Math.round(base).toString(),
         isDiscounted: false
       };
     }
-    const discountAmount = (base * rate) / 100;
-    const finalPrice = Math.max(0, base - discountAmount);
+    const discountAmount = Math.round((base * rate) / 100);
+    const finalPrice = Math.max(0, Math.round(base - discountAmount));
     return {
       rate,
       rateFormatted: `${rate}%`,
-      basePrice: base.toFixed(2),
-      discountAmount: discountAmount.toFixed(2),
-      finalPrice: finalPrice.toFixed(2),
+      basePrice: Math.round(base).toString(),
+      discountAmount: discountAmount.toString(),
+      finalPrice: finalPrice.toString(),
       isDiscounted: true
     };
   };
@@ -154,7 +196,7 @@ const DealsDiscountsModal = ({ onClose }) => {
     }
   };
 
-  // Direct Mail Client Trigger (Exact user specifications to prevent blank page crash)
+  // Direct Mail Client Trigger with Clean & Beautiful Invoice Format
   const sendEmailPayload = (
     coupon, 
     price, 
@@ -165,24 +207,57 @@ const DealsDiscountsModal = ({ onClose }) => {
   ) => {
     const activeDeal = deal || {};
     const dealTitle = activeDeal.title || 'Exclusive Deal';
-    const clientName = (name || '').trim() || (isBangla ? 'নাম প্রদান করা হয়নি' : 'Not provided');
-    const appliedCode = coupon && coupon !== 'NO_COUPON' && coupon !== 'প্রযোজ্য নয়' ? coupon : "প্রযোজ্য নয়";
-    const finalPrice = typeof price === 'number' ? `$${price.toFixed(2)} USD` : (String(price).startsWith('$') ? price : `$${price} USD`);
-    const projectScope = (message || '').trim() || (isBangla ? 'কোনো বার্তা নেই' : 'No message provided');
+    const clientName = (name || '').trim() || (isBangla ? 'গ্রাহকের নাম উল্লেখ করা হয়নি' : 'Not provided');
+    const isCouponActive = coupon && coupon !== 'NO_COUPON' && coupon !== 'প্রযোজ্য নয়' && coupon !== 'None';
+    const couponCodeText = isCouponActive ? coupon : (isBangla ? 'ব্যবহার করা হয়নি' : 'Not applied');
+    const appliedDiscountText = isCouponActive 
+      ? (activeDeal.discountPercent || '75% OFF') 
+      : (isBangla ? 'প্রযোজ্য নয়' : 'Not Applicable');
 
-    const recipient = "rasel00.tg@gmail.com";
-    const subject = encodeURIComponent(`Order Claim: ${dealTitle}`);
-    const body = encodeURIComponent(
-      `অর্ডার বিবরণ:\n` +
-      `-----------------------------\n` +
-      `প্রজেক্ট: ${dealTitle}\n` +
-      `কাস্টমারের নাম: ${clientName}\n` +
-      `ইমেইল: ${userEmail}\n` +
-      `কুপন কোড: ${appliedCode}\n` +
-      `পরিশোধযোগ্য মূল্য: ${finalPrice}\n` +
-      `মেসেজ: ${projectScope}\n` +
-      `-----------------------------`
-    );
+    const baseRateNum = activeDeal?.originalPrice ? Number(activeDeal.originalPrice) : checkoutBasePrice;
+    const baseRateFormatted = `৳${Math.round(baseRateNum)} BDT`;
+    const finalPrice = typeof price === 'number' 
+      ? `৳${Math.round(price)} BDT` 
+      : (String(price).startsWith('৳') 
+          ? (String(price).includes('BDT') ? String(price) : `${price} BDT`) 
+          : `৳${price} BDT`);
+
+    const projectScope = (message || '').trim() || (isBangla ? 'কোনো বিশেষ রিকোয়ারমেন্ট উল্লেখ করা হয়নি।' : 'No special requirement mentioned.');
+
+    // Format current date and time cleanly
+    const now = new Date();
+    const orderTimestamp = now.toLocaleString(isBangla ? 'bn-BD' : 'en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    const recipient = "rasedul.karim00@gmail.com";
+    const subject = encodeURIComponent(`Order Claim: ${dealTitle} - ${clientName}`);
+    const emailBodyText = 
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `      🌟 EXCLUSIVE DEAL CLAIM ORDER\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `📌 প্রজেক্ট ও অফারের বিবরণ:\n` +
+      `• প্রজেক্টের নাম: ${dealTitle}\n` +
+      `• প্যাকেজ রেট: ${baseRateFormatted}\n` +
+      `• ছাড়ের পরিমাণ: ${appliedDiscountText}\n` +
+      `• চূড়ান্ত পরিশোধযোগ্য মূল্য: ${finalPrice}\n\n` +
+      `👤 গ্রাহকের তথ্য:\n` +
+      `• নাম: ${clientName}\n` +
+      `• ইমেইল: ${userEmail || 'client@example.com'}\n` +
+      `• কুপন কোড: ${couponCodeText}\n\n` +
+      `📝 গ্রাহকের বার্তা / রিকোয়ারমেন্ট:\n` +
+      `${projectScope}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `অর্ডার প্রেরণের সময়: ${orderTimestamp}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+    const body = encodeURIComponent(emailBodyText);
 
     // নিরাপদ লিঙ্ক ক্লিক মেথড যাতে ব্রাউজার ক্র্যাশ বা ফাঁকা না হয়
     const mailtoLink = document.createElement("a");
@@ -198,17 +273,22 @@ const DealsDiscountsModal = ({ onClose }) => {
   };
 
   // ১. ইমেইল ভেরিফিকেশন ও অটোমেটিক কুপন কোড লজিক
+  // ১. ইমেইল ভেরিফিকেশন ও অটোমেটিক কুপন কোড লজিক (কঠোর ওয়ান-টাইম ও সাবস্ক্রিপশন গার্ড)
   const handleVerifyEmailAndAutoFill = async () => {
+    setIsEmailVerified(false);
+    setIsCouponApplied(false);
+    setAppliedCouponCode('');
+    setCouponSuccessMsg(null);
     setEmailFeedback(null);
     setCouponErrorMsg(null);
-    setCouponSuccessMsg(null);
 
     const cleanEmail = (checkoutEmail || '').trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
+      setIsEmailVerified(false);
       setEmailFeedback({
         type: 'error',
-        message: isBangla ? 'এখানে আপনার ইমেইল লিখুন' : 'Enter your email here',
+        message: isBangla ? 'অনুগ্রহ করে সঠিক ইমেইল ঠিকানা প্রদান করুন।' : 'Please enter a valid email address.',
         needsSubscribe: false
       });
       return;
@@ -217,53 +297,91 @@ const DealsDiscountsModal = ({ onClose }) => {
     setEmailChecking(true);
 
     try {
-      // ফায়ারস্টোরের subscribers কালেকশনে চেক
-      const isSubscribed = await isEmailSubscribed(cleanEmail);
-      if (!isSubscribed) {
+      // ১. সাবস্ক্রিপশন চেক (Firestore subscribers কালেকশনে ইমেইল আছে কিনা)
+      let isSub = false;
+      try {
+        const subQuery = query(collection(db, "subscribers"), where("email", "==", cleanEmail));
+        const subSnap = await getDocs(subQuery);
+        if (!subSnap.empty) {
+          isSub = true;
+        } else {
+          const docSnap = await getDoc(doc(db, "subscribers", cleanEmail));
+          if (docSnap.exists()) {
+            isSub = true;
+          }
+        }
+      } catch (subErr) {
+        isSub = await isEmailSubscribed(cleanEmail);
+      }
+
+      if (!isSub) {
         setIsEmailVerified(false);
         setIsCouponApplied(false);
         setAppliedCouponCode('');
         setEmailFeedback({
           type: 'error',
-          message: isBangla ? 'আপনার এই ইমেইলটি সাবস্ক্রাইব করা নেই!' : 'This email is not subscribed yet!',
+          message: isBangla 
+            ? 'এই ইমেইলটি সাবস্ক্রাইব করা নেই! আগে সাবস্ক্রাইব করুন।' 
+            : 'This email is not subscribed! Please subscribe first.',
           needsSubscribe: true
         });
         return;
       }
 
-      // সাবস্ক্রাইবার তালিকায় পাওয়া গেছে; ওই নির্দিষ্ট পোস্টে আগে কুপন ব্যবহার হয়েছে কিনা চেক
-      const postCoupon = (selectedDealForClaim?.discountCode || 'RASEDUL75').trim().toUpperCase();
-      const redemption = await checkCouponRedemption(cleanEmail, postCoupon, selectedDealForClaim?.id);
+      // ২. ওয়ান-টাইম চেক (coupon_redemptions কালেকশনে এই ডিল ও ইমেইলের পূর্ববর্তী রেকর্ড আছে কিনা)
+      const activeDeal = selectedDealForClaim || {};
+      const activeDealId = (activeDeal.id || '').trim();
+      let alreadyRedeemed = false;
 
-      if (redemption.alreadyRedeemed) {
-        setIsEmailVerified(true);
+      try {
+        if (activeDealId) {
+          const redeemQuery = query(
+            collection(db, "coupon_redemptions"),
+            where("dealId", "==", activeDealId),
+            where("email", "==", cleanEmail)
+          );
+          const redeemSnap = await getDocs(redeemQuery);
+          if (!redeemSnap.empty) {
+            alreadyRedeemed = true;
+          }
+        }
+      } catch (redeemErr) {}
+
+      if (!alreadyRedeemed) {
+        const postCoupon = (activeDeal.couponCode || activeDeal.discountCode || 'RASEDUL75').trim().toUpperCase();
+        const redemption = await checkCouponRedemption(cleanEmail, postCoupon, activeDealId);
+        if (redemption.alreadyRedeemed) {
+          alreadyRedeemed = true;
+        }
+      }
+
+      if (alreadyRedeemed) {
+        setIsEmailVerified(false); // কঠোরভাবে false রাখা হলো
         setIsCouponApplied(false);
         setAppliedCouponCode('');
         setEmailFeedback({
           type: 'error',
           message: isBangla 
-            ? 'ইমেইল সাবস্ক্রাইব করা আছে, তবে আপনি ইতোপূর্বে এই ডিলটির জন্য কুপন কোড ব্যবহার করেছেন!' 
-            : 'Email is subscribed, but you have already redeemed a coupon for this deal!',
+            ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন!' 
+            : 'You have already redeemed a coupon for this deal!',
           needsSubscribe: false
         });
         return;
       }
 
-      // অটো-ফিল মেকানিজম:
-      // ১. ইমেইল ফিল্ডে সবুজ টিকচিহ্ন দেখাবে
+      // ৩. সফল হলে: কেবল দুটি শর্তই সফল হলে isEmailVerified = true হবে
+      const postCoupon = (activeDeal.couponCode || activeDeal.discountCode || 'RASEDUL75').trim().toUpperCase();
       setIsEmailVerified(true);
-      // ২. নিচের কুপন কোডের ঘরে স্বয়ংক্রিয়ভাবে সক্রিয় কুপন কোডটি বসে যাবে (Auto-filled)
       setCheckoutCouponCode(postCoupon);
-      // ৩. মোট মূল্য থেকে সাথে সাথে ডিসকাউন্ট মাইনাস হয়ে নেট প্রদেয় মূল্য আপডেট হবে
       setIsCouponApplied(true);
       setAppliedCouponCode(postCoupon);
 
-      const rate = parseDiscountRate(selectedDealForClaim);
+      const rate = parseDiscountRate(activeDeal);
       setEmailFeedback({
         type: 'success',
         message: isBangla 
-          ? `✓ ইমেইল ভেরিফাইড! কুপন কোড (${postCoupon}) স্বয়ংক্রিয়ভাবে বসে গেছে এবং ${rate}% ডিসকাউন্ট চালু হয়েছে।` 
-          : `✓ Email verified! Coupon code (${postCoupon}) auto-filled and ${rate}% discount applied.`,
+          ? `✓ ইমেইল সফলভাবে ভেরিফাইড! কুপন (${postCoupon}) স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে এবং ${rate}% ডিসকাউন্ট সক্রিয় হয়েছে।` 
+          : `✓ Email verified! Coupon (${postCoupon}) auto-applied with ${rate}% discount.`,
         needsSubscribe: false
       });
       setCouponSuccessMsg(
@@ -277,7 +395,7 @@ const DealsDiscountsModal = ({ onClose }) => {
       setIsEmailVerified(false);
       setEmailFeedback({
         type: 'error',
-        message: err.message || (isBangla ? 'ইমেইল যাচাই ব্যর্থ হয়েছে।' : 'Email verification failed.'),
+        message: isBangla ? 'ভেরিফিকেশনে সমস্যা হয়েছে।' : 'Verification failed.',
         needsSubscribe: false
       });
     } finally {
@@ -347,10 +465,11 @@ const DealsDiscountsModal = ({ onClose }) => {
       if (redemption.alreadyRedeemed) {
         setIsCouponApplied(false);
         setAppliedCouponCode('');
+        setIsEmailVerified(false);
         setCouponErrorMsg(
           isBangla 
-            ? 'আপনি ইতোপূর্বে এই ডিলটির জন্য এই কুপন কোডটি ব্যবহার করেছেন!' 
-            : 'You have already redeemed this coupon for this deal!'
+            ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন!' 
+            : 'You have already redeemed a coupon for this deal!'
         );
         return;
       }
@@ -414,14 +533,14 @@ const DealsDiscountsModal = ({ onClose }) => {
       const redemption = await checkCouponRedemption(cleanEmail, postCoupon, selectedDealForClaim?.id);
 
       if (redemption.alreadyRedeemed) {
-        setIsEmailVerified(true);
+        setIsEmailVerified(false);
         setIsCouponApplied(false);
         setAppliedCouponCode('');
         setEmailFeedback({
           type: 'error',
           message: isBangla 
-            ? 'সাবস্ক্রিপশন সম্পন্ন হয়েছে, তবে আপনি ইতোপূর্বে এই ডিলটির জন্য কুপন ব্যবহার করেছেন!' 
-            : 'Subscribed, but you have already redeemed a coupon for this deal!',
+            ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন!' 
+            : 'You have already redeemed a coupon for this deal!',
           needsSubscribe: false
         });
       } else {
@@ -479,7 +598,7 @@ const DealsDiscountsModal = ({ onClose }) => {
     const activeDeal = selectedDealForClaim || {};
     const activeCode = isCouponApplied && appliedCouponCode ? appliedCouponCode : null;
     const pricing = calculatePricing(activeDeal, !!activeCode);
-    const finalPayablePrice = `$${pricing.finalPrice} USD`;
+    const finalPayablePrice = `৳${pricing.finalPrice} BDT`;
 
     try {
       // যদি কুপন কার্যকর থাকে, ফায়ারস্টোরে ওয়ান-টাইম ট্র্যাকিং রেকর্ড করা হবে
@@ -488,6 +607,7 @@ const DealsDiscountsModal = ({ onClose }) => {
         if (!isSubscribed) {
           setIsCouponApplied(false);
           setAppliedCouponCode('');
+          setIsEmailVerified(false);
           setCheckoutError(
             isBangla 
               ? 'কুপনটি সঠিক, তবে আপনি এখনো সাবস্ক্রাইব করেননি! ডিসকাউন্ট পেতে আগে সাবস্ক্রাইব করুন।' 
@@ -501,9 +621,10 @@ const DealsDiscountsModal = ({ onClose }) => {
         if (redemptionCheck.alreadyRedeemed) {
           setIsCouponApplied(false);
           setAppliedCouponCode('');
+          setIsEmailVerified(false);
           setCheckoutError(
             isBangla
-              ? 'You have already redeemed this coupon for this deal! রেগুলার মূল্য ($100.00) বহাল রাখা হলো।'
+              ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন! রেগুলার মূল্য বহাল রাখা হলো।'
               : 'You have already redeemed this coupon for this deal! Regular pricing applies.'
           );
           setCheckoutSubmitting(false);
@@ -736,7 +857,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                           borderRadius: '18px 18px 0 0'
                         }}>
                           <img 
-                            src={item.bannerUrl || '/add1.png'} 
+                            src={item.bannerUrl || (item.imagePath ? (item.imagePath.startsWith('/') ? item.imagePath : '/' + item.imagePath) : '/add1.png')} 
                             alt={item.title}
                             onError={(e) => { e.target.src = '/add1.png'; }}
                             style={{ width: '100%', maxWidth: '100%', height: '100%', objectFit: 'cover' }}
@@ -781,7 +902,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                               </div>
 
                               {/* Right: Discount Percentage Badge */}
-                              {(item.discountPercent || item.discountCode) && (
+                              {(item.discountPercent || item.discountPercentage || item.discountCode || item.couponCode) && (
                                 <div style={{
                                   padding: '5px 14px',
                                   borderRadius: '10px',
@@ -792,7 +913,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                                   boxShadow: '0 2px 10px rgba(16, 185, 129, 0.4)',
                                   letterSpacing: '0.5px'
                                 }}>
-                                  {item.discountPercent || '75% OFF'}
+                                  {item.discountPercent || (item.discountPercentage ? `${item.discountPercentage}% OFF` : (item.discountCode || item.couponCode))}
                                 </div>
                               )}
                             </div>
@@ -818,7 +939,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                             </p>
 
                             {/* Expiration Date Pill (Clean metadata outside image) */}
-                            {item.expiryDate && (
+                            {(item.expiryDate || item.validUntil) && (
                               <div style={{
                                 marginTop: '10px',
                                 display: 'inline-flex',
@@ -829,7 +950,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                                 fontWeight: 600
                               }}>
                                 <Clock size={13} color="#10B981" />
-                                <span>{isBangla ? 'মেয়াদ:' : 'Valid until:'} {item.expiryDate}</span>
+                                <span>{isBangla ? 'মেয়াদ:' : 'Valid until:'} {item.expiryDate || item.validUntil}</span>
                               </div>
                             )}
                           </div>
@@ -864,28 +985,36 @@ const DealsDiscountsModal = ({ onClose }) => {
                               <span>{isBangla ? 'Claim Offer / ক্লেইম করুন' : 'Claim Offer / Redeem Now'}</span>
                             </motion.button>
 
-                            {item.partnerUrl && (
-                              <a
-                                href={item.partnerUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  padding: '12px 16px',
-                                  borderRadius: '14px',
-                                  background: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
-                                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)'}`,
-                                  color: isDark ? '#FFFFFF' : '#0F172A',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  textDecoration: 'none',
-                                  transition: 'all 0.2s ease'
-                                }}
-                                title={isBangla ? 'পার্টনার সাইট ভিজিট করুন' : 'Visit Partner Site'}
-                              >
-                                <ExternalLink size={17} />
-                              </a>
-                            )}
+                            {/* Native Social Media Share Button */}
+                            <motion.button
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                              onClick={() => handleShareDeal(item)}
+                              style={{
+                                padding: '13px 16px',
+                                borderRadius: '14px',
+                                background: sharedDealId === item.id 
+                                  ? 'rgba(16, 185, 129, 0.25)' 
+                                  : (isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(0, 105, 92, 0.08)'),
+                                border: `1.5px solid ${sharedDealId === item.id ? '#10B981' : (isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(0, 105, 92, 0.25)')}`,
+                                color: sharedDealId === item.id ? '#10B981' : (isDark ? '#34D399' : '#059669'),
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                flexShrink: 0,
+                                boxShadow: '0 2px 10px rgba(16, 185, 129, 0.15)'
+                              }}
+                              title={isBangla ? 'সোশ্যাল মিডিয়ায় শেয়ার করুন' : 'Share on Social Media'}
+                              aria-label="Share Deal"
+                            >
+                              {sharedDealId === item.id ? (
+                                <Check size={18} color="#10B981" />
+                              ) : (
+                                <Share2 size={18} />
+                              )}
+                            </motion.button>
                           </div>
                         </div>
                       </motion.div>
@@ -1055,14 +1184,14 @@ const DealsDiscountsModal = ({ onClose }) => {
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: '#94A3B8' }}>
                         <span>{isBangla ? 'প্যাকেজের মূল রেগুলার মূল্য:' : 'Standard Package Rate:'}</span>
-                        <span style={{ fontFamily: "'Space Grotesk', monospace" }}>${pricing.basePrice} USD</span>
+                        <span style={{ fontFamily: "'Space Grotesk', monospace" }}>৳{pricing.basePrice} BDT</span>
                       </div>
 
                       {/* Coupon discount line */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: hasEffectiveCoupon ? '#10B981' : '#94A3B8', fontWeight: 700 }}>
                         <span>{hasEffectiveCoupon ? (isBangla ? `প্রযোজ্য কুপন ছাড় (${pricing.rateFormatted}):` : `Applied Coupon Discount (${pricing.rateFormatted}):`) : (isBangla ? 'কুপন প্রয়োগ ছাড়া (রেগুলার মূল্য):' : 'Without Coupon (Regular Rate):')}</span>
                         <span style={{ fontFamily: "'Space Grotesk', monospace" }}>
-                          {hasEffectiveCoupon ? `-$${pricing.discountAmount} USD` : '$0.00 USD'}
+                          {hasEffectiveCoupon ? `-৳${pricing.discountAmount} BDT` : '৳0 BDT'}
                         </span>
                       </div>
 
@@ -1081,11 +1210,11 @@ const DealsDiscountsModal = ({ onClose }) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {hasEffectiveCoupon && (
                             <span style={{ fontSize: '0.82rem', color: '#94A3B8', textDecoration: 'line-through', fontFamily: "'Space Grotesk', monospace" }}>
-                              ${pricing.basePrice}
+                              ৳{pricing.basePrice}
                             </span>
                           )}
                           <span style={{ color: '#10B981', fontSize: '1.25rem', fontFamily: "'Space Grotesk', monospace" }}>
-                            ${pricing.finalPrice} USD
+                            ৳{pricing.finalPrice} BDT
                           </span>
                         </div>
                       </div>
@@ -1142,8 +1271,8 @@ const DealsDiscountsModal = ({ onClose }) => {
                       </h4>
                       <p style={{ margin: 0, fontSize: '0.84rem', color: isDark ? '#E2E8F0' : '#1E293B' }}>
                         {isBangla 
-                          ? `প্রজেক্ট: ${checkoutSuccess.dealTitle} | চূড়ান্ত প্রদেয় মূল্য: $${checkoutSuccess.finalPrice} USD (${checkoutSuccess.couponCode})` 
-                          : `Project: ${checkoutSuccess.dealTitle} | Net Total: $${checkoutSuccess.finalPrice} USD (${checkoutSuccess.couponCode})`}
+                          ? `প্রজেক্ট: ${checkoutSuccess.dealTitle} | চূড়ান্ত প্রদেয় মূল্য: ৳${checkoutSuccess.finalPrice} BDT (${checkoutSuccess.couponCode})` 
+                          : `Project: ${checkoutSuccess.dealTitle} | Net Total: ৳${checkoutSuccess.finalPrice} BDT (${checkoutSuccess.couponCode})`}
                       </p>
                     </div>
 
@@ -1249,25 +1378,26 @@ const DealsDiscountsModal = ({ onClose }) => {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
+                        <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box' }}>
                           <input
                             type="email"
                             required
                             value={checkoutEmail}
                             onChange={(e) => {
                               setCheckoutEmail(e.target.value);
-                              if (isEmailVerified) {
-                                setIsEmailVerified(false);
-                              }
+                              setIsEmailVerified(false);
+                              setIsCouponApplied(false);
+                              setAppliedCouponCode('');
+                              setCouponSuccessMsg(null);
                               setEmailFeedback(null);
                             }}
                             placeholder={isBangla ? 'এখানে আপনার ইমেইল লিখুন' : 'Enter your email here'}
                             style={{
                               width: '100%',
-                              padding: '10px 12px',
-                              paddingRight: isEmailVerified ? '36px' : '12px',
-                              borderRadius: '10px',
+                              padding: '11px 14px',
+                              paddingRight: isEmailVerified ? '36px' : '14px',
+                              borderRadius: '12px',
                               background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#F8FAFC',
                               border: isEmailVerified
                                 ? '1.5px solid #10B981'
@@ -1292,22 +1422,24 @@ const DealsDiscountsModal = ({ onClose }) => {
                           disabled={emailChecking}
                           onClick={handleVerifyEmailAndAutoFill}
                           style={{
-                            padding: '10px 16px',
-                            borderRadius: '10px',
+                            width: '100%',
+                            padding: '11px 16px',
+                            borderRadius: '12px',
                             background: isEmailVerified
                               ? 'rgba(16, 185, 129, 0.18)'
                               : 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
                             border: isEmailVerified ? '1px solid #10B981' : 'none',
                             color: isEmailVerified ? '#10B981' : '#FFFFFF',
-                            fontSize: '0.8rem',
+                            fontSize: '0.84rem',
                             fontWeight: 800,
                             cursor: emailChecking ? 'wait' : 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            whiteSpace: 'nowrap',
+                            justifyContent: 'center',
+                            gap: '8px',
                             boxShadow: isEmailVerified ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
-                            opacity: emailChecking ? 0.75 : 1
+                            opacity: emailChecking ? 0.75 : 1,
+                            boxSizing: 'border-box'
                           }}
                         >
                           {emailChecking ? (
@@ -1419,7 +1551,9 @@ const DealsDiscountsModal = ({ onClose }) => {
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      {/* উল্লম্ব লেআউট (Vertical Stacking): উপরে ইনপুট, নিচে বাটন (পূর্ণ প্রস্থে) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
+                        {/* টাইপিং ইনপুট ঘর (পূর্ণ প্রস্থে উপরে) */}
                         <input
                           type="text"
                           value={checkoutCouponCode}
@@ -1431,22 +1565,24 @@ const DealsDiscountsModal = ({ onClose }) => {
                               setCouponSuccessMsg(null);
                             }
                           }}
-                          placeholder={isBangla ? 'কুপন কোড লিখুন (যদি থাকে)' : 'Enter coupon code (optional)'}
+                          placeholder={isBangla ? 'কুপন কোড লিখুন...' : 'ENTER COUPON CODE...'}
                           style={{
-                            flex: 1,
-                            padding: '10px 12px',
-                            borderRadius: '10px',
+                            width: '100%',
+                            padding: '12px 14px',
+                            borderRadius: '12px',
                             background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
-                            border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.12)'}`,
+                            border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.12)'}`,
                             color: isDark ? '#FFFFFF' : '#0F172A',
-                            fontSize: '0.84rem',
+                            fontSize: '0.86rem',
                             fontFamily: "'Space Grotesk', monospace",
                             textTransform: 'uppercase',
                             letterSpacing: '1px',
-                            outline: 'none'
+                            outline: 'none',
+                            boxSizing: 'border-box'
                           }}
                         />
 
+                        {/* ভেরিফাই বাটন (ইনপুটের ঠিক নিচে পূর্ণ প্রস্থে) */}
                         {isCouponApplied ? (
                           <button
                             type="button"
@@ -1457,18 +1593,25 @@ const DealsDiscountsModal = ({ onClose }) => {
                               setCouponErrorMsg(null);
                             }}
                             style={{
-                              padding: '10px 14px',
-                              borderRadius: '10px',
+                              width: '100%',
+                              padding: '12px 16px',
+                              borderRadius: '12px',
                               background: 'rgba(239, 68, 68, 0.15)',
-                              border: '1px solid rgba(239, 68, 68, 0.35)',
+                              border: '1.5px solid rgba(239, 68, 68, 0.35)',
                               color: '#EF4444',
-                              fontSize: '0.78rem',
+                              fontSize: '0.86rem',
                               fontWeight: 800,
                               cursor: 'pointer',
-                              whiteSpace: 'nowrap'
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              boxSizing: 'border-box',
+                              transition: 'all 0.2s ease'
                             }}
                           >
-                            {isBangla ? 'রিমুভ' : 'Remove'}
+                            <X size={15} />
+                            <span>{isBangla ? 'কুপন রিমুভ করুন' : 'Remove Coupon'}</span>
                           </button>
                         ) : (
                           <button
@@ -1476,28 +1619,31 @@ const DealsDiscountsModal = ({ onClose }) => {
                             disabled={couponChecking}
                             onClick={handleApplyCouponInsideModal}
                             style={{
-                              padding: '10px 16px',
-                              borderRadius: '10px',
+                              width: '100%',
+                              padding: '12px 16px',
+                              borderRadius: '12px',
                               background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
                               border: 'none',
                               color: '#FFFFFF',
-                              fontSize: '0.8rem',
+                              fontSize: '0.88rem',
                               fontWeight: 800,
                               cursor: couponChecking ? 'wait' : 'pointer',
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '6px',
-                              whiteSpace: 'nowrap',
+                              justifyContent: 'center',
+                              gap: '8px',
                               boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                              opacity: couponChecking ? 0.75 : 1
+                              opacity: couponChecking ? 0.75 : 1,
+                              boxSizing: 'border-box',
+                              transition: 'all 0.2s ease'
                             }}
                           >
                             {couponChecking ? (
                               <span>{isBangla ? 'যাচাই হচ্ছে...' : 'Verifying...'}</span>
                             ) : (
                               <>
-                                <KeyRound size={13} />
-                                <span>{isBangla ? 'Apply Coupon' : 'Apply Coupon'}</span>
+                                <KeyRound size={15} />
+                                <span>{isBangla ? 'কুপন ভেরিফাই করুন' : 'Apply Coupon'}</span>
                               </>
                             )}
                           </button>
@@ -1632,7 +1778,40 @@ const DealsDiscountsModal = ({ onClose }) => {
           )}
         </AnimatePresence>
 
-        {/* Floating Success Toast Notification */}
+        {/* Floating Share Feedback Toast Notification */}
+        <AnimatePresence>
+          {shareToastMsg && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.9 }}
+              style={{
+                position: 'fixed',
+                bottom: '80px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 100000,
+                background: 'linear-gradient(135deg, #064E3B 0%, #047857 100%)',
+                color: '#FFFFFF',
+                padding: '12px 22px',
+                borderRadius: '50px',
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(16, 185, 129, 0.4)',
+                border: '1.5px solid rgba(16, 185, 129, 0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '0.86rem',
+                fontWeight: 800,
+                maxWidth: '90vw',
+                textAlign: 'center',
+                pointerEvents: 'none'
+              }}
+            >
+              <CheckCircle2 size={18} color="#34D399" style={{ flexShrink: 0 }} />
+              <span>{shareToastMsg}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence>
           {showOrderToast && (
             <motion.div

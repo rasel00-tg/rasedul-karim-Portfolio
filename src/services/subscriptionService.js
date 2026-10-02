@@ -54,7 +54,7 @@ export const subscribeEmail = async (rawEmail) => {
       throw new Error('Firestore database instance unavailable. Please verify network connection.');
     }
 
-    const { doc, getDoc, setDoc, serverTimestamp, increment } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+    const { doc, getDoc, setDoc, serverTimestamp, increment } = await import('firebase/firestore');
     const subscriberDocRef = doc(db, 'subscribers', cleanEmail);
     const counterRef = doc(db, 'analytics', 'subscribers_count');
 
@@ -113,7 +113,7 @@ export const isEmailSubscribed = async (rawEmail) => {
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { doc, getDoc, collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore');
       // 1. Direct document lookup (ID is cleanEmail)
       const subscriberDocRef = doc(db, 'subscribers', cleanEmail);
       const docSnapshot = await getDoc(subscriberDocRef);
@@ -154,7 +154,7 @@ export const listenSubscriberCount = (onCountUpdate) => {
       const { db } = await initFirebase();
 
       if (db) {
-        const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+        const { doc, onSnapshot } = await import('firebase/firestore');
         const countDocRef = doc(db, 'analytics', 'subscribers_count');
 
         unsubscribe = onSnapshot(

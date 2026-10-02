@@ -90,7 +90,7 @@ export const fetchControlCredentials = async () => {
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, getDoc } = await import('firebase/firestore');
       const credDocRef = doc(db, 'control_auth', 'credentials');
       const snap = await getDoc(credDocRef);
       if (snap.exists()) {
@@ -157,7 +157,7 @@ export const registerActiveSession = async (userEmail) => {
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, setDoc } = await import('firebase/firestore');
       const credDocRef = doc(db, 'control_auth', 'credentials');
       await setDoc(credDocRef, {
         activeSessionId: sessionId,
@@ -187,7 +187,7 @@ export const listenActiveSession = (onSessionInvalidated) => {
     if (isUnmounted || !db) return;
 
     try {
-      const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, onSnapshot } = await import('firebase/firestore');
       const credDocRef = doc(db, 'control_auth', 'credentials');
 
       unsubscribe = onSnapshot(credDocRef, (snap) => {

@@ -299,7 +299,7 @@ export const saveFeatureItem = async (collectionName, itemData, idToken = null) 
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, setDoc } = await import('firebase/firestore');
       const docRef = doc(db, collectionName, id);
       await setDoc(docRef, docData, { merge: true });
       sdkSuccess = true;
@@ -360,7 +360,7 @@ export const deleteFeatureItem = async (collectionName, itemId, idToken = null) 
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, deleteDoc } = await import('firebase/firestore');
       await deleteDoc(doc(db, collectionName, itemId));
       sdkSuccess = true;
     }
@@ -424,7 +424,7 @@ export const checkCouponRedemption = async (email, couponCode, dealId = '') => {
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { doc, getDoc, collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, getDoc, collection, query, where, getDocs } = await import('firebase/firestore');
       
       // Check document by key
       const docRef = doc(db, COLLECTIONS.COUPON_REDEMPTIONS, perDealKey);

@@ -34,7 +34,7 @@ export const recordUniqueVisit = async () => {
     const { db } = await initFirebase();
 
     if (db) {
-      const { doc, getDoc, setDoc, increment, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { doc, getDoc, setDoc, increment, serverTimestamp } = await import('firebase/firestore');
       const visitorDocRef = doc(db, 'analytics', 'visitors');
       
       const snap = await getDoc(visitorDocRef);
@@ -67,7 +67,7 @@ export const listenVisitorCount = (onCountUpdate) => {
       const { db } = await initFirebase();
 
       if (db) {
-        const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+        const { doc, onSnapshot } = await import('firebase/firestore');
         const visitorDocRef = doc(db, 'analytics', 'visitors');
 
         unsubscribe = onSnapshot(visitorDocRef, (snap) => {

@@ -43,6 +43,7 @@ import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
 import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem } from '../services/featuresService';
 import { firebaseConfig } from '../firebase/config';
 import { useLanguage } from '../context/LanguageContext';
+import AddDealModal from './AddDealModal';
 import {
   getDeviceLockoutStatus,
   recordFailedAttempt,
@@ -119,6 +120,7 @@ const AdminModal = ({ onClose }) => {
   const [activeAdminTab, setActiveAdminTab] = useState('overview');
   const [featureActionLoading, setFeatureActionLoading] = useState(false);
   const [featureToast, setFeatureToast] = useState(null); // { type: 'success' | 'error', text: '' }
+  const [isAddDealModalOpen, setIsAddDealModalOpen] = useState(false);
 
   const showFeatureToast = (text, type = 'success') => {
     setFeatureToast({ text, type });
@@ -3264,6 +3266,29 @@ const AdminModal = ({ onClose }) => {
                     {isBangla ? 'ডিল ও ডিসকাউন্ট অফার ম্যানেজমেন্ট' : 'Deals & Discounts Offer Management'}
                   </span>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddDealModalOpen(true)}
+                  style={{
+                    marginLeft: 'auto',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(16, 185, 129, 0.25) 100%)',
+                    border: '1.5px solid #06B6D4',
+                    color: '#22D3EE',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 10px rgba(6, 182, 212, 0.3)'
+                  }}
+                >
+                  <Plus size={15} />
+                  <span>{isBangla ? '+ নতুন ডিল মডাল' : '+ Open Add Deal Modal'}</span>
+                </button>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
@@ -3494,6 +3519,14 @@ const AdminModal = ({ onClose }) => {
                   </FirestoreStreamBuilder>
                 </div>
               </div>
+
+              {/* Standalone Add Deal Modal Integration */}
+              {isAddDealModalOpen && (
+                <AddDealModal
+                  isOpen={isAddDealModalOpen}
+                  onClose={() => setIsAddDealModalOpen(false)}
+                />
+              )}
             </div>
           )}
           </motion.div>

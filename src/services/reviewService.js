@@ -173,7 +173,7 @@ export const submitReview = async ({ name, email, rating, feedback }) => {
   try {
     const { db } = await initFirebase();
     if (db) {
-      const { collection, addDoc, query, where, getDocs, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { collection, addDoc, query, where, getDocs, orderBy, limit } = await import('firebase/firestore');
       
       const colRef = collection(db, 'ratings_reviews');
       const q = query(colRef, where('email', '==', normalizedEmail), orderBy('timestamp', 'desc'), limit(1));
@@ -229,7 +229,7 @@ export const listenReviews = (callback) => {
     if (isUnmounted || !db) return;
 
     try {
-      const { collection, onSnapshot, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
+      const { collection, onSnapshot, query, orderBy, limit } = await import('firebase/firestore');
       const colRef = collection(db, 'ratings_reviews');
       const q = query(colRef, orderBy('timestamp', 'desc'), limit(100));
 
