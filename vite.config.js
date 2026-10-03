@@ -10,6 +10,11 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
         secure: false
+      },
+      '/.netlify/functions': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false
       }
     },
     watch: {

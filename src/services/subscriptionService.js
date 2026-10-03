@@ -34,34 +34,48 @@ export const formatSubscriberCount = (count) => {
 export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 /**
- * Send 6-digit OTP to user's email via Nodemailer Gmail SMTP backend (/api/send-otp)
+ * Send 6-digit OTP to user's email via Nodemailer Gmail SMTP (Netlify Serverless Function or Express /api/send-otp)
  */
 export const sendSubscriptionOtp = async (rawEmail, otp) => {
   const cleanEmail = (rawEmail || '').trim().toLowerCase();
   if (!cleanEmail) {
-    return { success: false, message: 'Please provide a valid email.' };
+    return { success: false, message: 'অনুগ্রহ করে একটি সঠিক ইমেইল ঠিকানা দিন।' };
   }
 
   try {
-    const targetUrl = API_BASE_URL ? `${API_BASE_URL}/api/send-otp` : '/api/send-otp';
-    const res = await fetch(targetUrl, {
+    // Netlify Serverless Function ও লোকাল Express উভয়ের সাথে সামঞ্জস্যপূর্ণ এন্ডপয়েন্ট
+    const targetUrl = API_BASE_URL 
+      ? `${API_BASE_URL}/api/send-otp` 
+      : '/.netlify/functions/send-otp';
+
+    let res = await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: cleanEmail, otp })
     });
-    const data = await res.json();
+
+    // যদি /.netlify/functions/send-otp কোনো কারণে 404 দেয়, সরাসরি /api/send-otp এ কল করবে
+    if (res.status === 404 && !API_BASE_URL) {
+      res = await fetch('/api/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, otp })
+      });
+    }
+
+    const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) {
       return {
         success: false,
-        message: data.message || data.error || 'ওটিপি পাঠাতে ব্যর্থ হয়েছে। অনুগ্রহ করে কিছুক্ষণ পর চেষ্টা করুন।'
+        message: data.error || data.message || 'ইমেইল পাঠাতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।'
       };
     }
     return data;
   } catch (error) {
-    console.error('Fetch Error:', error);
+    console.error('Network/API Error:', error);
     return {
       success: false,
-      message: 'সার্ভারের সাথে সংযোগ করা যায়নি। ব্যাকএন্ড চালু আছে কিনা যাচাই করুন।'
+      message: 'সার্ভারের সাথে সংযোগ ব্যর্থ হয়েছে। নেটওয়ার্ক চেক করুন।'
     };
   }
 };

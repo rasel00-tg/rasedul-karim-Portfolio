@@ -9,15 +9,24 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Gmail SMTP ট্রান্সপোর্টার (SSL port 465 সহ সঠিক কনফিগারেশন)
+// Google SMTP ট্রান্সপোর্টার কনফিগারেশন (পোর্ট ৪৬৫ - ডেডিকেটেড SSL, নো MX লুকআপ)
+const senderEmail = (process.env.GMAIL_USER || 'rasedul.karim00@gmail.com').trim();
+const rawPass = process.env.GMAIL_APP_PASS || 'twhziydraulxyqos';
+const appPassword = rawPass.replace(/[\s\r\n]+/g, '');
+
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
   host: 'smtp.gmail.com',
   port: 465,
-  secure: true, // SSL ব্যবহার
+  secure: true,
   auth: {
-    user: process.env.GMAIL_USER || 'rasedul.karim00@gmail.com',
-    pass: (process.env.GMAIL_APP_PASS || 'ntccgwbwttjlukle').replace(/\s+/g, ''), // স্পেস ছাড়া ১৬ অক্ষরের অ্যাপ পাসওয়ার্ড
+    user: senderEmail,
+    pass: appPassword,
+  },
+  pool: false, // একক কানেকশন নিশ্চিত করবে
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -38,59 +47,52 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, service: 'Rasedul Karim Portfolio SMTP Service', time: new Date().toISOString() });
 });
 
-// ১. সাবস্ক্রিপশন ওটিপি (OTP) ভেরিফিকেশন এন্ডপয়েন্ট
-app.post('/api/send-otp', async (req, res) => {
+// ১. সাবস্ক্রিপশন ওটিপি (OTP) ভেরিফিকেশন এন্ডপয়েন্ট (Express & Netlify Serverless Function compatibility)
+const handleSendOtpRoute = async (req, res) => {
   const { email, otp } = req.body;
 
   if (!email || !otp) {
     return res.status(400).json({ success: false, message: 'ইমেইল ও ওটিপি আবশ্যক।' });
   }
 
+  const gmailUser = process.env.GMAIL_USER || 'rasedul.karim00@gmail.com';
   const mailOptions = {
-    from: `"Rasedul Karim Portfolio" <${process.env.GMAIL_USER || 'rasedul.karim00@gmail.com'}>`,
+    from: `"Rasedul Karim" <${gmailUser}>`,
     to: email,
-    subject: '🔐 সাবস্ক্রিপশন ভেরিফিকেশন কোড',
+    subject: `🔐 ${otp} হলো আপনার সাবস্ক্রিপশন ভেরিফিকেশন কোড`,
     html: `
-      <div style="font-family: Arial, sans-serif; padding: 20px; text-align: center;">
-        <h2>আপনার সাবস্ক্রিপশন ওটিপি (OTP)</h2>
-        <h1 style="color: #0d9488; letter-spacing: 5px;">${otp}</h1>
-        <p>কোডটি ৫ মিনিটের জন্য কার্যকর থাকবে।</p>
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <h2 style="color: #0d9488; margin: 0;">ইমেইল যাচাইকরণ ওটিপি</h2>
+          <p style="color: #64748b; font-size: 14px; margin-top: 5px;">পোর্টফোলিওতে সাবস্ক্রিপশন নিশ্চিত করতে নিচের কোডটি ব্যবহার করুন:</p>
+        </div>
+        <div style="background: #f0fdfa; border: 2px dashed #0d9488; border-radius: 12px; padding: 16px; text-align: center; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0f766e; display: inline-block;">${otp}</span>
+        </div>
+        <p style="font-size: 12px; color: #94a3b8; text-align: center; margin: 0;">কোডটি পরবর্তী ৫ মিনিটের জন্য কার্যকর থাকবে। আপনি যদি এই অনুরোধ না করে থাকেন, তবে এটি উপেক্ষা করুন।</p>
       </div>
     `,
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP sent successfully to: ${email}`);
-    return res.json({ success: true, message: 'ওটিপি সফলভাবে পাঠানো হয়েছে।' });
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ [Nodemailer] OTP successfully delivered to ${email}: ${info.messageId}`);
+    return res.json({ 
+      success: true, 
+      message: 'ওটিপি সফলভাবে ইনবক্সে পাঠানো হয়েছে।',
+      messageId: info.messageId 
+    });
   } catch (err) {
-    console.error('❌ Nodemailer Error:', err.message);
-
-    // Google SMTP 535 BadCredentials / Authentication Error
-    const isAuthError = err.code === 'EAUTH' || err.responseCode === 535 || err.message?.includes('535');
-    if (isAuthError) {
-      console.warn(`⚠️ [Google SMTP 535 Notice] Google rejected the App Password for ${process.env.GMAIL_USER || 'rasedul.karim00@gmail.com'}.`);
-      console.warn(`🔑 [DEV TEST CODE] OTP for ${email} is: [ ${otp} ]`);
-
-      // Allow smooth local development if DEV_OTP_FALLBACK is enabled
-      const devBypass = process.env.DEV_OTP_FALLBACK === 'true' || !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
-      if (devBypass) {
-        return res.json({
-          success: true,
-          devNotice: true,
-          message: 'ওটিপি কোড তৈরি হয়েছে (লোকাল টেস্ট মোড)। টার্মিনাল কনসোলে ওটিপি কোডটি দেখুন।'
-        });
-      }
-
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Google SMTP Authentication Failed (535 BadCredentials). Please create a new 16-character App Password at https://myaccount.google.com/apppasswords and update .env' 
-      });
-    }
-
-    return res.status(500).json({ success: false, error: err.message });
+    console.error('❌ Nodemailer Dispatch Error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      error: err.message || 'ইমেইল পাঠাতে ব্যর্থ হয়েছে।' 
+    });
   }
-});
+};
+
+app.post('/api/send-otp', handleSendOtpRoute);
+app.post('/.netlify/functions/send-otp', handleSendOtpRoute);
 
 // ২. অর্ডার রসিদ / ডিসপ্যাচ এন্ডপয়েন্ট
 app.post('/api/send-order-receipt', async (req, res) => {

@@ -25,7 +25,7 @@ export const FirestoreStreamBuilder = ({
     let unsubscribe = () => {};
 
     // Feature collection instant local baseline and broadcast listener
-    const isFeatureCollection = collectionName.startsWith('features_');
+    const isFeatureCollection = collectionName.startsWith('features_') || collectionName === 'projects';
 
     const handleLocalUpdate = (e) => {
       if (e.detail?.collectionName === collectionName && isMounted) {

@@ -1,13 +1,12 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Globe, Smartphone, ExternalLink, Sparkles, ArrowLeft } from 'lucide-react';
-import ProjectsSection from './ProjectsSection';
+import ProjectsPage from './ProjectsPage';
+import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
 import { useTheme } from '../context/ThemeContext';
-import { useLanguage } from '../context/LanguageContext';
 
 const ProjectsModal = ({ onClose }) => {
   const { isDark } = useTheme();
-  const { isBangla } = useLanguage();
 
   // PopScope / Browser Back Interception to return to Homebar
   useEffect(() => {
@@ -93,7 +92,7 @@ const ProjectsModal = ({ onClose }) => {
                   flexShrink: 0,
                   transition: 'all 0.2s ease'
                 }}
-                title={isBangla ? 'হোমবারে ফিরে যান' : 'Back to Home'}
+                title="Back to Home"
                 aria-label="Back"
               >
                 <ArrowLeft size={18} />
@@ -102,12 +101,12 @@ const ProjectsModal = ({ onClose }) => {
                 width: '36px',
                 height: '36px',
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #FF6B35 0%, #F97316 100%)',
+                background: 'linear-gradient(135deg, #10B981 0%, #06B6D4 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#FFFFFF',
-                boxShadow: '0 4px 12px rgba(255, 107, 53, 0.35)'
+                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)'
               }}>
                 <Globe size={18} strokeWidth={2.4} />
               </div>
@@ -117,16 +116,16 @@ const ProjectsModal = ({ onClose }) => {
                   fontSize: '1.05rem',
                   fontWeight: 800,
                   color: 'var(--text-primary)',
-                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
+                  fontFamily: "'DM Serif Display', serif"
                 }}>
-                  {isBangla ? 'প্রজেক্ট ও পোর্টফোলিও শোকেস' : 'Projects & Portfolio Showcase'}
+                  Projects & Portfolio Showcase
                 </h3>
                 <p style={{
                   margin: '2px 0 0 0',
                   fontSize: '0.72rem',
                   color: 'var(--text-secondary)'
                 }}>
-                  {isBangla ? 'লাইভ ওয়েব ও মোবাইল অ্যাপ্লিকেশন' : 'Live Web & Mobile Applications'}
+                  Live Web & Mobile Applications
                 </p>
               </div>
             </div>
@@ -153,13 +152,17 @@ const ProjectsModal = ({ onClose }) => {
             </motion.button>
           </div>
 
-          {/* Scrollable Project Content Container */}
+          {/* Scrollable Project Content Container with Realtime Firestore StreamBuilder */}
           <div style={{
             flex: 1,
             overflowY: 'auto',
-            padding: '12px 16px 24px 16px'
+            padding: '0'
           }}>
-            <ProjectsSection />
+            <FirestoreStreamBuilder collectionName="projects">
+              {({ data, loading }) => (
+                <ProjectsPage items={data || []} loading={loading} />
+              )}
+            </FirestoreStreamBuilder>
           </div>
         </motion.div>
       </div>

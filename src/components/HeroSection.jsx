@@ -213,15 +213,15 @@ const HeroSection = ({
         setSubResult({
           success: false,
           message: dispatchRes?.message || (isBangla 
-            ? 'ইমেইলে ওটিপি পাঠানো সম্ভব হয়নি। ইন্টারনেট সংযোগ বা জিমেইল সেটিংস যাচাই করুন।' 
-            : 'Could not send verification OTP. Please verify your connection or Gmail settings.')
+            ? 'ইমেইলে ওটিপি পাঠানো সম্ভব হয়নি। অনুগ্রহ করে কিছুক্ষণ পর চেষ্টা করুন।' 
+            : 'Could not send verification OTP. Please try again later.')
         });
       }
     } catch (err) {
       setSubLoading(false);
       setSubResult({
         success: false,
-        message: isBangla ? 'ওটিপি পাঠাতে সমস্যা হয়েছে।' : 'Error sending OTP.'
+        message: isBangla ? 'সার্ভারের সাথে সংযোগ ব্যর্থ হয়েছে। নেটওয়ার্ক চেক করুন।' : 'Connection error. Please check your network.'
       });
     }
   };
@@ -236,9 +236,13 @@ const HeroSection = ({
     setSubOtpTimer(300);
     setSubOtpSending(true);
     try {
-      await sendSubscriptionOtp(cleanEmail, newOtp);
+      const resendRes = await sendSubscriptionOtp(cleanEmail, newOtp);
+      if (!resendRes?.success) {
+        setSubOtpError(resendRes?.message || (isBangla ? 'ওটিপি পুনরায় পাঠাতে সমস্যা হয়েছে।' : 'Failed to resend OTP.'));
+      }
     } catch (err) {
       console.warn('Resend sub OTP error:', err);
+      setSubOtpError(isBangla ? 'সার্ভারের সাথে সংযোগ ব্যর্থ হয়েছে।' : 'Server connection failed.');
     } finally {
       setSubOtpSending(false);
     }

@@ -3,6 +3,7 @@ import { FirestoreStreamBuilder } from './firebase/FirestoreStreamBuilder';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
 import Footer from './components/Footer';
+import MaintenanceScreen from './components/MaintenanceScreen';
 
 // Lazy loading modals for maximum performance
 const DreamModal = lazy(() => import('./components/DreamModal'));
@@ -36,6 +37,9 @@ function App() {
     <FirestoreStreamBuilder collectionName="portfolio">
       {({ data, loading, error }) => (
         <>
+          {/* Full-Screen Maintenance Lock Screen Overlay */}
+          <MaintenanceScreen onOpenAdmin={() => setShowAdmin(true)} />
+
           {/* Navigation Header */}
           <Navbar 
             isDrawerOpen={isDrawerOpen}

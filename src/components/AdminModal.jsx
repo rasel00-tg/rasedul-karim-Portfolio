@@ -127,6 +127,100 @@ const AdminModal = ({ onClose }) => {
     setTimeout(() => setFeatureToast(null), 4000);
   };
 
+  // --- DEDICATED TAB: PROJECTS (APPS & WEBSITE) STATE ---
+  const [projectEditingId, setProjectEditingId] = useState(null);
+  const [projectCategory, setProjectCategory] = useState('apps'); // 'apps' | 'website'
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectSubCategory, setProjectSubCategory] = useState('');
+  const [projectMediaUrl, setProjectMediaUrl] = useState('/icons/hisabnama-icon.png');
+  const [projectActionUrl, setProjectActionUrl] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
+  const [uploadingProjectMedia, setUploadingProjectMedia] = useState(false);
+
+  const handleProjectMediaChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const localUrl = createLocalImagePreview(file);
+    setProjectMediaUrl(localUrl);
+    setUploadingProjectMedia(true);
+    try {
+      const url = await uploadFileToStorage(file, 'projects', idToken);
+      setProjectMediaUrl(url);
+      showFeatureToast(isBangla ? '✓ মিডিয়া আপলোড সম্পন্ন হয়েছে' : '✓ Media uploaded to storage');
+    } catch (err) {
+      console.warn('Project media upload notice:', err.message);
+    } finally {
+      setUploadingProjectMedia(false);
+    }
+  };
+
+  const resetProjectsForm = () => {
+    setProjectEditingId(null);
+    setProjectCategory('apps');
+    setProjectTitle('');
+    setProjectSubCategory('');
+    setProjectMediaUrl('/icons/hisabnama-icon.png');
+    setProjectActionUrl('');
+    setProjectDescription('');
+  };
+
+  const handleSaveProjectsItem = async (e) => {
+    e.preventDefault();
+    if (!projectTitle.trim()) {
+      showFeatureToast(isBangla ? 'অনুগ্রহ করে প্রজেক্ট টাইটেল দিন' : 'Please provide a project title', 'error');
+      return;
+    }
+    setFeatureActionLoading(true);
+    try {
+      const payload = {
+        title: projectTitle.trim(),
+        category: projectCategory,
+        subCategory: projectSubCategory.trim(),
+        mediaUrl: projectMediaUrl.trim() || (projectCategory === 'apps' ? '/icons/hisabnama-icon.png' : '/banners/madrasah-banner.jpg'),
+        actionUrl: projectActionUrl.trim(),
+        description: projectDescription.trim()
+      };
+      if (projectEditingId) {
+        await updateFeatureItem('projects', projectEditingId, payload, idToken);
+        showFeatureToast(isBangla ? '✓ প্রজেক্ট সফলভাবে আপডেট হয়েছে!' : '✓ Project updated successfully!');
+      } else {
+        await saveFeatureItem('projects', payload, idToken);
+        showFeatureToast(isBangla ? '✓ নতুন প্রজেক্ট সফলভাবে যুক্ত হয়েছে!' : '✓ New project added successfully!');
+      }
+      resetProjectsForm();
+    } catch (err) {
+      showFeatureToast(err.message || 'Operation failed', 'error');
+    } finally {
+      setFeatureActionLoading(false);
+    }
+  };
+
+  const handleEditProjectItem = (item) => {
+    setProjectEditingId(item.id);
+    const cat = (item.category || 'apps').toLowerCase();
+    setProjectCategory(cat === 'website' || cat === 'web' ? 'website' : 'apps');
+    setProjectTitle(item.title || item.name || '');
+    setProjectSubCategory(item.subCategory || item.platform || item.domain || item.tagline || '');
+    setProjectMediaUrl(item.mediaUrl || item.icon || item.banner || item.thumbnail?.imageUrl || '');
+    setProjectActionUrl(item.actionUrl || item.playStoreUrl || item.liveUrl || item.link || '');
+    setProjectDescription(item.description || item.shortDescription || '');
+  };
+
+  const handleDeleteProjectItem = async (item) => {
+    const title = item.title || item.name || 'this item';
+    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত "${title}" মুছে ফেলতে চান?` : `Delete "${title}"?`)) return;
+    setFeatureActionLoading(true);
+    try {
+      await deleteFeatureItem('projects', item.id, idToken);
+      showFeatureToast(isBangla ? '✓ প্রজেক্ট মুছে ফেলা হয়েছে!' : '✓ Project deleted successfully!');
+      if (projectEditingId === item.id) resetProjectsForm();
+    } catch (err) {
+      showFeatureToast(err.message || 'Failed to delete', 'error');
+    } finally {
+      setFeatureActionLoading(false);
+    }
+  };
+
   // --- TAB 1: DESIGN PROJECT STATE ---
   const [designEditingId, setDesignEditingId] = useState(null);
   const [designTitle, setDesignTitle] = useState('');
@@ -2055,77 +2149,84 @@ const AdminModal = ({ onClose }) => {
                   </FirestoreStreamBuilder>
 
                   {/* CARD 5: SEE PROJECTS (WEB & APPS SHOWCASE) */}
-                  <motion.div
-                    whileHover={{ y: -2, scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSelectAdminTab('projects')}
-                    className="admin-compact-card"
-                    style={{
-                      background: 'radial-gradient(circle at top left, rgba(0, 240, 255, 0.16), rgba(15, 23, 42, 0.92))',
-                      border: '1.2px solid rgba(0, 240, 255, 0.35)',
-                      boxShadow: '0 4px 16px rgba(0, 240, 255, 0.12)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
-                      <div style={{
-                        width: '34px',
-                        height: '34px',
-                        borderRadius: '10px',
-                        background: 'rgba(0, 240, 255, 0.2)',
-                        border: '1px solid rgba(0, 240, 255, 0.4)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#00F0FF',
-                        flexShrink: 0
-                      }}>
-                        <FolderGit2 size={17} />
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <h4 style={{
-                          margin: 0,
-                          fontSize: '12.5px',
-                          fontWeight: 700,
-                          color: '#00F0FF',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          lineHeight: 1.2
-                        }}>
-                          {isBangla ? 'ওয়েব ও অ্যাপস' : 'Web & Apps'}
-                        </h4>
-                        <span style={{
-                          fontSize: '10.5px',
-                          color: '#94A3B8',
-                          display: 'block',
-                          marginTop: '2px',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {isBangla ? 'লাইভ শোকেস' : 'Showcase'}
-                        </span>
-                      </div>
-                    </div>
+                  <FirestoreStreamBuilder collectionName="projects">
+                    {({ data }) => {
+                      const count = (data || []).length;
+                      return (
+                        <motion.div
+                          whileHover={{ y: -2, scale: 1.01 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleSelectAdminTab('projects')}
+                          className="admin-compact-card"
+                          style={{
+                            background: 'radial-gradient(circle at top left, rgba(0, 240, 255, 0.16), rgba(15, 23, 42, 0.92))',
+                            border: '1.2px solid rgba(0, 240, 255, 0.35)',
+                            boxShadow: '0 4px 16px rgba(0, 240, 255, 0.12)'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                            <div style={{
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '10px',
+                              background: 'rgba(0, 240, 255, 0.2)',
+                              border: '1px solid rgba(0, 240, 255, 0.4)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#00F0FF',
+                              flexShrink: 0
+                            }}>
+                              <FolderGit2 size={17} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <h4 style={{
+                                margin: 0,
+                                fontSize: '12.5px',
+                                fontWeight: 700,
+                                color: '#00F0FF',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                lineHeight: 1.2
+                              }}>
+                                {isBangla ? 'ওয়েব ও অ্যাপস' : 'Web & Apps'}
+                              </h4>
+                              <span style={{
+                                fontSize: '10.5px',
+                                color: '#94A3B8',
+                                display: 'block',
+                                marginTop: '2px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {isBangla ? 'লাইভ শোকেস' : 'Showcase'}
+                              </span>
+                            </div>
+                          </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-                      <span style={{
-                        fontSize: '17px',
-                        fontWeight: 900,
-                        color: '#FFFFFF',
-                        fontFamily: "'Space Grotesk', monospace",
-                        lineHeight: 1
-                      }}>
-                        {(streamProjects || []).length}
-                      </span>
-                      <ChevronRight size={14} color="#00F0FF" opacity={0.8} />
-                    </div>
-                  </motion.div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: '17px',
+                              fontWeight: 900,
+                              color: '#FFFFFF',
+                              fontFamily: "'Space Grotesk', monospace",
+                              lineHeight: 1
+                            }}>
+                              {count}
+                            </span>
+                            <ChevronRight size={14} color="#00F0FF" opacity={0.8} />
+                          </div>
+                        </motion.div>
+                      );
+                    }}
+                  </FirestoreStreamBuilder>
                 </div>
               </div>
             )}
 
-            {/* TAB 0: ORIGINAL WEB & APPS PROJECT MANAGER (Untouched) */}
+            {/* TAB: DEDICATED REALTIME PROJECTS (APPS & WEBSITE) MANAGER */}
             {activeAdminTab === 'projects' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* Dedicated Top-Left Navigation Back Bar */}
@@ -2166,243 +2267,355 @@ const AdminModal = ({ onClose }) => {
                       {isBangla ? '← ড্যাশবোর্ড ওভারভিউতে ফিরুন' : '← Back to Overview Dashboard'}
                     </span>
                     <span style={{ display: 'block', fontSize: '0.7rem', color: '#94A3B8' }}>
-                      {isBangla ? 'ওয়েব ও অ্যাপস শোকেস ম্যানেজমেন্ট' : 'Web & Apps Showcase Management'}
+                      {isBangla ? 'প্রজেক্ট ও শোকেস লাইভ ম্যানেজমেন্ট (Firestore)' : 'Projects & Showcase Live Management (Firestore)'}
                     </span>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
                 
-                {/* Form Column */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#00f0ff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isEditing ? <Edit3 size={17} /> : <Plus size={17} />}
-                    <span>{isEditing ? 'Edit Project' : 'Add New Project'}</span>
-                  </h3>
+                  {/* Left Column: Add / Edit Form */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#00F0FF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FolderGit2 size={18} />
+                      <span>{projectEditingId ? (isBangla ? 'প্রজেক্ট সম্পাদনা করুন' : 'Edit Project') : (isBangla ? 'নতুন প্রজেক্ট যুক্ত করুন' : 'Add New Project')}</span>
+                    </h3>
 
-                  <form onSubmit={handleSaveProject} style={{ display: 'flex', flexDirection: 'column', gap: '13px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Project Title</label>
-                      <input
-                        type="text"
-                        required
-                        value={formTitle}
-                        onChange={(e) => setFormTitle(e.target.value)}
-                        placeholder="e.g., FifaLive Score App"
-                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Category</label>
+                    <form onSubmit={handleSaveProjectsItem} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {/* Category Selector */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'ক্যাটাগরি *' : 'Category *'}</label>
                         <select
-                          value={formCategory}
-                          onChange={(e) => setFormCategory(e.target.value)}
-                          style={{ width: '100%', padding: '10px', background: '#0b1329', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
+                          value={projectCategory}
+                          onChange={(e) => {
+                            const newCat = e.target.value;
+                            setProjectCategory(newCat);
+                            if (newCat === 'apps' && projectMediaUrl.includes('banner')) {
+                              setProjectMediaUrl('/icons/hisabnama-icon.png');
+                            } else if (newCat === 'website' && projectMediaUrl.includes('icon')) {
+                              setProjectMediaUrl('/banners/madrasah-banner.jpg');
+                            }
+                          }}
+                          style={{ width: '100%', padding: '10px', background: '#0b1329', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontSize: '0.86rem' }}
                         >
-                          <option value="apps">Apps</option>
-                          <option value="web">Websites</option>
+                          <option value="apps">Apps (Mobile Application)</option>
+                          <option value="website">Website (Web Application)</option>
                         </select>
                       </div>
 
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Display Order</label>
+                      {/* Project Title */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'প্রজেক্টের নাম (Project Title) *' : 'Project Title *'}</label>
                         <input
-                          type="number"
-                          value={formDisplayOrder}
-                          onChange={(e) => setFormDisplayOrder(e.target.value)}
+                          type="text"
+                          required
+                          value={projectTitle}
+                          onChange={(e) => setProjectTitle(e.target.value)}
+                          placeholder={projectCategory === 'apps' ? 'e.g., HisabNama / Naf Sports' : 'e.g., Sufia Nuria Madrasah'}
                           style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
                         />
                       </div>
-                    </div>
 
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Domain / Tag</label>
-                      <input
-                        type="text"
-                        value={formDomain}
-                        onChange={(e) => setFormDomain(e.target.value)}
-                        placeholder="e.g., fifalive.click"
-                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>Live URL</label>
-                      <input
-                        type="url"
-                        value={formLiveUrl}
-                        onChange={(e) => setFormLiveUrl(e.target.value)}
-                        placeholder="https://fifalive.click"
-                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-
-                    {/* Thumbnail Image Upload */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>
-                        Thumbnail Image (Cloudinary Auto Optimization)
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <label style={{
-                          padding: '8px 16px',
-                          background: 'rgba(0, 240, 255, 0.1)',
-                          border: '1px solid rgba(0, 240, 255, 0.3)',
-                          borderRadius: '8px',
-                          color: '#00f0ff',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          fontSize: '0.85rem'
-                        }}>
-                          <Upload size={15} />
-                          <span>{uploadingThumbnail ? 'Uploading...' : 'Upload Thumbnail'}</span>
-                          <input type="file" accept="image/*" onChange={handleThumbnailChange} style={{ display: 'none' }} />
-                        </label>
-
-                        {thumbnailMeta.imageUrl && (
-                          <span style={{ fontSize: '0.75rem', color: '#4ade80' }}>
-                            ✓ Ready
-                          </span>
-                        )}
+                      {/* Sub-category / Platform */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'সাব-ক্যাটেগরি / প্ল্যাটফর্ম (Sub-category / Platform)' : 'Sub-category / Platform'}</label>
+                        <input
+                          type="text"
+                          value={projectSubCategory}
+                          onChange={(e) => setProjectSubCategory(e.target.value)}
+                          placeholder={projectCategory === 'apps' ? 'e.g., Finance & Productivity / Android' : 'e.g., React, Node.js & Vite'}
+                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                        />
                       </div>
 
-                      {thumbnailMeta.imageUrl && (
-                        <div style={{ marginTop: '8px', width: '56px', height: '56px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #00f0ff' }}>
-                          <img src={thumbnailMeta.imageUrl} alt="Thumbnail preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      {/* Media URL (Apps: Icon URL, Website: Banner URL) */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                            {projectCategory === 'apps'
+                              ? (isBangla ? 'অ্যাপ আইকন URL (Icon URL) *' : 'App Icon URL (Media URL) *')
+                              : (isBangla ? 'ওয়েবসাইট ব্যানার URL (Banner URL) *' : 'Website Banner URL (Media URL) *')}
+                          </label>
                         </div>
-                      )}
-                    </div>
+                        <input
+                          type="text"
+                          value={projectMediaUrl}
+                          onChange={(e) => setProjectMediaUrl(e.target.value)}
+                          placeholder={projectCategory === 'apps' ? '/icons/hisabnama-icon.png or https://...' : '/banners/madrasah-banner.jpg or https://...'}
+                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                        />
 
-                    {/* Screenshots Upload */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>
-                        Screenshots (Multiple Image Upload)
-                      </label>
-                      <label style={{
-                        padding: '8px 16px',
-                        background: 'rgba(255, 0, 127, 0.1)',
-                        border: '1px solid rgba(255, 0, 127, 0.3)',
-                        borderRadius: '8px',
-                        color: '#ff007f',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontSize: '0.85rem'
-                      }}>
-                        <ImageIcon size={15} />
-                        <span>{uploadingScreenshots ? 'Uploading Screenshots...' : 'Add Screenshots (Multiple)'}</span>
-                        <input type="file" multiple accept="image/*" onChange={handleScreenshotsChange} style={{ display: 'none' }} />
-                      </label>
-
-                      {screenshots.length > 0 && (
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                          {screenshots.map((ss, idx) => (
-                            <div key={idx} style={{ position: 'relative', width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
-                              <img src={ss.imageUrl} alt={`Screenshot ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveScreenshot(idx)}
-                                style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(0,0,0,0.75)', color: '#ff4444', border: 'none', borderRadius: '50%', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '10px' }}
-                              >
-                                ×
-                              </button>
-                            </div>
+                        {/* Quick Presets from public/ folder */}
+                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>Quick public/ assets:</span>
+                          {(projectCategory === 'apps'
+                            ? [
+                                { label: 'HisabNama', path: '/icons/hisabnama-icon.png' },
+                                { label: 'NafSports', path: '/icons/nafsports-icon.png' },
+                                { label: 'GoEasy', path: '/icons/goeasy-icon.png' },
+                                { label: 'App1', path: '/app1.png' },
+                                { label: 'App2', path: '/app2.png' }
+                              ]
+                            : [
+                                { label: 'Madrasah', path: '/banners/madrasah-banner.jpg' },
+                                { label: 'ESheba', path: '/banners/esheba-banner.jpg' },
+                                { label: 'Community', path: '/banners/community-banner.jpg' },
+                                { label: 'Add1', path: '/add1.png' },
+                                { label: 'Add2', path: '/add2.png' }
+                              ]
+                          ).map((preset) => (
+                            <button
+                              key={preset.path}
+                              type="button"
+                              onClick={() => setProjectMediaUrl(preset.path)}
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background: projectMediaUrl === preset.path ? 'rgba(0, 240, 255, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                                border: `1px solid ${projectMediaUrl === preset.path ? '#00F0FF' : 'rgba(255, 255, 255, 0.1)'}`,
+                                color: projectMediaUrl === preset.path ? '#00F0FF' : '#CBD5E1',
+                                fontSize: '0.68rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {preset.label}
+                            </button>
                           ))}
                         </div>
-                      )}
-                    </div>
 
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                      <button
-                        type="submit"
-                        disabled={actionLoading || uploadingThumbnail || uploadingScreenshots}
-                        style={{
-                          flex: 1,
-                          padding: '10px',
-                          background: '#00f0ff',
-                          color: '#000',
-                          fontWeight: 700,
-                          borderRadius: '8px',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {actionLoading ? 'Saving...' : (isEditing ? 'Update Project' : 'Publish Project')}
-                      </button>
+                        {/* Device File Picker Upload Button */}
+                        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <label style={{
+                            padding: '6px 12px',
+                            background: 'rgba(0, 240, 255, 0.12)',
+                            border: '1px solid rgba(0, 240, 255, 0.3)',
+                            borderRadius: '8px',
+                            color: '#00F0FF',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.78rem'
+                          }}>
+                            <Upload size={14} />
+                            <span>{uploadingProjectMedia ? (isBangla ? 'আপলোড হচ্ছে...' : 'Uploading...') : (isBangla ? 'গ্যালারি থেকে ছবি আপলোড' : 'Upload from Device')}</span>
+                            <input type="file" accept="image/*" onChange={handleProjectMediaChange} style={{ display: 'none' }} />
+                          </label>
 
-                      {isEditing && (
-                        <button
-                          type="button"
-                          onClick={resetForm}
-                          style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                </div>
-
-                {/* Live List Column */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Layers size={17} color="#00f0ff" />
-                    <span>Existing Projects ({streamProjects?.length || 0})</span>
-                  </h3>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '420px', overflowY: 'auto' }}>
-                    {(streamProjects || []).map((p) => (
-                      <div
-                        key={p.id}
-                        style={{
-                          padding: '12px 14px',
-                          background: 'rgba(15, 23, 42, 0.8)',
-                          border: '1px solid rgba(255,255,255,0.08)',
-                          borderRadius: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '12px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                          <div style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', background: '#0b1329', flexShrink: 0 }}>
-                            <img src={p.thumbnail?.imageUrl || '/app1.png'} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <h4 style={{ margin: 0, fontSize: '0.88rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title || 'Untitled'}</h4>
-                            <span style={{ fontSize: '0.74rem', color: '#00f0ff' }}>{p.domain || p.category}</span>
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button
-                            onClick={() => handleEditClick(p)}
-                            style={{ padding: '6px', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0,240,255,0.3)', color: '#00f0ff', borderRadius: '6px', cursor: 'pointer' }}
-                            title="Edit"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(p)}
-                            style={{ padding: '6px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '6px', cursor: 'pointer' }}
-                            title="Cascade Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          {/* Live Media Preview Thumbnail */}
+                          {projectMediaUrl && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{
+                                width: projectCategory === 'apps' ? '42px' : '64px',
+                                height: '42px',
+                                borderRadius: projectCategory === 'apps' ? '50%' : '8px',
+                                overflow: 'hidden',
+                                border: '1.5px solid #00F0FF',
+                                background: '#0B1329',
+                                flexShrink: 0
+                              }}>
+                                <img
+                                  src={projectMediaUrl}
+                                  alt="Preview"
+                                  onError={(e) => { e.target.src = projectCategory === 'apps' ? '/app1.png' : '/add1.png'; }}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </div>
+                              <span style={{ fontSize: '0.72rem', color: '#10B981' }}>✓ {isBangla ? 'মিডিয়া প্রস্তুত' : 'Media Ready'}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
 
+                      {/* Action URL */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                          {projectCategory === 'apps'
+                            ? (isBangla ? 'গুগল প্লে স্টোর লিংক (Action URL)' : 'Google Play Store Link (Action URL)')
+                            : (isBangla ? 'ওয়েবসাইট লাইভ লিংক (Action URL)' : 'Live Website Link (Action URL)')}
+                        </label>
+                        <input
+                          type="url"
+                          value={projectActionUrl}
+                          onChange={(e) => setProjectActionUrl(e.target.value)}
+                          placeholder={projectCategory === 'apps' ? 'https://play.google.com/store/apps/details?id=...' : 'https://example.com'}
+                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                        />
+                      </div>
+
+                      {/* Short Description */}
+                      <div>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'সংক্ষিপ্ত বিবরণ (Short Description)' : 'Short Description'}</label>
+                        <textarea
+                          rows={3}
+                          value={projectDescription}
+                          onChange={(e) => setProjectDescription(e.target.value)}
+                          placeholder="Brief description of the app or website project..."
+                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box', resize: 'vertical' }}
+                        />
+                      </div>
+
+                      {/* Submit & Cancel Buttons */}
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                        <button
+                          type="submit"
+                          disabled={featureActionLoading || uploadingProjectMedia}
+                          style={{
+                            flex: 1,
+                            padding: '11px',
+                            background: 'linear-gradient(135deg, #00838F 0%, #00F0FF 100%)',
+                            color: '#000',
+                            fontWeight: 800,
+                            borderRadius: '8px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '0.88rem'
+                          }}
+                        >
+                          {featureActionLoading ? (isBangla ? 'সংরক্ষণ হচ্ছে...' : 'Saving to Firestore...') : (projectEditingId ? (isBangla ? 'প্রজেক্ট আপডেট করুন' : 'Update Project') : (isBangla ? 'ফায়ারস্টোরে পাবলিশ করুন' : 'Publish to Firestore'))}
+                        </button>
+                        {projectEditingId && (
+                          <button
+                            type="button"
+                            onClick={resetProjectsForm}
+                            style={{ padding: '11px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px', cursor: 'pointer', fontSize: '0.88rem' }}
+                          >
+                            {isBangla ? 'বাতিল' : 'Cancel'}
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Right Column: Live Existing Projects List (Streamed Realtime from Firestore) */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <FirestoreStreamBuilder collectionName="projects">
+                      {({ data }) => {
+                        const list = data || [];
+                        return (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '0 0 16px 0' }}>
+                              <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Layers size={17} color="#00F0FF" />
+                                <span>{isBangla ? `বিদ্যমান প্রজেক্টসমূহ (${list.length})` : `Existing Projects (${list.length})`}</span>
+                              </h3>
+                              <span style={{ fontSize: '0.72rem', color: '#10B981', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+                                <span>Firestore Live</span>
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '480px', overflowY: 'auto' }}>
+                              {list.length === 0 ? (
+                                <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: '0.84rem', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '12px' }}>
+                                  {isBangla ? 'কোনো প্রজেক্ট পাওয়া যায়নি। বামপাশের ফর্ম পূরণ করে যুক্ত করুন।' : 'No projects found in Firestore. Add one using the form on the left.'}
+                                </div>
+                              ) : (
+                                list.map((item) => {
+                                  const isApp = (item.category || '').toLowerCase() === 'apps' || (item.category || '').toLowerCase() === 'app';
+                                  const media = item.mediaUrl || item.icon || item.banner || item.thumbnail?.imageUrl || (isApp ? '/icons/hisabnama-icon.png' : '/banners/madrasah-banner.jpg');
+                                  const actionUrl = item.actionUrl || item.playStoreUrl || item.liveUrl || item.link;
+
+                                  return (
+                                    <div
+                                      key={item.id}
+                                      style={{
+                                        padding: '12px 14px',
+                                        background: 'rgba(15, 23, 42, 0.8)',
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        borderRadius: '12px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '12px'
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                                        {/* Media Preview (circular for app, rounded for web) */}
+                                        <div style={{
+                                          width: isApp ? '40px' : '48px',
+                                          height: '40px',
+                                          borderRadius: isApp ? '50%' : '8px',
+                                          overflow: 'hidden',
+                                          background: '#0B1329',
+                                          border: isApp ? '1.5px solid #10B981' : '1.5px solid #00F0FF',
+                                          flexShrink: 0
+                                        }}>
+                                          <img
+                                            src={media}
+                                            alt={item.title}
+                                            onError={(e) => { e.target.src = isApp ? '/app1.png' : '/add1.png'; }}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                          />
+                                        </div>
+
+                                        <div style={{ minWidth: 0, flex: 1 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <h4 style={{ margin: 0, fontSize: '0.88rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                              {item.title || item.name || 'Untitled'}
+                                            </h4>
+                                            <span style={{
+                                              fontSize: '0.64rem',
+                                              fontWeight: 800,
+                                              padding: '1px 6px',
+                                              borderRadius: '4px',
+                                              background: isApp ? 'rgba(16, 185, 129, 0.2)' : 'rgba(0, 240, 255, 0.2)',
+                                              color: isApp ? '#10B981' : '#00F0FF'
+                                            }}>
+                                              {isApp ? 'Apps' : 'Website'}
+                                            </span>
+                                          </div>
+
+                                          <div style={{ display: 'flex', gap: '6px', marginTop: '3px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {item.subCategory && (
+                                              <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>{item.subCategory}</span>
+                                            )}
+                                            {actionUrl && (
+                                              <a
+                                                href={actionUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                style={{ fontSize: '0.68rem', color: '#00F0FF', display: 'inline-flex', alignItems: 'center', gap: '3px', textDecoration: 'none' }}
+                                              >
+                                                <span>Link</span>
+                                                <ExternalLink size={10} />
+                                              </a>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Action Buttons: Edit and Delete */}
+                                      <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                                        <button
+                                          onClick={() => handleEditProjectItem(item)}
+                                          style={{ padding: '6px', background: 'rgba(0, 240, 255, 0.1)', border: '1px solid rgba(0,240,255,0.3)', color: '#00F0FF', borderRadius: '6px', cursor: 'pointer' }}
+                                          title={isBangla ? 'সম্পাদনা করুন' : 'Edit'}
+                                        >
+                                          <Edit3 size={14} />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteProjectItem(item)}
+                                          style={{ padding: '6px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444', borderRadius: '6px', cursor: 'pointer' }}
+                                          title={isBangla ? 'মুছে ফেলুন' : 'Delete'}
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </>
+                        );
+                      }}
+                    </FirestoreStreamBuilder>
+                  </div>
+
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* TAB 1: DESIGN PROJECT MANAGER */}
           {activeAdminTab === 'design' && (
