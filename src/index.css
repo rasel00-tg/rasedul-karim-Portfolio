@@ -49,7 +49,7 @@
 
 /* Responsive Profile Name Typography & Verified Badge */
 .hero-profile-name {
-  font-size: 11.5px !important;
+  font-size: 16.5px !important;
   font-weight: 800 !important;
   letter-spacing: 0.3px !important;
   line-height: 1.2 !important;
@@ -174,7 +174,7 @@
   width: 100%;
   max-width: 580px;
   margin: 0 auto;
-  padding: 6px 12px 14px 12px;
+  padding: 24px 12px 14px 12px;
   position: relative;
   z-index: 4;
   box-sizing: border-box;
@@ -183,7 +183,7 @@
 @media (min-width: 1024px) {
   .hero-responsive-container {
     max-width: 1260px !important;
-    padding: 76px 36px 20px 36px !important;
+    padding: 88px 36px 20px 36px !important;
   }
 }
 
@@ -204,7 +204,7 @@
     align-items: center !important;
     justify-content: center !important;
     width: 100% !important;
-    min-height: calc(100vh - 100px) !important;
+    min-height: calc(100vh - 110px) !important;
   }
 }
 
@@ -214,6 +214,7 @@
   align-items: center;
   text-align: center;
   width: 100%;
+  padding-top: 6px;
 }
 
 @media (min-width: 1024px) {
@@ -286,7 +287,7 @@
   justify-content: center;
   align-items: center;
   margin-top: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
 }
 
 @media (min-width: 1024px) {
@@ -294,7 +295,7 @@
     max-width: 420px !important;
     gap: 14px !important;
     margin-top: 14px !important;
-    margin-bottom: 10px !important;
+    margin-bottom: 0 !important;
   }
 }
 
@@ -323,54 +324,18 @@
   }
 }
 
-.hero-counters-container {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 6px;
-  flex-wrap: wrap;
-}
-
-@media (min-width: 1024px) {
-  .hero-counters-container {
-    gap: 14px !important;
-    margin-top: 10px !important;
-  }
-}
-
-.hero-counter-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-@media (min-width: 1024px) {
-  .hero-counter-pill {
-    padding: 6px 14px !important;
-    border-radius: 18px !important;
-    font-size: 14.5px !important;
-    gap: 8px !important;
-  }
-}
-
 .hero-social-links-row {
   display: flex;
   justify-content: center;
   gap: 12px;
   align-items: center;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 @media (min-width: 1024px) {
   .hero-social-links-row {
     gap: 16px !important;
-    margin-top: 12px !important;
+    margin-top: 14px !important;
   }
 }
 
@@ -578,6 +543,34 @@
   transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
 }
 
+/* Homepage Scrolling Lock Utilities */
+.h-screen {
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-height: 100vh !important;
+}
+
+.overflow-hidden {
+  overflow: hidden !important;
+}
+
+/* Global Scrollbar Elimination */
+html, body {
+  overflow: hidden;
+  height: 100%;
+  max-height: 100vh;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 body {
   font-family: 'Outfit', sans-serif;
   background-color: #E8F7FD !important;
@@ -589,8 +582,9 @@ body {
   background-repeat: no-repeat, no-repeat !important;
   background-attachment: fixed !important;
   color: var(--text-primary);
-  overflow-x: hidden;
-  min-height: 100vh;
+  overflow: hidden;
+  height: 100vh;
+  max-height: 100vh;
 }
 
 [data-theme="light"] body,
@@ -791,4 +785,39 @@ h1, h2, h3, h4, h5, h6 {
     padding: 8px 10px;
   }
 }
+
+/* Horizontal Admin Tab Bar Container (Smooth Scroll & Zero Clipping) */
+.admin-tab-bar-container {
+  min-height: 48px !important;
+  padding: 10px 16px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.admin-tab-bar-container::-webkit-scrollbar {
+  height: 5px;
+}
+
+.admin-tab-bar-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-tab-bar-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+.admin-tab-bar-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.admin-tab-bar-container button {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+}
+
 

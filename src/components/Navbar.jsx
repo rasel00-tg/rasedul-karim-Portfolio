@@ -302,7 +302,7 @@ const Navbar = ({
 
         {/* Right: Language Selector, Subscribe, QR Code & Theme Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Subscribe Button */}
+          {/* Connect Button */}
           <motion.button
             onClick={() => onOpenSubscribe && onOpenSubscribe()}
             whileHover={{ scale: 1.06 }}
@@ -313,17 +313,18 @@ const Navbar = ({
               gap: '6px',
               padding: '7px 14px',
               borderRadius: '20px',
-              background: 'linear-gradient(135deg, rgba(255, 23, 68, 0.15) 0%, rgba(213, 0, 0, 0.1) 100%)',
-              border: '1px solid rgba(255, 23, 68, 0.35)',
-              color: '#FF1744',
+              background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.15) 0%, rgba(37, 99, 235, 0.15) 100%)',
+              border: '1px solid rgba(0, 240, 255, 0.4)',
+              color: '#00f0ff',
               cursor: 'pointer',
               fontSize: '0.8rem',
-              fontWeight: 800
+              fontWeight: 800,
+              boxShadow: '0 2px 10px rgba(0, 240, 255, 0.15)'
             }}
-            title={isBangla ? 'সাবস্ক্রাইব করুন' : 'Subscribe'}
+            title={isBangla ? 'কানেক্ট করুন' : 'Connect'}
           >
-            <Bell size={15} color="#FF1744" />
-            <span>{isBangla ? 'সাবস্ক্রাইব' : 'Subscribe'}</span>
+            <Sparkles size={14} color="#00f0ff" />
+            <span>{isBangla ? 'কানেক্ট' : 'Connect'}</span>
           </motion.button>
 
           {/* Language Switch Button */}
@@ -832,20 +833,20 @@ const Navbar = ({
                     justifyContent: 'space-between',
                     padding: '10px 14px',
                     borderRadius: '14px',
-                    background: isDark ? 'rgba(255, 23, 68, 0.1)' : 'rgba(255, 23, 68, 0.07)',
-                    border: '1px solid rgba(255, 23, 68, 0.3)',
-                    color: '#FF1744',
+                    background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(2, 132, 199, 0.08)',
+                    border: '1px solid rgba(0, 240, 255, 0.35)',
+                    color: isDark ? '#00f0ff' : '#0284C7',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 15px rgba(255, 23, 68, 0.12)'
+                    boxShadow: '0 4px 15px rgba(0, 240, 255, 0.12)'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Bell size={16} color="#FF1744" />
+                    <Sparkles size={16} color={isDark ? '#00f0ff' : '#0284C7'} />
                     <span style={{ fontSize: '0.84rem', fontWeight: 800, letterSpacing: '0.3px', fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit' }}>
-                      {isBangla ? 'সাবস্ক্রাইব ও ওটিপি ভেরিফিকেশন' : 'Subscribe & OTP Verify'}
+                      {isBangla ? 'কানেক্ট (Google / GitHub)' : 'Connect (Google / GitHub)'}
                     </span>
                   </div>
-                  <span style={{ fontSize: '0.70rem', background: '#FF1744', color: '#FFFFFF', padding: '2px 8px', borderRadius: '10px', fontWeight: 800 }}>OTP</span>
+                  <span style={{ fontSize: '0.70rem', background: 'linear-gradient(135deg, #00f0ff 0%, #3B82F6 100%)', color: '#FFFFFF', padding: '2px 8px', borderRadius: '10px', fontWeight: 800 }}>Auth</span>
                 </motion.button>
               </div>
 

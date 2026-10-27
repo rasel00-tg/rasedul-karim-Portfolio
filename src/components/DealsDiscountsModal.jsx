@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -22,18 +23,31 @@ import {
   DollarSign,
   Calculator,
   User,
+  Phone,
+  MapPin,
+  Info,
+  LogIn,
   MessageSquare,
   KeyRound,
-  UserCheck
+  UserCheck,
+  Package,
+  Search,
+  Smartphone,
+  SlidersHorizontal,
+  Printer,
+  Download,
+  FileText
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
 import { COLLECTIONS, checkCouponRedemption, recordCouponRedemption } from '../services/featuresService';
 import { isEmailSubscribed, subscribeEmail } from '../services/subscriptionService';
-import { db } from '../firebase/config';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, auth, initFirebase, firebaseConfig } from '../firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { sendStyledOrderEmail, generateHtmlInvoice, sendOrderReceiptViaBackend } from '../services/emailOrderService';
+import ConnectModal from './ConnectModal';
 
 const DealsDiscountsModal = ({ onClose }) => {
   const { isDark } = useTheme();
@@ -45,12 +59,21 @@ const DealsDiscountsModal = ({ onClose }) => {
     return localStorage.getItem('subscriber_deal_email') || '';
   });
 
+  // Authentication & Connect Flow States
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [pendingClaimDeal, setPendingClaimDeal] = useState(null);
+  const [isTrackModalOpen, setIsTrackModalOpen] = useState(false);
+  const [trackEmail, setTrackEmail] = useState('');
+  const [orderCode, setOrderCode] = useState('');
+
   // Interactive Claim & Checkout Modal Drawer State
   const [selectedDealForClaim, setSelectedDealForClaim] = useState(null);
   const [checkoutName, setCheckoutName] = useState('');
-  const [checkoutEmail, setCheckoutEmail] = useState(() => {
-    return localStorage.getItem('subscriber_deal_email') || '';
-  });
+  const [checkoutPhone, setCheckoutPhone] = useState('');
+  const [checkoutAddress, setCheckoutAddress] = useState('');
+  const [checkoutEmail, setCheckoutEmail] = useState('');
+  const [showEmailInfoModal, setShowEmailInfoModal] = useState(false);
   const [checkoutCouponCode, setCheckoutCouponCode] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
   const [checkoutBasePrice] = useState(5000); // Standard base package rate in BDT (৳)
@@ -68,11 +91,105 @@ const DealsDiscountsModal = ({ onClose }) => {
   const [sharedDealId, setSharedDealId] = useState(null);
   const [shareToastMsg, setShareToastMsg] = useState(null);
 
+  // Guest Order Intercept Verification Modal State
+  const [isGuestInterceptOpen, setIsGuestInterceptOpen] = useState(false);
+  const [guestInterceptEmail, setGuestInterceptEmail] = useState('');
+  const [guestInterceptPhone, setGuestInterceptPhone] = useState('01');
+  const [guestInterceptError, setGuestInterceptError] = useState(null);
+  const [orderConfirmationAlert, setOrderConfirmationAlert] = useState(null);
+  const [receiptCopied, setReceiptCopied] = useState(false);
+
+  // Background scroll lock when Order Confirmation Receipt Modal is active
+  useEffect(() => {
+    if (orderConfirmationAlert) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [orderConfirmationAlert]);
+
+  // Background scroll lock when Guest Intercept Verification Modal is active
+  useEffect(() => {
+    if (isGuestInterceptOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isGuestInterceptOpen]);
+
+  // Guest Order History Finder Modal / Search View States
+  const [isGuestSearchOpen, setIsGuestSearchOpen] = useState(false);
+  const [guestSearchCategory, setGuestSearchCategory] = useState('phone'); // 'phone' | 'email'
+  const [guestSearchInput, setGuestSearchInput] = useState('01');
+  const [guestSearchSubmittedQuery, setGuestSearchSubmittedQuery] = useState(null); // { category, query }
+  const [guestSearchInputError, setGuestSearchInputError] = useState(null);
+
+  // Modern Shipment & Delivery Tracking States
+  const [trackingSearchTerm, setTrackingSearchTerm] = useState('');
+  const [trackingStatusFilter, setTrackingStatusFilter] = useState('all'); // 'all' | 'pending' | 'confirmed' | 'cancelled'
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const [selectedShipmentDetail, setSelectedShipmentDetail] = useState(null);
+  const [alreadyClaimedDiscount, setAlreadyClaimedDiscount] = useState(false);
+
+  // Phone number normalizer for accurate query matching across +88, 01, and formatted strings
+  const normalizePhone = (num) => {
+    if (!num) return '';
+    return String(num).replace(/[\s\-\+\(\)]/g, '').replace(/^88/, '');
+  };
+
+  // Real-time Auth listener for Google & GitHub authentication
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      if (user) {
+        if (user.email) {
+          setActiveUserEmail(user.email);
+          setCheckoutEmail(user.email);
+          setTrackEmail(user.email);
+        }
+        if (user.displayName) {
+          setCheckoutName((prev) => prev || user.displayName);
+        }
+        // If user logged in specifically after clicking Claim Offer, proceed to open claim modal
+        if (pendingClaimDeal) {
+          const dealToClaim = pendingClaimDeal;
+          setPendingClaimDeal(null);
+          setIsConnectModalOpen(false);
+          handleOpenClaimModal(dealToClaim, user);
+        }
+      } else {
+        setCheckoutEmail('');
+        setTrackEmail('');
+      }
+    });
+    return () => unsubscribe();
+  }, [pendingClaimDeal]);
+
   // PopScope / Browser Back Interception to return to Homebar
   useEffect(() => {
     window.history.pushState({ modal: 'deals_discounts' }, '');
     const handlePopState = () => {
-      if (selectedDealForClaim) {
+      if (selectedShipmentDetail) {
+        setSelectedShipmentDetail(null);
+        window.history.pushState({ modal: 'deals_discounts' }, '');
+      } else if (isGuestInterceptOpen) {
+        setIsGuestInterceptOpen(false);
+        window.history.pushState({ modal: 'deals_discounts' }, '');
+      } else if (isGuestSearchOpen) {
+        setIsGuestSearchOpen(false);
+        setGuestSearchSubmittedQuery(null);
+        window.history.pushState({ modal: 'deals_discounts' }, '');
+      } else if (isTrackModalOpen) {
+        setIsTrackModalOpen(false);
+        window.history.pushState({ modal: 'deals_discounts' }, '');
+      } else if (isConnectModalOpen) {
+        setIsConnectModalOpen(false);
+        window.history.pushState({ modal: 'deals_discounts' }, '');
+      } else if (selectedDealForClaim) {
         setSelectedDealForClaim(null);
         window.history.pushState({ modal: 'deals_discounts' }, '');
       } else {
@@ -81,7 +198,7 @@ const DealsDiscountsModal = ({ onClose }) => {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [onClose, selectedDealForClaim]);
+  }, [onClose, selectedDealForClaim, isTrackModalOpen, isConnectModalOpen, isGuestInterceptOpen, isGuestSearchOpen, selectedShipmentDetail]);
 
   // Copy coupon code to clipboard with visual feedback
   const handleCopyCode = (code) => {
@@ -160,39 +277,122 @@ const DealsDiscountsModal = ({ onClose }) => {
     };
   };
 
-  // Open Claim Checkout Modal - default hidden coupon state & draft restoration
-  const handleOpenClaimModal = (deal) => {
+  // Handle Claim Offer Button Click (Directly opens claim & checkout modal, supporting guest checkout)
+  const handleClaimButtonClick = (deal) => {
+    handleOpenClaimModal(deal, currentUser);
+  };
+
+  // Open Claim Checkout Modal with Clean Visual Hierarchy & Strict Single-Discount-Per-Account Validation
+  const handleOpenClaimModal = async (deal, user = currentUser) => {
     setSelectedDealForClaim(deal);
     setCheckoutError(null);
     setCheckoutSuccess(null);
     setCouponErrorMsg(null);
     setCouponSuccessMsg(null);
-    setIsEmailVerified(false);
-    setEmailChecking(false);
-    setEmailFeedback(null);
-
-    // Check if there is an existing draft to preserve form state
-    try {
-      const rawDraft = localStorage.getItem('checkout_pending_draft');
-      if (rawDraft) {
-        const draft = JSON.parse(rawDraft);
-        if (draft.dealId === deal.id) {
-          setCheckoutName(draft.name || '');
-          setCheckoutEmail(draft.email || activeUserEmail || '');
-          setCheckoutMessage(draft.message || '');
-          setCheckoutCouponCode(''); // Default Hidden State (Empty input!)
-          setIsCouponApplied(false);
-          setAppliedCouponCode('');
-          return;
-        }
-      }
-    } catch {}
-
-    setCheckoutCouponCode(''); // Default Hidden State: Starts completely empty (no auto-fill!)
+    setShowEmailInfoModal(false);
     setIsCouponApplied(false);
     setAppliedCouponCode('');
-    if (activeUserEmail) {
-      setCheckoutEmail(activeUserEmail);
+    setAlreadyClaimedDiscount(false);
+
+    // Auto-generate fresh unique order code (e.g. ORD-92841)
+    const newOrderCode = 'ORD-' + Math.floor(10000 + Math.random() * 90000);
+    setOrderCode(newOrderCode);
+
+    // Auto-fill user email & name ONLY if user is authenticated/logged-in
+    if (user?.email) {
+      setCheckoutEmail(user.email);
+      setIsEmailVerified(true);
+    } else {
+      setCheckoutEmail('');
+      setIsEmailVerified(false);
+    }
+    if (user?.displayName) {
+      setCheckoutName((prev) => prev || user.displayName);
+    } else if (!user) {
+      setCheckoutName('');
+    }
+
+    // Never expose secret coupon code in the text input box
+    setCheckoutCouponCode('');
+
+    // STRICT SINGLE-DISCOUNT-PER-ACCOUNT VALIDATION
+    const dealCoupon = (deal?.couponCode || deal?.discountCode || '').trim();
+
+    if (user?.email) {
+      const currentUserEmail = user.email.trim().toLowerCase();
+      const currentPostId = deal?.id || '';
+      const currentTitle = (deal?.title || '').trim().toLowerCase();
+
+      let alreadyConfirmedDiscount = false;
+      try {
+        const ordersRef = collection(db, 'deal_orders');
+        // Query deal_orders where email matches currentUserEmail
+        const qOrders = query(ordersRef, where('email', '==', currentUserEmail));
+        const snap = await getDocs(qOrders);
+        snap.forEach((docSnap) => {
+          const ord = docSnap.data();
+          const matchesPost = (ord.postId && ord.postId === currentPostId) ||
+                              (ord.dealId && ord.dealId === currentPostId) ||
+                              (ord.dealTitle && ord.dealTitle.trim().toLowerCase() === currentTitle);
+          const isConfirmed = ord.status === 'confirmed' ||
+                              ord.status === 'accepted' ||
+                              ord.discountApplied === true ||
+                              ord.claimed === true;
+          if (matchesPost && isConfirmed) {
+            alreadyConfirmedDiscount = true;
+          }
+        });
+
+        // Also check clientEmail in case order used clientEmail
+        if (!alreadyConfirmedDiscount) {
+          const qClient = query(ordersRef, where('clientEmail', '==', currentUserEmail));
+          const snapClient = await getDocs(qClient);
+          snapClient.forEach((docSnap) => {
+            const ord = docSnap.data();
+            const matchesPost = (ord.postId && ord.postId === currentPostId) ||
+                                (ord.dealId && ord.dealId === currentPostId) ||
+                                (ord.dealTitle && ord.dealTitle.trim().toLowerCase() === currentTitle);
+            const isConfirmed = ord.status === 'confirmed' ||
+                                ord.status === 'accepted' ||
+                                ord.discountApplied === true ||
+                                ord.claimed === true;
+            if (matchesPost && isConfirmed) {
+              alreadyConfirmedDiscount = true;
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Error verifying previous confirmed discount record:', err);
+      }
+
+      if (alreadyConfirmedDiscount) {
+        // STRICT RULE 1: If database has previous confirmed record, STRICTLY BLOCK discount & force regular price
+        setAlreadyClaimedDiscount(true);
+        setIsCouponApplied(false);
+        setAppliedCouponCode('');
+        setCouponErrorMsg("You have already claimed the discount for this deal. Regular price applies.");
+      } else if (!dealCoupon) {
+        // STRICT RULE 2: If post has no active coupon, NO discount is applied
+        setAlreadyClaimedDiscount(false);
+        setIsCouponApplied(false);
+        setAppliedCouponCode('');
+      } else {
+        // STRICT RULE 3: Post has active coupon, user logged in, and user has NOT claimed discount before
+        setAlreadyClaimedDiscount(false);
+        setIsCouponApplied(true);
+        setAppliedCouponCode(dealCoupon);
+        const rate = parseDiscountRate(deal);
+        setCouponSuccessMsg(
+          isBangla 
+            ? `✓ স্পেশাল ডিল ডিসকাউন্ট স্বয়ংক্রিয়ভাবে সক্রিয় হয়েছে (${rate}% ছাড় প্রযোজ্য)` 
+            : `✓ Special deal discount auto-applied (${rate}% OFF)`
+        );
+      }
+    } else {
+      // User is not logged in: regular price applies unless user connects
+      setAlreadyClaimedDiscount(false);
+      setIsCouponApplied(false);
+      setAppliedCouponCode('');
     }
   };
 
@@ -272,220 +472,134 @@ const DealsDiscountsModal = ({ onClose }) => {
     }, 150);
   };
 
-  // ১. ইমেইল ভেরিফিকেশন ও অটোমেটিক কুপন কোড লজিক
-  // ১. ইমেইল ভেরিফিকেশন ও অটোমেটিক কুপন কোড লজিক (কঠোর ওয়ান-টাইম ও সাবস্ক্রিপশন গার্ড)
-  const handleVerifyEmailAndAutoFill = async () => {
-    setIsEmailVerified(false);
-    setIsCouponApplied(false);
-    setAppliedCouponCode('');
-    setCouponSuccessMsg(null);
-    setEmailFeedback(null);
-    setCouponErrorMsg(null);
-
-    const cleanEmail = (checkoutEmail || '').trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      setIsEmailVerified(false);
-      setEmailFeedback({
-        type: 'error',
-        message: isBangla ? 'অনুগ্রহ করে সঠিক ইমেইল ঠিকানা প্রদান করুন।' : 'Please enter a valid email address.',
-        needsSubscribe: false
-      });
-      return;
-    }
-
-    setEmailChecking(true);
-
-    try {
-      // ১. সাবস্ক্রিপশন চেক (Firestore subscribers কালেকশনে ইমেইল আছে কিনা)
-      let isSub = false;
-      try {
-        const subQuery = query(collection(db, "subscribers"), where("email", "==", cleanEmail));
-        const subSnap = await getDocs(subQuery);
-        if (!subSnap.empty) {
-          isSub = true;
-        } else {
-          const docSnap = await getDoc(doc(db, "subscribers", cleanEmail));
-          if (docSnap.exists()) {
-            isSub = true;
-          }
-        }
-      } catch (subErr) {
-        isSub = await isEmailSubscribed(cleanEmail);
-      }
-
-      if (!isSub) {
-        setIsEmailVerified(false);
-        setIsCouponApplied(false);
-        setAppliedCouponCode('');
-        setEmailFeedback({
-          type: 'error',
-          message: isBangla 
-            ? 'এই ইমেইলটি সাবস্ক্রাইব করা নেই! আগে সাবস্ক্রাইব করুন।' 
-            : 'This email is not subscribed! Please subscribe first.',
-          needsSubscribe: true
-        });
-        return;
-      }
-
-      // ২. ওয়ান-টাইম চেক (coupon_redemptions কালেকশনে এই ডিল ও ইমেইলের পূর্ববর্তী রেকর্ড আছে কিনা)
-      const activeDeal = selectedDealForClaim || {};
-      const activeDealId = (activeDeal.id || '').trim();
-      let alreadyRedeemed = false;
-
-      try {
-        if (activeDealId) {
-          const redeemQuery = query(
-            collection(db, "coupon_redemptions"),
-            where("dealId", "==", activeDealId),
-            where("email", "==", cleanEmail)
-          );
-          const redeemSnap = await getDocs(redeemQuery);
-          if (!redeemSnap.empty) {
-            alreadyRedeemed = true;
-          }
-        }
-      } catch (redeemErr) {}
-
-      if (!alreadyRedeemed) {
-        const postCoupon = (activeDeal.couponCode || activeDeal.discountCode || 'RASEDUL75').trim().toUpperCase();
-        const redemption = await checkCouponRedemption(cleanEmail, postCoupon, activeDealId);
-        if (redemption.alreadyRedeemed) {
-          alreadyRedeemed = true;
-        }
-      }
-
-      if (alreadyRedeemed) {
-        setIsEmailVerified(false); // কঠোরভাবে false রাখা হলো
-        setIsCouponApplied(false);
-        setAppliedCouponCode('');
-        setEmailFeedback({
-          type: 'error',
-          message: isBangla 
-            ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন!' 
-            : 'You have already redeemed a coupon for this deal!',
-          needsSubscribe: false
-        });
-        return;
-      }
-
-      // ৩. সফল হলে: কেবল দুটি শর্তই সফল হলে isEmailVerified = true হবে
-      const postCoupon = (activeDeal.couponCode || activeDeal.discountCode || 'RASEDUL75').trim().toUpperCase();
-      setIsEmailVerified(true);
-      setCheckoutCouponCode(postCoupon);
-      setIsCouponApplied(true);
-      setAppliedCouponCode(postCoupon);
-
-      const rate = parseDiscountRate(activeDeal);
-      setEmailFeedback({
-        type: 'success',
-        message: isBangla 
-          ? `✓ ইমেইল সফলভাবে ভেরিফাইড! কুপন (${postCoupon}) স্বয়ংক্রিয়ভাবে যুক্ত হয়েছে এবং ${rate}% ডিসকাউন্ট সক্রিয় হয়েছে।` 
-          : `✓ Email verified! Coupon (${postCoupon}) auto-applied with ${rate}% discount.`,
-        needsSubscribe: false
-      });
-      setCouponSuccessMsg(
-        isBangla 
-          ? `✓ কুপন কোড (${postCoupon}) কার্যকর হয়েছে!` 
-          : `✓ Coupon code (${postCoupon}) active!`
-      );
-      localStorage.setItem('subscriber_deal_email', cleanEmail);
-      setActiveUserEmail(cleanEmail);
-    } catch (err) {
-      setIsEmailVerified(false);
-      setEmailFeedback({
-        type: 'error',
-        message: isBangla ? 'ভেরিফিকেশনে সমস্যা হয়েছে।' : 'Verification failed.',
-        needsSubscribe: false
-      });
-    } finally {
-      setEmailChecking(false);
-    }
-  };
-
-  // ২. ম্যানুয়াল কুপন কোড টাইপ ও ভ্যালিডেশন লজিক
-  const handleApplyCouponInsideModal = async () => {
+  // Account Coupon Eligibility & Single-Use Check in deal_orders collection
+  const checkAndApplyCouponForUser = async (codeToApply, deal = selectedDealForClaim, userEmail = (currentUser?.email || checkoutEmail)) => {
     setCouponErrorMsg(null);
     setCouponSuccessMsg(null);
 
-    const typedCode = (checkoutCouponCode || '').trim().toUpperCase();
+    const typedCode = (codeToApply || checkoutCouponCode || '').trim().toUpperCase();
     if (!typedCode) {
-      setCouponErrorMsg(
-        isBangla 
-          ? 'কুপন কোড লিখুন (যদি থাকে)' 
-          : 'Enter coupon code (optional)'
-      );
+      setCouponErrorMsg(isBangla ? 'কুপন কোড লিখুন (ঐচ্ছিক)।' : 'Please enter a coupon code (optional).');
       return;
     }
 
-    const cleanEmail = (checkoutEmail || '').trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      setCouponErrorMsg(
-        isBangla 
-          ? 'কুপন যাচাইয়ের জন্য অনুগ্রহ করে প্রথমে আপনার ইমেইল লিখুন।' 
-          : 'Please enter your email first to verify coupon.'
-      );
-      return;
-    }
-
-    const postCoupon = (selectedDealForClaim?.discountCode || 'RASEDUL75').trim().toUpperCase();
-
-    // ভুল কোড গার্ড: টাইপ করা কোডটি পোস্টের মূল কুপন কোডের সাথে না মিললে
-    if (typedCode !== postCoupon) {
+    // 1. Account connection is required to apply coupons
+    if (!currentUser && !userEmail) {
       setIsCouponApplied(false);
       setAppliedCouponCode('');
       setCouponErrorMsg(
         isBangla 
-          ? 'ভুল কুপন কোড! দয়া করে সঠিক কোড দিন।' 
-          : 'Invalid coupon code! Please enter a valid code.'
+          ? 'কুপন বা বিশেষ ছাড় পেতে অনুগ্রহ করে একাউন্ট কানেক্ট করুন।' 
+          : 'Please connect your account to be eligible for coupon codes.'
       );
       return;
     }
 
-    // সঠিক কোড ও সাবস্ক্রিপশন চেক:
+    const cleanEmail = (currentUser?.email || userEmail || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+      setIsCouponApplied(false);
+      setAppliedCouponCode('');
+      setCouponErrorMsg(
+        isBangla 
+          ? 'কুপন ভ্যালিডেশনের জন্য সঠিক ইমেইল আইডি দিন।' 
+          : 'A valid email is required to verify coupon eligibility.'
+      );
+      return;
+    }
+
     setCouponChecking(true);
 
     try {
-      const isSubscribed = await isEmailSubscribed(cleanEmail);
-      if (!isSubscribed) {
+      const activeDeal = deal || selectedDealForClaim || {};
+      const currentPostId = activeDeal?.id || '';
+      const currentTitle = (activeDeal?.title || '').trim().toLowerCase();
+      const expectedCode = (activeDeal.couponCode || activeDeal.discountCode || '').trim().toUpperCase();
+
+      if (!expectedCode) {
         setIsCouponApplied(false);
         setAppliedCouponCode('');
-        setIsEmailVerified(false);
         setCouponErrorMsg(
           isBangla 
-            ? 'কুপনটি সঠিক, তবে আপনি এখনো সাবস্ক্রাইব করেননি! ডিসকাউন্ট পেতে আগে সাবস্ক্রাইব করুন।' 
-            : 'Coupon is valid, but you have not subscribed yet! Please subscribe first to claim discount.'
+            ? 'এই ডিল বা পোস্টের জন্য কোনো কুপন প্রযোজ্য নয়।' 
+            : 'No active coupon available for this deal.'
         );
         return;
       }
 
-      // এক পোস্টে একবার ব্যবহারের সুরক্ষা:
-      const redemption = await checkCouponRedemption(cleanEmail, typedCode, selectedDealForClaim?.id);
-      if (redemption.alreadyRedeemed) {
+      if (typedCode !== expectedCode) {
         setIsCouponApplied(false);
         setAppliedCouponCode('');
-        setIsEmailVerified(false);
         setCouponErrorMsg(
           isBangla 
-            ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন!' 
-            : 'You have already redeemed a coupon for this deal!'
+            ? 'ভুল কুপন কোড! অফারের সঠিক কোডটি দিন।' 
+            : 'Invalid coupon code! Please enter the correct code for this offer.'
         );
         return;
       }
 
-      // সফল প্রয়োগ: কুপন কার্যকর ও ডিসকাউন্ট চালু
-      setIsEmailVerified(true);
+      // Check Firestore deal_orders collection to see if user has already claimed this offer successfully
+      let alreadyClaimed = false;
+      try {
+        const ordersRef = collection(db, 'deal_orders');
+        // Query by email
+        const qOrders = query(ordersRef, where('email', '==', cleanEmail));
+        const orderSnap = await getDocs(qOrders);
+        orderSnap.forEach((docSnap) => {
+          const ord = docSnap.data();
+          const matchesDeal = (ord.postId && ord.postId === currentPostId) ||
+                              (ord.dealId && ord.dealId === currentPostId) || 
+                              (ord.dealTitle && ord.dealTitle.trim().toLowerCase() === currentTitle);
+          const isConfirmed = ord.claimed === true || 
+                              ord.status === 'accepted' || 
+                              ord.status === 'confirmed' || 
+                              ord.discountApplied === true;
+          if (matchesDeal && isConfirmed) {
+            alreadyClaimed = true;
+          }
+        });
+
+        // Also query by clientEmail
+        if (!alreadyClaimed) {
+          const qClient = query(ordersRef, where('clientEmail', '==', cleanEmail));
+          const clientSnap = await getDocs(qClient);
+          clientSnap.forEach((docSnap) => {
+            const ord = docSnap.data();
+            const matchesDeal = (ord.postId && ord.postId === currentPostId) ||
+                                (ord.dealId && ord.dealId === currentPostId) || 
+                                (ord.dealTitle && ord.dealTitle.trim().toLowerCase() === currentTitle);
+            const isConfirmed = ord.claimed === true || 
+                                ord.status === 'accepted' || 
+                                ord.status === 'confirmed' || 
+                                ord.discountApplied === true;
+            if (matchesDeal && isConfirmed) {
+              alreadyClaimed = true;
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Error querying deal_orders for coupon eligibility:', err);
+      }
+
+      if (alreadyClaimed) {
+        setAlreadyClaimedDiscount(true);
+        setIsCouponApplied(false);
+        setAppliedCouponCode('');
+        setCouponErrorMsg("You have already claimed the discount for this deal. Regular price applies.");
+        return;
+      }
+
+      // Eligible! Apply coupon
+      setAlreadyClaimedDiscount(false);
+      setCheckoutCouponCode(typedCode);
       setIsCouponApplied(true);
       setAppliedCouponCode(typedCode);
-      const rate = parseDiscountRate(selectedDealForClaim);
+      const rate = parseDiscountRate(activeDeal);
       setCouponSuccessMsg(
         isBangla 
           ? `✓ কুপন কোড (${typedCode}) সফলভাবে কার্যকর হয়েছে! (${rate}% ছাড় প্রযোজ্য)` 
           : `✓ Coupon code (${typedCode}) applied successfully! (${rate}% discount active)`
       );
-      localStorage.setItem('subscriber_deal_email', cleanEmail);
-      setActiveUserEmail(cleanEmail);
     } catch (err) {
       setIsCouponApplied(false);
       setAppliedCouponCode('');
@@ -495,100 +609,47 @@ const DealsDiscountsModal = ({ onClose }) => {
     }
   };
 
-  // State-Preserving Subscription Flow: Subscribes and immediately returns with form state intact
-  const handleStatePreservedSubscribeAndRestore = async () => {
-    const cleanEmail = (checkoutEmail || '').trim().toLowerCase();
-    if (!cleanEmail) return;
-
-    // ১. ফর্মের পূরণকৃত সমস্ত ফিল্ড (নাম, ইমেইল, মেসেজ) লোকাল স্টেটে সুরক্ষিত রাখা
-    const preservedDraft = {
-      dealId: selectedDealForClaim?.id,
-      name: checkoutName,
-      email: cleanEmail,
-      couponCode: checkoutCouponCode,
-      message: checkoutMessage
-    };
-    try {
-      localStorage.setItem('checkout_pending_draft', JSON.stringify(preservedDraft));
-    } catch {}
-
-    setEmailChecking(true);
-    setCouponChecking(true);
-    setEmailFeedback(null);
-    setCouponErrorMsg(null);
-
-    try {
-      // ২. ফায়ারস্টোরের subscribers কালেকশনে সাবস্ক্রিপশন সম্পন্ন
-      await subscribeEmail(cleanEmail);
-      localStorage.setItem('subscriber_deal_email', cleanEmail);
-      setActiveUserEmail(cleanEmail);
-
-      // ৩. পূর্বে পূরণ করা নাম ও ইমেইল অক্ষত অবস্থায় ফর্মে বসানো
-      setCheckoutName(preservedDraft.name);
-      setCheckoutEmail(preservedDraft.email);
-      setCheckoutMessage(preservedDraft.message);
-
-      // ৪. অটোমেটিক কুপন কোড বসানো ও ডিসকাউন্ট কার্যকর করা
-      const postCoupon = (selectedDealForClaim?.discountCode || 'RASEDUL75').trim().toUpperCase();
-      const redemption = await checkCouponRedemption(cleanEmail, postCoupon, selectedDealForClaim?.id);
-
-      if (redemption.alreadyRedeemed) {
-        setIsEmailVerified(false);
-        setIsCouponApplied(false);
-        setAppliedCouponCode('');
-        setEmailFeedback({
-          type: 'error',
-          message: isBangla 
-            ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন!' 
-            : 'You have already redeemed a coupon for this deal!',
-          needsSubscribe: false
-        });
-      } else {
-        setIsEmailVerified(true);
-        setCheckoutCouponCode(postCoupon);
-        setIsCouponApplied(true);
-        setAppliedCouponCode(postCoupon);
-
-        const rate = parseDiscountRate(selectedDealForClaim);
-        setEmailFeedback({
-          type: 'success',
-          message: isBangla 
-            ? `✓ সাবস্ক্রিপশন সফল! কুপন কোড (${postCoupon}) স্বয়ংক্রিয়ভাবে বসে গেছে এবং ${rate}% ডিসকাউন্ট চালু হয়েছে।` 
-            : `✓ Subscribed successfully! Coupon (${postCoupon}) auto-filled and ${rate}% discount applied.`,
-          needsSubscribe: false
-        });
-        setCouponSuccessMsg(
-          isBangla 
-            ? `✓ কুপন কোড (${postCoupon}) কার্যকর হয়েছে!` 
-            : `✓ Coupon code (${postCoupon}) active!`
-        );
-      }
-    } catch (err) {
-      setEmailFeedback({
-        type: 'error',
-        message: err.message || (isBangla ? 'সাবস্ক্রিপশন ব্যর্থ হয়েছে।' : 'Subscription failed.'),
-        needsSubscribe: false
-      });
-    } finally {
-      setEmailChecking(false);
-      setCouponChecking(false);
+  // Submit Order Claim with Full Customer Details & Lifecycle Status
+  const handleConfirmOrderClaim = async (e, options = {}) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
-  };
-
-  // Submit Order Claim with Direct Email Client Redirection & One-Time Coupon Validation
-  const handleConfirmOrderClaim = async (e) => {
-    e?.preventDefault();
     setCheckoutError(null);
 
     const userName = (checkoutName || '').trim();
-    const userEmail = (checkoutEmail || '').trim().toLowerCase();
+    const userPhone = (options?.overridePhone || checkoutPhone || '').trim();
+    const userAddress = (checkoutAddress || '').trim();
+    const userEmail = (options?.overrideEmail || checkoutEmail || '').trim().toLowerCase();
+    const isGuest = options?.isGuest !== undefined ? options.isGuest : !currentUser;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!userName || !userEmail || !emailRegex.test(userEmail)) {
+    // Validate Required Customer Fields
+    if (!userName) {
+      setCheckoutError(isBangla ? 'আপনার পূর্ণ নাম লিখুন (আবশ্যক)।' : 'Please enter your full name (required).');
+      return;
+    }
+    if (!userPhone) {
+      setCheckoutError(isBangla ? 'আপনার মোবাইল নাম্বার প্রদান করুন (আবশ্যক)।' : 'Please enter your phone number (required).');
+      return;
+    }
+    if (!userAddress) {
+      setCheckoutError(isBangla ? 'আপনার সম্পূর্ণ ঠিকানা প্রদান করুন (আবশ্যক)।' : 'Please enter your address (required).');
+      return;
+    }
+
+    // Optional email validation if provided
+    if (userEmail && !emailRegex.test(userEmail)) {
+      setCheckoutError(isBangla ? 'অনুগ্রহ করে সঠিক ইমেইল আইডি দিন।' : 'Please enter a valid email address.');
+      return;
+    }
+
+    // If coupon is applied, user must have an email provided (either logged in or guest verified)
+    if (isCouponApplied && appliedCouponCode && !currentUser && !userEmail) {
       setCheckoutError(
         isBangla 
-          ? 'অনুগ্রহ করে আপনার নাম ও ইমেইল সঠিকভাবে পূরণ করুন।' 
-          : 'Please enter your name and email correctly.'
+          ? 'কুপন কোড বা বিশেষ ছাড় পেতে ইমেইল ও একাউন্ট ভেরিফাই করুন।' 
+          : 'Please provide an email or connect account to be eligible for coupon codes.'
       );
       return;
     }
@@ -598,54 +659,75 @@ const DealsDiscountsModal = ({ onClose }) => {
     const activeDeal = selectedDealForClaim || {};
     const activeCode = isCouponApplied && appliedCouponCode ? appliedCouponCode : null;
     const pricing = calculatePricing(activeDeal, !!activeCode);
-    const finalPayablePrice = `৳${pricing.finalPrice} BDT`;
 
     try {
-      // যদি কুপন কার্যকর থাকে, ফায়ারস্টোরে ওয়ান-টাইম ট্র্যাকিং রেকর্ড করা হবে
-      if (activeCode) {
-        const isSubscribed = await isEmailSubscribed(userEmail);
-        if (!isSubscribed) {
+      // Re-verify eligibility if coupon is applied
+      if (activeCode && (currentUser?.email || userEmail)) {
+        const verifyEmail = (currentUser?.email || userEmail).toLowerCase();
+        const currentPostId = activeDeal?.id || '';
+        const currentTitle = (activeDeal?.title || '').trim().toLowerCase();
+        let alreadyClaimed = false;
+        try {
+          let firestoreDb = db;
+          if (!firestoreDb) {
+            const fb = await initFirebase();
+            firestoreDb = fb?.db;
+          }
+          if (firestoreDb) {
+            const ordersRef = collection(firestoreDb, 'deal_orders');
+            const qOrders = query(ordersRef, where('email', '==', verifyEmail));
+            const orderSnap = await getDocs(qOrders);
+            orderSnap.forEach((docSnap) => {
+              const ord = docSnap.data();
+              const matchesDeal = (ord.postId && ord.postId === currentPostId) || 
+                                  (ord.dealId && ord.dealId === currentPostId) || 
+                                  (ord.dealTitle && ord.dealTitle.trim().toLowerCase() === currentTitle);
+              const isConfirmed = ord.claimed === true || 
+                                  ord.status === 'accepted' || 
+                                  ord.status === 'confirmed' || 
+                                  ord.discountApplied === true;
+              if (matchesDeal && isConfirmed) {
+                alreadyClaimed = true;
+              }
+            });
+
+            if (!alreadyClaimed) {
+              const qClient = query(ordersRef, where('clientEmail', '==', verifyEmail));
+              const clientSnap = await getDocs(qClient);
+              clientSnap.forEach((docSnap) => {
+                const ord = docSnap.data();
+                const matchesDeal = (ord.postId && ord.postId === currentPostId) || 
+                                    (ord.dealId && ord.dealId === currentPostId) || 
+                                    (ord.dealTitle && ord.dealTitle.trim().toLowerCase() === currentTitle);
+                const isConfirmed = ord.claimed === true || 
+                                    ord.status === 'accepted' || 
+                                    ord.status === 'confirmed' || 
+                                    ord.discountApplied === true;
+                if (matchesDeal && isConfirmed) {
+                  alreadyClaimed = true;
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Coupon verification notice:', err);
+        }
+
+        if (alreadyClaimed) {
           setIsCouponApplied(false);
           setAppliedCouponCode('');
-          setIsEmailVerified(false);
           setCheckoutError(
             isBangla 
-              ? 'কুপনটি সঠিক, তবে আপনি এখনো সাবস্ক্রাইব করেননি! ডিসকাউন্ট পেতে আগে সাবস্ক্রাইব করুন।' 
-              : 'Coupon is valid, but you have not subscribed yet! Please subscribe first to claim discount.'
+              ? 'আপনি ইতিমধ্যে এই ডিলের জন্য ছাড় গ্রহণ করেছেন। নিয়মিত মূল্য প্রযোজ্য হবে।' 
+              : 'You have already claimed the discount for this deal. Regular price applies.'
           );
           setCheckoutSubmitting(false);
           return;
         }
-
-        const redemptionCheck = await checkCouponRedemption(userEmail, activeCode, activeDeal.id);
-        if (redemptionCheck.alreadyRedeemed) {
-          setIsCouponApplied(false);
-          setAppliedCouponCode('');
-          setIsEmailVerified(false);
-          setCheckoutError(
-            isBangla
-              ? 'আপনি ইতোপূর্বে এই অফারের জন্য কুপন ব্যবহার করেছেন! রেগুলার মূল্য বহাল রাখা হলো।'
-              : 'You have already redeemed this coupon for this deal! Regular pricing applies.'
-          );
-          setCheckoutSubmitting(false);
-          return;
-        }
-
-        // ফায়ারস্টোর রেডিম ট্র্যাকিং
-        await recordCouponRedemption({
-          dealId: activeDeal.id,
-          email: userEmail,
-          couponCode: activeCode,
-          dealTitle: activeDeal.title,
-          discountPercent: activeDeal.discountPercent || `${pricing.rate}%`,
-          clientName: userName,
-          message: checkoutMessage.trim()
-        });
       }
 
-      // Order Record for Client Confirmation & Detailed Digital Invoice
-      const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
-      const orderDate = new Date().toLocaleString('bn-BD', {
+      const finalOrderCode = orderCode || ("ORD-" + Math.floor(10000 + Math.random() * 90000));
+      const orderDate = new Date().toLocaleString(isBangla ? 'bn-BD' : 'en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -654,67 +736,199 @@ const DealsDiscountsModal = ({ onClose }) => {
       });
       const hasCoupon = !!activeCode;
 
+      const basePriceNum = Number(pricing?.basePrice) || 0;
+      const finalPriceNum = Number(pricing?.finalPrice) || 0;
+      const cleanCoupon = activeCode ? String(activeCode).trim() : null;
+      const cleanEmail = String(userEmail || currentUser?.email || 'guest@noemail.com').trim();
+      const cleanName = String(userName || 'Customer').trim();
+      const cleanPhone = String(userPhone || '').trim();
+      const cleanAddress = String(userAddress || '').trim();
+      const cleanNotes = String(checkoutMessage || '').trim();
+      const cleanDealId = String(activeDeal?.id || activeDeal?._firestoreDocId || '');
+      const cleanDealTitle = String(activeDeal?.title || activeDeal?.name || (isBangla ? 'এক্সক্লুসিভ ডিল প্রজেক্ট' : 'Exclusive Deal Project')).trim();
+
+      const orderUserId = currentUser?.uid ? String(currentUser.uid) : "guest";
+      const isGuestUser = Boolean(!currentUser || isGuest || orderUserId === "guest");
+
+      // Sanitized object with exact fallbacks to ensure ZERO undefined values
       const orderRecord = {
-        orderId,
-        orderDate,
-        hasCoupon,
-        dealTitle: activeDeal.title || (isBangla ? 'এক্সক্লুসিভ ডিল প্রজেক্ট' : 'Exclusive Deal Project'),
-        originalPrice: `৳${pricing.basePrice} BDT`,
-        discountPercentage: String(pricing.rate),
-        discountAmount: `৳${pricing.discountAmount} BDT`,
-        finalPrice: pricing.finalPrice,
-        couponCode: activeCode ? activeCode : null,
-        clientName: userName,
-        clientEmail: userEmail,
-        message: checkoutMessage.trim() || (isBangla ? 'কোনো বিশেষ রিকোয়ারমেন্ট উল্লেখ করা হয়নি।' : 'No special requirement mentioned.'),
+        // 1. Required exact keys from user prompt
+        dealId: cleanDealId,
+        dealTitle: cleanDealTitle,
+        customerName: cleanName,
+        phone: cleanPhone,
+        customerAddress: cleanAddress,
+        email: cleanEmail,
+        regularPrice: basePriceNum,
+        finalPrice: finalPriceNum,
+        couponApplied: cleanCoupon || null,
+        notes: cleanNotes,
+        status: 'pending',
+        createdAt: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
+
+        // User & Guest identification
+        userId: orderUserId,
+        isGuest: isGuestUser,
+
+        // 2. Compatibility & System Tracking Keys (for AdminModal, invoices, & notifications)
+        postId: cleanDealId,
+        orderId: String(finalOrderCode),
+        orderCode: String(finalOrderCode),
+        orderDate: String(orderDate),
+        clientName: cleanName,
+        name: cleanName,
+        clientPhone: cleanPhone,
+        whatsapp: cleanPhone,
+        clientAddress: cleanAddress,
+        address: cleanAddress,
+        clientEmail: cleanEmail,
+        originalPrice: `৳${basePriceNum} BDT`,
+        finalPriceFormatted: `৳${finalPriceNum} BDT`,
+        discountPercentage: String(pricing?.rate || '0'),
+        discountPercent: `${pricing?.rate || 0}% OFF`,
+        discountAmount: `৳${pricing?.discountAmount || 0} BDT`,
+        hasCoupon: Boolean(cleanCoupon),
+        couponCode: cleanCoupon || null,
+        discountApplied: Boolean(isCouponApplied && cleanCoupon),
+        dealThumbnail: String(activeDeal?.bannerUrl || activeDeal?.imagePath || '/add1.png'),
+        message: cleanNotes || (isBangla ? 'কোনো বিশেষ রিকোয়ারমেন্ট উল্লেখ করা হয়নি।' : 'No special requirement mentioned.'),
+        claimed: false,
         redeemedAt: new Date().toISOString()
       };
 
-      // ৩. ইমেইল ট্রিগার লজিক (সরাসরি মেইল অ্যাপে নিয়ে যাওয়ার জন্য mailto: ব্যাকআপ)
-      const recipient = "rasedul.karim00@gmail.com";
-      const subject = encodeURIComponent(`New Deal Order: ${activeDeal?.title || "Banner design"}`);
-      const body = encodeURIComponent(
-        `নাম: ${userName}\n` +
-        `ইমেইল: ${userEmail}\n` +
-        `প্রজেক্ট: ${activeDeal?.title || "Banner design"}\n` +
-        `কুপন কোড: ${activeCode || "None"}\n` +
-        `পরিশোধযোগ্য মূল্য: ৳${pricing.finalPrice || 5000} BDT\n` +
-        `গ্রাহকের মেসেজ: ${checkoutMessage?.trim() || "কোনো বিশেষ রিকোয়ারমেন্ট নেই"}`
-      );
+      // Strict purge of any undefined fields to prevent Firestore serialization exceptions
+      Object.keys(orderRecord).forEach((k) => {
+        if (orderRecord[k] === undefined) {
+          orderRecord[k] = null;
+        }
+      });
 
+      // 1. Direct Persistent Save to Firestore 'deal_orders'
+      let savedDocId = null;
       try {
-        window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
-      } catch (mailErr) {
-        console.warn('Mailto direct link launch notice:', mailErr);
+        let firestoreDb = db;
+        if (!firestoreDb) {
+          const fb = await initFirebase();
+          firestoreDb = fb?.db;
+        }
+        if (firestoreDb) {
+          const docRef = await addDoc(collection(firestoreDb, 'deal_orders'), orderRecord);
+          savedDocId = docRef?.id;
+          console.log('Order successfully saved to Firestore deal_orders with ID:', savedDocId);
+        } else {
+          throw new Error('Firestore database instance is not available');
+        }
+      } catch (dbErr) {
+        console.error('Error saving order to Firestore deal_orders collection:', dbErr);
+        // Resilient REST API fallback
+        try {
+          const restFields = {};
+          Object.keys(orderRecord).forEach((k) => {
+            const v = orderRecord[k];
+            if (v === null || v === undefined) {
+              restFields[k] = { nullValue: null };
+            } else if (typeof v === 'boolean') {
+              restFields[k] = { booleanValue: v };
+            } else if (typeof v === 'number') {
+              restFields[k] = { integerValue: String(v) };
+            } else if (k === 'createdAt' && typeof v === 'object') {
+              restFields[k] = { timestampValue: new Date().toISOString() };
+            } else {
+              restFields[k] = { stringValue: String(v) };
+            }
+          });
+          const restRes = await fetch(
+            `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/deal_orders`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields: restFields })
+            }
+          );
+          if (restRes.ok) {
+            console.log('Deal order successfully saved via Firestore REST fallback');
+            savedDocId = finalOrderCode;
+          } else {
+            const errText = await restRes.text();
+            console.error('Firestore REST save error response:', errText);
+          }
+        } catch (restErr) {
+          console.error('Firestore REST fallback write error:', restErr);
+        }
       }
 
-      // ৪. সফল হলে ডিজিটাল ইনভয়েস সাকসেস স্টেট দেখাবে (মোডাল বন্ধ হবে না!)
-      setCheckoutSuccess(orderRecord);
-      localStorage.setItem('subscriber_deal_email', userEmail);
-      setActiveUserEmail(userEmail);
+      if (!savedDocId) {
+        throw new Error(isBangla ? 'ডাটাবেসে অর্ডার সেভ হতে ব্যর্থ হয়েছে। অনুগ্রহ করে ইন্টারনেট সংযোগ পরীক্ষা করে পুনরায় চেষ্টা করুন।' : 'Failed to save order to database. Please check your connection and try again.');
+      }
 
-      // Backend Gmail SMTP (Node.js/Nodemailer) সরাসরি ডিসপ্যাচ ট্রিগার
+      // Store in localStorage for guest order tracking
+      if (userEmail) {
+        localStorage.setItem('subscriber_deal_email', userEmail);
+        setActiveUserEmail(userEmail);
+      }
+      if (userPhone) {
+        localStorage.setItem('subscriber_deal_phone', userPhone);
+      }
+
+      // Background email dispatches (non-blocking)
       sendOrderReceiptViaBackend({
-        customerEmail: userEmail,
+        customerEmail: userEmail || 'guest@example.com',
         customerName: userName,
         dealTitle: activeDeal.title || 'Exclusive Deal Project',
         finalPrice: pricing.finalPrice,
         couponCode: activeCode || (isBangla ? 'ব্যবহার করা হয়নি' : 'Not applied'),
-        message: checkoutMessage.trim() || (isBangla ? 'কোনো বার্তা নেই' : 'No message'),
+        message: `${checkoutMessage.trim() || ''}\nPhone: ${userPhone}\nAddress: ${userAddress}`,
         htmlInvoice: generateHtmlInvoice(orderRecord)
       }).catch((e) => console.warn('Backend Gmail SMTP dispatch notice:', e));
 
-      // EmailJS ক্লাউড ডিসপ্যাচ ট্রিগার
       sendStyledOrderEmail({
         activeDeal,
         isCouponApplied: !!activeCode,
         enteredCoupon: activeCode,
         userName,
-        userEmail,
-        userMessage: checkoutMessage.trim(),
+        userEmail: userEmail || 'guest@example.com',
+        userMessage: `Phone: ${userPhone} | Address: ${userAddress} | Note: ${checkoutMessage.trim()}`,
         pricing
       }).catch((e) => console.warn('EmailJS cloud dispatch notice:', e));
+
+      // Close Intercept Modal and Checkout Window, and Reset Form
+      setIsGuestInterceptOpen(false);
+      setSelectedDealForClaim(null);
+      setCheckoutName('');
+      setCheckoutPhone('');
+      setCheckoutAddress('');
+      setCheckoutEmail('');
+      setCheckoutCouponCode('');
+      setCheckoutMessage('');
+      setIsCouponApplied(false);
+      setAppliedCouponCode('');
+      setCheckoutError(null);
+      setCheckoutSuccess(null);
+
+      // Trigger Confirmation Receipt Modal
+      setOrderConfirmationAlert({
+        orderCode: finalOrderCode,
+        orderDate: String(orderDate),
+        dealTitle: cleanDealTitle,
+        dealThumbnail: String(activeDeal?.bannerUrl || activeDeal?.imagePath || '/add1.png'),
+        clientName: cleanName,
+        customerName: cleanName,
+        phone: cleanPhone,
+        address: cleanAddress,
+        email: cleanEmail,
+        regularPrice: basePriceNum,
+        finalPrice: finalPriceNum,
+        couponApplied: cleanCoupon || null,
+        hasCoupon: Boolean(cleanCoupon),
+        couponCode: cleanCoupon || null,
+        discountAmount: pricing?.discountAmount || 0,
+        rate: pricing?.rate || 0,
+        notes: cleanNotes,
+        status: 'pending',
+        isGuest: isGuestUser
+      });
     } catch (err) {
+      console.error('Order submission error:', err);
       setCheckoutError(err.message || (isBangla ? 'অর্ডার প্রসেস করতে ব্যর্থ হয়েছে।' : 'Failed to process order claim.'));
     } finally {
       setCheckoutSubmitting(false);
@@ -726,18 +940,438 @@ const DealsDiscountsModal = ({ onClose }) => {
     setSelectedDealForClaim(null);
     setCheckoutSuccess(null);
     setCheckoutError(null);
+    setIsGuestInterceptOpen(false);
   };
 
-  // Direct Order Submission Handler - prevents premature close and triggers mail dispatch
+  // Direct Order Submission Handler - Intercepts unauthenticated guest checkouts
   const handleFinalSubmit = async (e) => {
     if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
     }
-    await handleConfirmOrderClaim(e);
+    if (checkoutSubmitting) return;
+    setCheckoutError(null);
+
+    const userName = (checkoutName || '').trim();
+    const userPhone = (checkoutPhone || '').trim();
+    const userAddress = (checkoutAddress || '').trim();
+
+    // 1. Mandatory customer fields validation with friendly warnings
+    if (!userName) {
+      setCheckoutError(isBangla ? 'আপনার পূর্ণ নাম লিখুন (আবশ্যক)।' : 'Please enter your full name (required).');
+      return;
+    }
+    if (!userPhone) {
+      setCheckoutError(isBangla ? 'আপনার মোবাইল নাম্বার প্রদান করুন (আবশ্যক)।' : 'Please enter your phone number (required).');
+      return;
+    }
+    if (!userAddress) {
+      setCheckoutError(isBangla ? 'আপনার সম্পূর্ণ ঠিকানা প্রদান করুন (আবশ্যক)।' : 'Please enter your address (required).');
+      return;
+    }
+
+    // 2. Unauthenticated / Guest or Logged-in users proceed directly without blocking for auth.currentUser
+    await handleConfirmOrderClaim(e, {
+      overrideEmail: checkoutEmail ? checkoutEmail.trim() : '',
+      overridePhone: userPhone,
+      isGuest: !currentUser
+    });
   };
   const handleFinalOrderDispatch = handleFinalSubmit;
   const handleSendOrderEmail = handleFinalSubmit;
+
+  // Confirm and submit order from Guest Intercept Modal
+  const handleConfirmGuestIntercept = async (e) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (checkoutSubmitting) return;
+    setGuestInterceptError(null);
+
+    const email = (guestInterceptEmail || '').trim().toLowerCase();
+    const phone = (guestInterceptPhone || '').trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Validate Mandatory Email
+    if (!email || !emailRegex.test(email)) {
+      setGuestInterceptError(
+        isBangla 
+          ? 'অনুগ্রহ করে একটি সঠিক ও সক্রিয় ইমেইল অ্যাড্রেস প্রদান করুন।' 
+          : 'Please enter a valid active email address.'
+      );
+      return;
+    }
+
+    // Validate Mandatory WhatsApp Number (starts with 01, 11 digits)
+    const cleanDigits = phone.replace(/[\s\-\+\(\)]/g, '').replace(/^88/, '');
+    if (!cleanDigits.startsWith('01') || cleanDigits.length !== 11) {
+      setGuestInterceptError(
+        isBangla 
+          ? 'অনুগ্রহ করে প্রিফিক্স 01 সহ সঠিক ১১ ডিজিটের হোয়াটসঅ্যাপ নাম্বার (যেমন: 01XXXXXXXXX) দিন।' 
+          : 'Please enter a valid 11-digit WhatsApp/mobile number starting with 01 (e.g. 01XXXXXXXXX).'
+      );
+      return;
+    }
+
+    // Update parent states
+    setCheckoutEmail(email);
+    setCheckoutPhone(cleanDigits);
+
+    // Proceed to claim
+    await handleConfirmOrderClaim(null, {
+      overrideEmail: email,
+      overridePhone: cleanDigits,
+      isGuest: true
+    });
+  };
+
+  // Execute Guest Order History Search Query
+  const handleExecuteGuestSearch = () => {
+    setGuestSearchInputError(null);
+    const query = (guestSearchInput || '').trim();
+
+    if (guestSearchCategory === 'phone') {
+      const cleanDigits = normalizePhone(query);
+      if (!cleanDigits || cleanDigits.length < 5) {
+        setGuestSearchInputError(
+          isBangla 
+            ? 'অনুগ্রহ করে সঠিক মোবাইল বা হোয়াটসঅ্যাপ নাম্বার প্রদান করুন।' 
+            : 'Please enter a valid mobile or WhatsApp number.'
+        );
+        return;
+      }
+      setGuestSearchSubmittedQuery({ category: 'phone', query: cleanDigits });
+    } else {
+      let cleanEmail = query.toLowerCase();
+      if (cleanEmail && cleanEmail.includes('@') && !cleanEmail.includes('.')) {
+        cleanEmail = cleanEmail + '.com';
+        setGuestSearchInput(cleanEmail);
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+        setGuestSearchInputError(
+          isBangla 
+            ? 'অনুগ্রহ করে সঠিক ইমেইল আইডি (যেমন: user@gmail.com) প্রদান করুন।' 
+            : 'Please enter a valid email address.'
+        );
+        return;
+      }
+      setGuestSearchSubmittedQuery({ category: 'email', query: cleanEmail });
+    }
+  };
+
+  // Filter helper for tracking orders (Search & Status)
+  const filterOrders = (ordersList) => {
+    return (ordersList || []).filter((order) => {
+      // 1. Status Filter
+      const status = (order.status || 'pending').toLowerCase();
+      const isAccepted = status === 'accepted' || status === 'confirmed';
+      const isCancelled = status === 'cancelled';
+      const isPending = !isAccepted && !isCancelled;
+
+      if (trackingStatusFilter === 'pending' && !isPending) return false;
+      if (trackingStatusFilter === 'confirmed' && !isAccepted) return false;
+      if (trackingStatusFilter === 'cancelled' && !isCancelled) return false;
+
+      // 2. Search Term Filter (Tracking ID / Order Code / Item Title / Address / Phone)
+      if (trackingSearchTerm.trim()) {
+        const q = trackingSearchTerm.trim().toLowerCase();
+        const code = (order.orderCode || order.orderId || '').toLowerCase();
+        const title = (order.dealTitle || '').toLowerCase();
+        const address = (order.clientAddress || order.address || '').toLowerCase();
+        const phone = (order.clientPhone || order.phone || order.whatsapp || '').toLowerCase();
+        const matches = code.includes(q) || title.includes(q) || address.includes(q) || phone.includes(q);
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  };
+
+  // Render Modern Delivery-Tracking Card (Modern Delivery/Shipment Card Style)
+  const renderDeliveryTrackingCard = (order) => {
+    const status = (order.status || 'pending').toLowerCase();
+    const isAccepted = status === 'accepted' || status === 'confirmed';
+    const isCancelled = status === 'cancelled';
+    const isPending = !isAccepted && !isCancelled;
+
+    const trackingId = order.orderCode || order.orderId || 'ORD-92841-XYZ';
+    const thumbUrl = order.dealThumbnail || order.bannerUrl || order.imagePath || '/add1.png';
+    const address = order.clientAddress || order.address || (isBangla ? 'ঠিকানা প্রযোজ্য নয় / ডিজিটাল ডেলিভারি' : 'Digital Delivery / Address not specified');
+    const dealTitle = order.dealTitle || (isBangla ? 'এক্সক্লুসিভ অফার ও ডিল' : 'Exclusive Deal Project');
+    const orderDate = order.orderDate || (order.timestamp ? new Date(order.timestamp).toLocaleString(isBangla ? 'bn-BD' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : 'Oct 27, 2026 • 10:00 PM');
+
+    return (
+      <div
+        key={order.id || order.orderId || trackingId}
+        className="rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all"
+        style={{
+          background: isDark ? 'linear-gradient(145deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.75) 100%)' : '#FFFFFF',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        {/* TOP SECTION (Header Row) */}
+        <div style={{
+          padding: '14px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #F1F5F9',
+          background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.65)'
+        }}>
+          {/* Left: Subtitle TRACKING ID & bold monospace code */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{
+              fontSize: '0.66rem',
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              color: isDark ? '#94A3B8' : '#64748B'
+            }}>
+              TRACKING ID
+            </span>
+            <span style={{
+              fontFamily: "'Space Grotesk', monospace",
+              fontWeight: 800,
+              fontSize: '0.98rem',
+              color: isDark ? '#F1F5F9' : '#0F172A',
+              letterSpacing: '0.5px'
+            }}>
+              {trackingId}
+            </span>
+          </div>
+
+          {/* Right: Rounded pill badge for status */}
+          <div>
+            {isPending && (
+              <span className="rounded-full bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50" style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 12px',
+                fontSize: '0.74rem',
+                fontWeight: 800
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />
+                <span>PENDING / IN TRANSIT</span>
+              </span>
+            )}
+            {isAccepted && (
+              <span className="rounded-full bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50" style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 12px',
+                fontSize: '0.74rem',
+                fontWeight: 800
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
+                <span>CONFIRMED / DELIVERED</span>
+              </span>
+            )}
+            {isCancelled && (
+              <span className="rounded-full bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/50" style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 12px',
+                fontSize: '0.74rem',
+                fontWeight: 800
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} />
+                <span>CANCELLED</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* MIDDLE SECTION (Route / Address Details) */}
+        <div style={{
+          padding: '16px 18px',
+          display: 'flex',
+          gap: '14px',
+          alignItems: 'flex-start'
+        }}>
+          {/* Location / Route Marker: Blue dot -> Dashed line -> Pin */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            paddingTop: '3px',
+            width: '18px',
+            flexShrink: 0
+          }}>
+            <div style={{
+              width: '9px',
+              height: '9px',
+              borderRadius: '50%',
+              background: '#3B82F6',
+              boxShadow: '0 0 8px rgba(59, 130, 246, 0.7)'
+            }} />
+            <div style={{
+              width: '2px',
+              height: '32px',
+              borderLeft: '2px dashed #93C5FD',
+              margin: '3px 0'
+            }} />
+            <MapPin size={13} color="#10B981" />
+          </div>
+
+          {/* Route Content */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div>
+              <div style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                color: '#3B82F6',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em'
+              }}>
+                {isBangla ? 'আইটেম / প্রজেক্ট' : 'Item / Project'}
+              </div>
+              <div style={{
+                fontWeight: 800,
+                fontSize: '0.94rem',
+                color: isDark ? '#FFFFFF' : '#0F172A',
+                lineHeight: 1.3
+              }}>
+                {dealTitle}
+              </div>
+            </div>
+
+            <div>
+              <div style={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                color: '#10B981',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em'
+              }}>
+                Destination / Address
+              </div>
+              <div style={{
+                fontSize: '0.82rem',
+                color: isDark ? '#CBD5E1' : '#475569',
+                lineHeight: 1.35
+              }}>
+                {address}
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '2px',
+              flexWrap: 'wrap'
+            }}>
+              <span style={{
+                fontSize: '0.82rem',
+                fontWeight: 900,
+                color: '#10B981',
+                fontFamily: "'Space Grotesk', monospace",
+                background: 'rgba(16, 185, 129, 0.1)',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                border: '1px solid rgba(16, 185, 129, 0.25)'
+              }}>
+                ৳{order.finalPrice} BDT
+              </span>
+              {order.isGuest && (
+                <span style={{
+                  fontSize: '0.68rem',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(0, 240, 255, 0.1)',
+                  color: '#00F0FF',
+                  fontWeight: 700,
+                  border: '1px solid rgba(0, 240, 255, 0.3)'
+                }}>
+                  {isBangla ? 'গেস্ট অর্ডার' : 'Guest Order'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Thumbnail */}
+          <div style={{
+            width: '62px',
+            height: '62px',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: isDark ? '#091124' : '#E2E8F0',
+            border: '1.5px solid rgba(16, 185, 129, 0.3)'
+          }}>
+            <img
+              src={thumbUrl}
+              alt={dealTitle}
+              onError={(e) => { e.target.src = '/add1.png'; }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
+        </div>
+
+        {/* BOTTOM SECTION (Footer Row) */}
+        <div style={{
+          padding: '12px 18px',
+          borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #F1F5F9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '10px',
+          background: isDark ? 'rgba(255, 255, 255, 0.015)' : 'rgba(248, 250, 252, 0.45)'
+        }}>
+          {/* Left: Delivered Date / Order Date */}
+          <div style={{
+            fontSize: '0.76rem',
+            color: isDark ? '#94A3B8' : '#64748B',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <Clock size={13} style={{ flexShrink: 0, color: '#3B82F6' }} />
+            <span>
+              <strong>{isAccepted ? 'Delivered Date' : 'Order Date'}:</strong> {orderDate}
+            </span>
+          </div>
+
+          {/* Right: Action Button Track ⛶ / Details > */}
+          <button
+            type="button"
+            onClick={() => setSelectedShipmentDetail(order)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #0284C7 0%, #00F0FF 100%)',
+              color: '#020617',
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 10px rgba(0, 240, 255, 0.3)',
+              transition: 'all 0.2s ease',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <span>Track ⛶</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <AnimatePresence>
@@ -765,54 +1399,65 @@ const DealsDiscountsModal = ({ onClose }) => {
           boxSizing: 'border-box'
         }}
       >
-        {/* TOP HEADER: Full-Width Canvas, 48px Glass Icon & 36px Back Button */}
+        {/* 1. TOP HEADER BAR: Back Arrow (Left), Exclusive Deals & Discounts (Center/Left), Close X (Right) */}
         <div style={{
-          padding: '16px 24px',
+          padding: '12px 20px',
           borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: isDark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.92)',
+          gap: '12px',
+          background: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          flexShrink: 0
+          flexShrink: 0,
+          width: '100%',
+          boxSizing: 'border-box'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            {/* Dedicated Circular 36px Back Button */}
-            <button
-              onClick={onClose}
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                color: isDark ? '#FFFFFF' : '#0F172A',
-                cursor: 'pointer',
-                flexShrink: 0,
-                transition: 'all 0.2s ease'
-              }}
-              title={isBangla ? 'হোমবারে ফিরে যান' : 'Back to Home'}
-              aria-label="Back"
-            >
-              <ArrowLeft size={18} />
-            </button>
+          {/* Left: Dedicated Circular 38px Back Arrow Button */}
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)'}`,
+              color: isDark ? '#FFFFFF' : '#0F172A',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'all 0.2s ease'
+            }}
+            title={isBangla ? 'হোমবারে ফিরে যান' : 'Back to Home'}
+            aria-label="Back"
+          >
+            <ArrowLeft size={18} />
+          </button>
 
-            {/* Enhanced 48px × 48px Circular Frosted Glass Badge with deal and discount.png */}
+          {/* Center / Left Section: Icon Badge + Title & Subtitle */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flex: 1,
+            minWidth: 0,
+            justifyContent: 'flex-start'
+          }}>
             <div style={{
-              width: '48px',
-              height: '48px',
+              width: '42px',
+              height: '42px',
               borderRadius: '50%',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
-              background: 'rgba(255, 255, 255, 0.15)',
-              border: '1.5px solid rgba(255, 255, 255, 0.3)',
-              boxShadow: '0 0 25px rgba(0, 240, 255, 0.35), 0 0 20px rgba(16, 185, 129, 0.35)',
+              background: 'rgba(255, 255, 255, 0.12)',
+              border: '1.5px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 0 20px rgba(0, 240, 255, 0.3), 0 0 15px rgba(16, 185, 129, 0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -821,26 +1466,32 @@ const DealsDiscountsModal = ({ onClose }) => {
               <img 
                 src="/deal and discount.png" 
                 alt="Deals & Discounts" 
-                style={{ width: '30px', height: '30px', objectFit: 'contain' }}
+                style={{ width: '26px', height: '26px', objectFit: 'contain' }}
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0, flex: 1 }}>
               <h2 style={{
                 margin: 0,
-                fontSize: '1.35rem',
+                fontSize: 'clamp(1.05rem, 3.2vw, 1.35rem)',
                 fontWeight: 900,
                 color: isDark ? '#FFFFFF' : '#0F172A',
                 fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
-                letterSpacing: '0.2px'
+                letterSpacing: '0.2px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               }}>
                 {isBangla ? 'বিশেষ ডিল ও এক্সক্লুসিভ ডিসকাউন্ট' : 'Exclusive Deals & Discounts'}
               </h2>
               <p style={{
                 margin: '2px 0 0 0',
-                fontSize: '0.78rem',
+                fontSize: 'clamp(0.70rem, 2vw, 0.78rem)',
                 color: isDark ? '#94A3B8' : '#64748B',
-                fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
               }}>
                 {isBangla 
                   ? 'ভেরিফাইড প্রোমো কোড, স্পেশাল বান্ডেল অফার ও প্রজেক্ট ডিসকাউন্ট সুবিধা' 
@@ -849,24 +1500,92 @@ const DealsDiscountsModal = ({ onClose }) => {
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-              border: 'none',
-              color: isDark ? '#FFFFFF' : '#0F172A',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <X size={18} />
-          </button>
+          {/* Right Action Buttons: Compact Colorful Tracking Button + Close (X) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            {/* Compact Colorful Order Tracking Button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (currentUser?.email) {
+                  setTrackEmail(currentUser.email);
+                }
+                setIsTrackModalOpen(true);
+              }}
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(6, 182, 212, 0.22) 100%)',
+                border: '1.5px solid rgba(16, 185, 129, 0.55)',
+                color: isDark ? '#34D399' : '#059669',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+                boxShadow: '0 0 16px rgba(16, 185, 129, 0.35), 0 0 8px rgba(6, 182, 212, 0.25)',
+                transition: 'all 0.2s ease',
+                position: 'relative'
+              }}
+              title={isBangla ? 'আমার অর্ডার ও ডিল ট্র্যাকিং' : 'My Orders & Deal Tracking'}
+              aria-label="Track Orders"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.06)';
+                e.currentTarget.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.55), 0 0 12px rgba(6, 182, 212, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.35), 0 0 8px rgba(6, 182, 212, 0.25)';
+              }}
+            >
+              <Package size={18} />
+              {currentUser && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-2px',
+                  right: '-2px',
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  background: '#10B981',
+                  border: `2px solid ${isDark ? '#0F172A' : '#FFFFFF'}`,
+                  boxShadow: '0 0 6px #10B981'
+                }} />
+              )}
+            </button>
+
+            {/* Circular 38px Close (X) Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)'}`,
+                color: isDark ? '#FFFFFF' : '#0F172A',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+                transition: 'all 0.2s ease'
+              }}
+              title={isBangla ? 'বন্ধ করুন' : 'Close'}
+              aria-label="Close"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.12)';
+                e.currentTarget.style.color = '#EF4444';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+                e.currentTarget.style.color = isDark ? '#FFFFFF' : '#0F172A';
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* EXPANSIVE FULL-SCREEN CANVAS CONTENT (No Overflow, Responsive Grid) */}
@@ -881,7 +1600,25 @@ const DealsDiscountsModal = ({ onClose }) => {
         }}>
           <FirestoreStreamBuilder collectionName={COLLECTIONS.DEALS_DISCOUNTS}>
             {({ data }) => {
-              const deals = data || [];
+              const allDeals = data || [];
+              const deals = allDeals.filter(deal => {
+                if (!deal) return false;
+                if (deal.isActive === false) return false;
+                if (deal.isLimited && deal.expiryDate) {
+                  const expTime = new Date(deal.expiryDate).getTime();
+                  if (!isNaN(expTime) && expTime < Date.now()) {
+                    return false; // Auto-expired limited time offer!
+                  }
+                }
+                return true;
+              });
+
+              // Calculate deal with highest discount percentage
+              const topDiscountRate = deals.reduce((max, d) => {
+                const r = parseDiscountRate(d);
+                return r > max ? r : max;
+              }, 0);
+              const topDealId = deals.find(d => parseDiscountRate(d) === topDiscountRate && topDiscountRate > 0)?.id;
 
               return (
                 <div style={{
@@ -894,6 +1631,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                   boxSizing: 'border-box'
                 }}>
                   {deals.map((item) => {
+                    const isRecommended = item.id === topDealId && topDiscountRate > 0;
                     return (
                       <motion.div
                         key={item.id}
@@ -904,18 +1642,49 @@ const DealsDiscountsModal = ({ onClose }) => {
                           background: isDark 
                             ? 'linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(3, 7, 18, 0.98) 100%)' 
                             : '#FFFFFF',
-                          border: `1.5px solid ${isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(0, 105, 92, 0.22)'}`,
+                          border: isRecommended
+                            ? '2px solid #FF6B00'
+                            : `1.5px solid ${isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(0, 105, 92, 0.22)'}`,
                           overflow: 'hidden',
-                          boxShadow: isDark 
-                            ? '0 8px 32px rgba(34, 197, 94, 0.15), 0 0 20px rgba(16, 185, 129, 0.08)' 
-                            : '0 8px 32px rgba(0, 105, 92, 0.12)',
+                          boxShadow: isRecommended
+                            ? (isDark 
+                                ? '0 10px 35px rgba(255, 107, 0, 0.28), 0 0 20px rgba(255, 69, 0, 0.2)' 
+                                : '0 10px 35px rgba(255, 107, 0, 0.25)')
+                            : (isDark 
+                                ? '0 8px 32px rgba(34, 197, 94, 0.15), 0 0 20px rgba(16, 185, 129, 0.08)' 
+                                : '0 8px 32px rgba(0, 105, 92, 0.12)'),
                           display: 'flex',
                           flexDirection: 'column',
                           width: '100%',
                           maxWidth: '100%',
-                          boxSizing: 'border-box'
+                          boxSizing: 'border-box',
+                          position: 'relative'
                         }}
                       >
+                        {/* Dynamic "🔥 Recommended / Popular Deal" Badge for highest discount */}
+                        {isRecommended && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '12px',
+                            left: '12px',
+                            zIndex: 15,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            background: 'linear-gradient(135deg, #FF3D00 0%, #FF8F00 100%)',
+                            color: '#FFFFFF',
+                            fontSize: '0.76rem',
+                            fontWeight: 900,
+                            letterSpacing: '0.4px',
+                            boxShadow: '0 4px 16px rgba(255, 61, 0, 0.5), 0 0 10px rgba(255, 143, 0, 0.4)',
+                            border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                            textTransform: 'uppercase'
+                          }}>
+                            <span>🔥 {isBangla ? 'সর্বোচ্চ ছাড় / জনপ্রিয় ডিল' : 'Recommended Deal'}</span>
+                          </div>
+                        )}
                         {/* High-Resolution Full-Width Banner Image (Clean Showcase, No Overlays) */}
                         <div style={{
                           width: '100%',
@@ -1032,7 +1801,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                             <motion.button
                               whileHover={{ scale: 1.02 }}
                               whileTap={{ scale: 0.98 }}
-                              onClick={() => handleOpenClaimModal(item)}
+                              onClick={() => handleClaimButtonClick(item)}
                               style={{
                                 flex: 1,
                                 display: 'flex',
@@ -1096,63 +1865,1587 @@ const DealsDiscountsModal = ({ onClose }) => {
           </FirestoreStreamBuilder>
         </div>
 
-        {/* DYNAMIC CHECKOUT DRAWER / MODAL: Single-Use Per Email & Price Calculation */}
+        {/* DYNAMIC CHECKOUT DRAWER / MODAL: Claim Offer & Checkout */}
         <AnimatePresence>
           {selectedDealForClaim && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-0 sm:p-4 box-border"
               style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
                 width: '100vw',
                 height: '100vh',
                 background: 'rgba(5, 10, 24, 0.88)',
                 backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                zIndex: 99999,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '16px',
-                boxSizing: 'border-box'
+                WebkitBackdropFilter: 'blur(16px)'
               }}
-              onClick={() => setSelectedDealForClaim(null)}
+              onClick={handleCloseCheckoutModal}
             >
               <motion.div
-                initial={{ scale: 0.92, y: 20 }}
+                initial={{ scale: 0.94, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.92, y: 20 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                exit={{ scale: 0.94, y: 20 }}
+                transition={{ type: 'spring', damping: 26, stiffness: 320 }}
                 onClick={(e) => e.stopPropagation()}
+                className="w-full h-full min-h-screen sm:min-h-0 sm:h-auto sm:max-h-[92vh] sm:max-w-xl rounded-none sm:rounded-3xl flex flex-col overflow-hidden relative"
                 style={{
-                  width: '100%',
-                  maxWidth: '580px',
-                  maxHeight: '92vh',
-                  borderRadius: '24px',
                   background: isDark ? 'linear-gradient(145deg, #0F172A 0%, #132338 100%)' : '#FFFFFF',
                   border: '1.5px solid rgba(16, 185, 129, 0.4)',
-                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.25)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                  position: 'relative'
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.25)'
                 }}
               >
-                {/* 1. Fixed Top Header */}
+                {/* 1. TOP HEADER: Explicit Title & Clean Close (X) Button */}
                 <div style={{
-                  padding: '18px 24px 14px',
+                  padding: '16px 22px',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexShrink: 0,
+                  background: isDark ? 'rgba(15, 23, 42, 0.8)' : '#FFFFFF'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '38px',
+                      height: '38px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                      flexShrink: 0
+                    }}>
+                      <Calculator size={18} />
+                    </div>
+                    <div>
+                      <h3 style={{
+                        margin: 0,
+                        fontSize: '1.15rem',
+                        fontWeight: 900,
+                        color: isDark ? '#FFFFFF' : '#0F172A',
+                        fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
+                      }}>
+                        {checkoutSuccess 
+                          ? (isBangla ? 'ডিজিটাল রসিদ ও ইনভয়েস' : 'Digital Receipt & Invoice') 
+                          : 'Claim Offer & Checkout'}
+                      </h3>
+                      <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                        {checkoutSuccess 
+                          ? (isBangla ? 'অর্ডারটি সফলভাবে জমা হয়েছে এবং অনুমোদনের অপেক্ষায় রয়েছে' : 'Order submitted & pending admin approval') 
+                          : (isBangla ? 'তথ্য পূরণ করে অফারটি ক্লেইম করুন' : 'Fill details below to complete your checkout')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseCheckoutModal}
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                      border: 'none',
+                      color: isDark ? '#FFFFFF' : '#0F172A',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title={isBangla ? 'বন্ধ করুন' : 'Close'}
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+
+                {/* 2. Scrollable Body */}
+                <div style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 22px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  WebkitOverflowScrolling: 'touch'
+                }}>
+                  {/* Digital Invoice Success Screen */}
+                  {checkoutSuccess ? (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                      style={{
+                        borderRadius: '20px',
+                        overflow: 'hidden',
+                        background: isDark ? '#0F172A' : '#FFFFFF',
+                        border: `1.5px solid ${isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.3)'}`,
+                        boxShadow: '0 20px 45px rgba(0, 0, 0, 0.35)',
+                        display: 'flex',
+                        flexDirection: 'column'
+                      }}
+                    >
+                      {/* Branding */}
+                      <div style={{
+                        padding: '16px 20px',
+                        background: isDark ? '#091124' : '#F8FAFC',
+                        borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}>
+                        <div>
+                          <div style={{ fontSize: '1rem', fontWeight: 900, letterSpacing: '1.5px', color: '#14B8A6', textTransform: 'uppercase' }}>
+                            RASEDUL KARIM
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: '#94A3B8', letterSpacing: '0.5px' }}>
+                            PORTFOLIO & DIGITAL SOLUTIONS
+                          </div>
+                        </div>
+                        {/* Live Lifecycle Status Badge: PENDING */}
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '20px',
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          border: '1.5px solid #F59E0B',
+                          color: '#FBBF24',
+                          fontSize: '0.74rem',
+                          fontWeight: 800,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px'
+                        }}>
+                          <Clock size={13} />
+                          {isBangla ? 'পেন্ডিং (Pending Approval)' : 'Pending Approval'}
+                        </span>
+                      </div>
+
+                      {/* Hero Notice */}
+                      <div style={{
+                        padding: '18px 20px',
+                        background: 'linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)',
+                        textAlign: 'center',
+                        color: '#FFFFFF'
+                      }}>
+                        <div style={{ fontSize: '1.8rem', marginBottom: '4px' }}>🎉</div>
+                        <h4 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: 900, color: '#FFFFFF' }}>
+                          {isBangla ? 'অর্ডার সফলভাবে জমা হয়েছে!' : 'Order Placed Successfully!'}
+                        </h4>
+                        <p style={{ margin: 0, fontSize: '0.78rem', color: '#E6FFFA' }}>
+                          {isBangla 
+                            ? 'আপনার অর্ডারটি পেন্ডিং হিসেবে জমা হয়েছে। অ্যাডমিন কনফার্ম করলে অফারটি চূড়ান্তভাবে সক্রিয় হবে।' 
+                            : 'Your order is recorded as pending. Offer benefits will lock upon admin confirmation.'}
+                        </p>
+                      </div>
+
+                      {/* Order Code & Date */}
+                      <div style={{
+                        padding: '12px 20px',
+                        background: isDark ? '#111E38' : '#F8FAFC',
+                        borderBottom: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: '0.78rem',
+                        color: '#94A3B8'
+                      }}>
+                        <div>
+                          {isBangla ? 'অর্ডার কোড:' : 'Order Code:'}{' '}
+                          <strong style={{ color: '#00F0FF', fontFamily: "'Space Grotesk', monospace" }}>
+                            #{checkoutSuccess.orderCode || checkoutSuccess.orderId}
+                          </strong>
+                        </div>
+                        <div>
+                          {isBangla ? 'তারিখ:' : 'Date:'}{' '}
+                          <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{checkoutSuccess.orderDate}</strong>
+                        </div>
+                      </div>
+
+                      {/* Pricing Breakdown */}
+                      <div style={{ padding: '16px 20px' }}>
+                        <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#22D3EE', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                          {isBangla ? '📋 প্রজেক্ট ও প্রাইসিং বিবরণ' : '📋 Deal & Pricing Summary'}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '8px', borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}` }}>
+                            <div>
+                              <div style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '0.92rem' }}>
+                                {checkoutSuccess.dealTitle}
+                              </div>
+                              {checkoutSuccess.hasCoupon && checkoutSuccess.couponCode && (
+                                <div style={{ fontSize: '0.74rem', color: '#14B8A6', marginTop: '2px' }}>
+                                  {isBangla ? 'অফার / ছাড়:' : 'Offer / Discount:'}{' '}
+                                  <strong>
+                                    {checkoutSuccess.couponCode === 'SPECIAL_DEAL_DISCOUNT'
+                                      ? (isBangla ? 'বিশেষ অফার ডিসকাউন্ট' : 'Special Deal Discount')
+                                      : checkoutSuccess.couponCode}
+                                  </strong>
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A', fontFamily: "'Space Grotesk', monospace" }}>
+                                {checkoutSuccess.hasCoupon ? checkoutSuccess.originalPrice : `৳${checkoutSuccess.finalPrice} BDT`}
+                              </div>
+                            </div>
+                          </div>
+
+                          {checkoutSuccess.hasCoupon && (
+                            <>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94A3B8' }}>
+                                <span>{isBangla ? 'রেগুলার মূল্য:' : 'Regular Price:'}</span>
+                                <span style={{ fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.originalPrice}</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#10B981', fontWeight: 700 }}>
+                                <span>{isBangla ? `প্রযোজ্য ছাড় (${checkoutSuccess.discountPercentage}%):` : `Applied Discount (${checkoutSuccess.discountPercentage}%):`}</span>
+                                <span style={{ fontFamily: "'Space Grotesk', monospace" }}>-{checkoutSuccess.discountAmount}</span>
+                              </div>
+                            </>
+                          )}
+
+                          <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingTop: '8px',
+                            borderTop: `1.5px solid ${isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.3)'}`,
+                            fontSize: '0.98rem',
+                            fontWeight: 900,
+                            color: isDark ? '#FFFFFF' : '#0F172A'
+                          }}>
+                            <span>{isBangla ? 'পরিশোধযোগ্য মূল্য:' : 'Payable Amount:'}</span>
+                            <span style={{ color: '#10B981', fontSize: '1.25rem', fontFamily: "'Space Grotesk', monospace" }}>
+                              ৳{checkoutSuccess.finalPrice} BDT
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Customer Details Box */}
+                      <div style={{ padding: '0 20px 16px' }}>
+                        <div style={{
+                          background: isDark ? '#111E38' : '#F8FAFC',
+                          borderRadius: '12px',
+                          padding: '12px 14px',
+                          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '5px'
+                        }}>
+                          <div style={{ fontWeight: 800, color: '#22D3EE', marginBottom: '2px' }}>
+                            {isBangla ? '👤 গ্রাহকের তথ্য' : '👤 Customer Information'}
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                            <span>{isBangla ? 'নাম:' : 'Name:'}</span>
+                            <span style={{ color: isDark ? '#FFFFFF' : '#0F172A', fontWeight: 700 }}>{checkoutSuccess.clientName}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                            <span>{isBangla ? 'মোবাইল:' : 'Phone:'}</span>
+                            <span style={{ color: isDark ? '#FFFFFF' : '#0F172A', fontWeight: 700, fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.clientPhone}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                            <span>{isBangla ? 'ঠিকানা:' : 'Address:'}</span>
+                            <span style={{ color: isDark ? '#FFFFFF' : '#0F172A', fontWeight: 700 }}>{checkoutSuccess.clientAddress}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8' }}>
+                            <span>{isBangla ? 'ইমেইল:' : 'Email:'}</span>
+                            <span style={{ color: '#10B981', fontWeight: 700, fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.clientEmail}</span>
+                          </div>
+                          {checkoutSuccess.message && (
+                            <div style={{ color: '#94A3B8', borderTop: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`, paddingTop: '5px', marginTop: '2px' }}>
+                              <span>{isBangla ? 'নোট / বার্তা:' : 'Note:'}</span>{' '}
+                              <span style={{ color: isDark ? '#E2E8F0' : '#334155' }}>{checkoutSuccess.message}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Close button */}
+                      <div style={{ padding: '0 20px 20px' }}>
+                        <button
+                          type="button"
+                          onClick={handleCloseCheckoutModal}
+                          style={{
+                            width: '100%',
+                            minHeight: '48px',
+                            padding: '12px 20px',
+                            borderRadius: '14px',
+                            background: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
+                            color: '#FFFFFF',
+                            fontWeight: 800,
+                            fontSize: '0.95rem',
+                            border: '1.5px solid rgba(52, 211, 153, 0.4)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Check size={18} />
+                          <span>{isBangla ? '✓ সম্পন্ন করুন (Done)' : 'Done / Close'}</span>
+                        </button>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    /* Clean Step-by-Step Checkout Form */
+                    <form onSubmit={(e) => { if (e) { e.preventDefault(); e.stopPropagation(); } handleFinalSubmit(e); }} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {/* 2. PRODUCT PREVIEW CARD */}
+                      {(() => {
+                        const hasEffectiveCoupon = isCouponApplied && !!appliedCouponCode;
+                        const pricing = calculatePricing(selectedDealForClaim, hasEffectiveCoupon);
+                        return (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '14px',
+                            padding: '12px 14px',
+                            borderRadius: '16px',
+                            background: isDark ? 'rgba(255, 255, 255, 0.04)' : '#F8FAFC',
+                            border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+                          }}>
+                            {/* Product Image / Banner on left */}
+                            <div style={{
+                              width: '76px',
+                              height: '76px',
+                              borderRadius: '12px',
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                              background: isDark ? '#0F172A' : '#E2E8F0',
+                              border: '1px solid rgba(16, 185, 129, 0.3)'
+                            }}>
+                              <img
+                                src={selectedDealForClaim.bannerUrl || '/add1.png'}
+                                alt="Product banner"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            </div>
+
+                            {/* Details beside image */}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <h4 style={{
+                                margin: 0,
+                                fontSize: '0.98rem',
+                                fontWeight: 800,
+                                color: isDark ? '#FFFFFF' : '#0F172A',
+                                lineHeight: '1.3'
+                              }}>
+                                {selectedDealForClaim.title}
+                              </h4>
+
+                              {/* Discount badge */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                <span style={{
+                                  fontSize: '0.72rem',
+                                  fontWeight: 800,
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  background: 'rgba(16, 185, 129, 0.18)',
+                                  color: '#10B981',
+                                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}>
+                                  <Sparkles size={11} />
+                                  {selectedDealForClaim.discountPercent || (selectedDealForClaim.discountPercentage ? `${selectedDealForClaim.discountPercentage}% OFF` : 'Special Discount')}
+                                </span>
+
+                                {hasEffectiveCoupon && (
+                                  <span style={{
+                                    fontSize: '0.70rem',
+                                    fontWeight: 800,
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    background: 'rgba(0, 240, 255, 0.15)',
+                                    color: '#00F0FF',
+                                    border: '1px solid rgba(0, 240, 255, 0.3)'
+                                  }}>
+                                    ✓ {appliedCouponCode === 'SPECIAL_DEAL_DISCOUNT' 
+                                        ? (isBangla ? 'বিশেষ অফার ছাড় সক্রিয়' : 'Special Deal Discount Applied') 
+                                        : `${isBangla ? 'কুপন সক্রিয়' : 'Coupon Applied'}: ${appliedCouponCode}`}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Pricing Section: Regular Price & Discounted Price side by side in clear fonts */}
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                {hasEffectiveCoupon ? (
+                                  <>
+                                    <span style={{
+                                      fontSize: '0.80rem',
+                                      color: '#94A3B8',
+                                      textDecoration: 'line-through',
+                                      fontFamily: "'Space Grotesk', monospace"
+                                    }}>
+                                      ৳{pricing.basePrice}
+                                    </span>
+                                    <span style={{
+                                      fontSize: '1.15rem',
+                                      fontWeight: 900,
+                                      color: '#10B981',
+                                      fontFamily: "'Space Grotesk', monospace"
+                                    }}>
+                                      ৳{pricing.finalPrice} BDT
+                                    </span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span style={{
+                                      fontSize: '1.1rem',
+                                      fontWeight: 900,
+                                      color: isDark ? '#FFFFFF' : '#0F172A',
+                                      fontFamily: "'Space Grotesk', monospace"
+                                    }}>
+                                      ৳{pricing.basePrice} BDT
+                                    </span>
+                                    <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                                      ({isBangla ? 'রেগুলার মূল্য' : 'Regular Price'})
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 3. CUSTOMER INFORMATION FIELDS */}
+                      <div style={{
+                        padding: '14px 16px',
+                        borderRadius: '16px',
+                        background: isDark ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC',
+                        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                      }}>
+                        <div style={{
+                          fontSize: '0.82rem',
+                          fontWeight: 800,
+                          color: '#22D3EE',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <User size={15} />
+                          <span>{isBangla ? 'গ্রাহকের তথ্য (Customer Details)' : 'Customer Information'}</span>
+                        </div>
+
+                        {/* Full Name Field (Required) */}
+                        <div>
+                          <label style={{ fontSize: '0.76rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', fontWeight: 600 }}>
+                            <span>{isBangla ? 'নাম (Full Name) *' : 'Full Name *'}</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="text"
+                              required
+                              value={checkoutName}
+                              onChange={(e) => setCheckoutName(e.target.value)}
+                              placeholder={isBangla ? 'আপনার পূর্ণ নাম লিখুন...' : 'Enter your full name...'}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                paddingLeft: '36px',
+                                borderRadius: '10px',
+                                background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                                border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                                color: isDark ? '#FFFFFF' : '#0F172A',
+                                fontSize: '0.84rem',
+                                boxSizing: 'border-box',
+                                outline: 'none'
+                              }}
+                            />
+                            <User size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                          </div>
+                        </div>
+
+                        {/* Phone Number Field (Required) */}
+                        <div>
+                          <label style={{ fontSize: '0.76rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', fontWeight: 600 }}>
+                            <span>{isBangla ? 'মোবাইল নাম্বার (Phone Number) *' : 'Phone Number *'}</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="tel"
+                              required
+                              value={checkoutPhone}
+                              onChange={(e) => setCheckoutPhone(e.target.value)}
+                              placeholder={isBangla ? '01XXXXXXXXX' : '+880 1XXXXXXXXX'}
+                              className="w-full font-mono text-base tracking-normal leading-normal"
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                paddingLeft: '36px',
+                                borderRadius: '10px',
+                                background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                                border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                                color: isDark ? '#FFFFFF' : '#0F172A',
+                                fontSize: '1rem',
+                                lineHeight: '1.5',
+                                boxSizing: 'border-box',
+                                outline: 'none'
+                              }}
+                            />
+                            <Phone size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                          </div>
+                        </div>
+
+                        {/* Address Field (Required) */}
+                        <div>
+                          <label style={{ fontSize: '0.76rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', fontWeight: 600 }}>
+                            <span>{isBangla ? 'ঠিকানা (Address) *' : 'Address *'}</span>
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="text"
+                              required
+                              value={checkoutAddress}
+                              onChange={(e) => setCheckoutAddress(e.target.value)}
+                              placeholder={isBangla ? 'রোড, বাড়ি/এরিয়া, জেলা...' : 'House, Road, City/Area...'}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                paddingLeft: '36px',
+                                borderRadius: '10px',
+                                background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                                border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                                color: isDark ? '#FFFFFF' : '#0F172A',
+                                fontSize: '0.84rem',
+                                boxSizing: 'border-box',
+                                outline: 'none'
+                              }}
+                            />
+                            <MapPin size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                          </div>
+                        </div>
+
+                        {/* 4. EMAIL & AUTHENTICATION STATUS (With Guest Checkout & Info Icon) */}
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                            <label style={{ fontSize: '0.76rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: 600 }}>
+                              <Mail size={14} />
+                              <span>{isBangla ? 'ইমেইল ঠিকানা (Email Address)' : 'Email Address'}</span>
+                            </label>
+
+                            {/* Info icon (ℹ️) triggering Info Modal/Tooltip */}
+                            <button
+                              type="button"
+                              onClick={() => setShowEmailInfoModal((prev) => !prev)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: showEmailInfoModal ? '#00F0FF' : '#94A3B8',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '0.72rem',
+                                padding: '2px 4px',
+                                borderRadius: '6px'
+                              }}
+                              title="Account benefits info"
+                            >
+                              <Info size={14} color="#00F0FF" />
+                              <span style={{ color: '#00F0FF', fontWeight: 700 }}>{isBangla ? 'সুবিধা দেখুন' : 'Info'}</span>
+                            </button>
+                          </div>
+
+                          {/* Email Info Modal / Tooltip */}
+                          <AnimatePresence>
+                            {showEmailInfoModal && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                style={{
+                                  marginBottom: '8px',
+                                  padding: '10px 12px',
+                                  borderRadius: '10px',
+                                  background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(0, 105, 92, 0.08)',
+                                  border: '1px solid rgba(0, 240, 255, 0.35)',
+                                  color: isDark ? '#E2E8F0' : '#0F172A',
+                                  fontSize: '0.78rem',
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: '8px'
+                                }}
+                              >
+                                <Info size={16} color="#00F0FF" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                <div style={{ flex: 1, lineHeight: '1.4' }}>
+                                  <strong>{isBangla ? 'অ্যাকাউন্ট ভেরিফিকেশন সুবিধা:' : 'Account Benefit:'}</strong>{' '}
+                                  "If you are connected with an account, you will be eligible for coupon codes and exclusive discounts."
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEmailInfoModal(false)}
+                                  style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 0 }}
+                                >
+                                  <X size={14} />
+                                </button>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
+                          {/* Email Field rendering based on login status */}
+                          {currentUser?.email ? (
+                            /* Logged-in state: auto-filled, read-only, connected badge */
+                            <div>
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  type="email"
+                                  readOnly
+                                  value={currentUser.email}
+                                  style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    paddingLeft: '36px',
+                                    paddingRight: '36px',
+                                    borderRadius: '10px',
+                                    background: isDark ? 'rgba(0, 0, 0, 0.45)' : '#F1F5F9',
+                                    border: '1.5px solid #10B981',
+                                    color: isDark ? '#FFFFFF' : '#0F172A',
+                                    fontSize: '0.84rem',
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    boxSizing: 'border-box',
+                                    outline: 'none'
+                                  }}
+                                />
+                                <Mail size={15} color="#10B981" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                                <CheckCircle2 size={16} color="#10B981" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                              </div>
+                              <div style={{
+                                marginTop: '4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.70rem',
+                                color: '#10B981',
+                                fontWeight: 700
+                              }}>
+                                <CheckCircle2 size={12} />
+                                <span>{isBangla ? 'কানেক্টেড একাউন্ট (কুপন ও ছাড়ের জন্য উপযুক্ত)' : 'Connected Account (Eligible for coupons & discounts)'}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Guest Checkout state: editable, guest note, connect button */
+                            <div>
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  type="email"
+                                  value={checkoutEmail}
+                                  onChange={(e) => {
+                                    setCheckoutEmail(e.target.value);
+                                    if (isCouponApplied) {
+                                      setIsCouponApplied(false);
+                                      setAppliedCouponCode('');
+                                    }
+                                  }}
+                                  placeholder={isBangla ? 'ইমেইল ঠিকানা লিখুন (ঐচ্ছিক / Optional)...' : 'Enter email address (optional)...'}
+                                  style={{
+                                    width: '100%',
+                                    padding: '10px 14px',
+                                    paddingLeft: '36px',
+                                    borderRadius: '10px',
+                                    background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                                    border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                                    color: isDark ? '#FFFFFF' : '#0F172A',
+                                    fontSize: '0.84rem',
+                                    boxSizing: 'border-box',
+                                    outline: 'none'
+                                  }}
+                                />
+                                <Mail size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                              </div>
+
+                              {/* Guest checkout note & Connect account action */}
+                              <div style={{
+                                marginTop: '6px',
+                                padding: '8px 10px',
+                                borderRadius: '8px',
+                                background: isDark ? 'rgba(255, 255, 255, 0.03)' : '#F1F5F9',
+                                border: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '8px',
+                                flexWrap: 'wrap'
+                              }}>
+                                <span style={{ fontSize: '0.72rem', color: isDark ? '#94A3B8' : '#64748B', lineHeight: '1.3' }}>
+                                  {isBangla 
+                                    ? '💡 লগইন ছাড়া অর্ডার করতে পারেন, তবে কুপন বা বিশেষ ছাড় পেতে একাউন্ট কানেক্ট করুন।' 
+                                    : '💡 Guest checkout allowed! Connect your account to unlock coupon discounts.'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsConnectModalOpen(true)}
+                                  style={{
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    background: 'rgba(0, 240, 255, 0.15)',
+                                    border: '1px solid #00F0FF',
+                                    color: '#00F0FF',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <LogIn size={12} />
+                                  <span>{isBangla ? 'একাউন্ট কানেক্ট করুন' : 'Connect Account'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 5. OPTIONAL COUPON CODE & SINGLE-USE ELIGIBILITY CHECK */}
+                      <div style={{
+                        padding: '14px 16px',
+                        borderRadius: '16px',
+                        background: isDark ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC',
+                        border: isCouponApplied
+                          ? '1.5px solid #10B981'
+                          : `1.5px dashed ${isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(0, 105, 92, 0.3)'}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Tag size={15} color="#10B981" />
+                            <span style={{ fontSize: '0.80rem', fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A' }}>
+                              {isBangla ? 'কুপন কোড (Optional Coupon)' : 'Coupon Code (Optional)'}
+                            </span>
+                          </div>
+
+                          {isCouponApplied && (
+                            <span style={{
+                              fontSize: '0.68rem',
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: 'rgba(16, 185, 129, 0.2)',
+                              color: '#10B981',
+                              fontWeight: 800,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}>
+                              <CheckCircle2 size={12} />
+                              {appliedCouponCode === 'SPECIAL_DEAL_DISCOUNT'
+                                ? (isBangla ? 'বিশেষ ছাড় কার্যকর' : 'Special Discount Active')
+                                : (isBangla ? 'কুপন কার্যকর' : 'Coupon Applied')}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Input & Action Row */}
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input
+                            type="text"
+                            value={checkoutCouponCode}
+                            onChange={(e) => {
+                              setCheckoutCouponCode(e.target.value.toUpperCase());
+                              if (isCouponApplied) {
+                                setIsCouponApplied(false);
+                                setAppliedCouponCode('');
+                                setCouponSuccessMsg(null);
+                              }
+                            }}
+                            placeholder={isBangla ? 'কুপন কোড লিখুন...' : 'ENTER COUPON...'}
+                            style={{
+                              flex: 1,
+                              padding: '10px 12px',
+                              borderRadius: '10px',
+                              background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                              border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                              color: isDark ? '#FFFFFF' : '#0F172A',
+                              fontSize: '0.84rem',
+                              fontFamily: "'Space Grotesk', monospace",
+                              textTransform: 'uppercase',
+                              letterSpacing: '1px',
+                              outline: 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+
+                          {isCouponApplied ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCouponApplied(false);
+                                setAppliedCouponCode('');
+                                setCouponSuccessMsg(null);
+                                setCouponErrorMsg(null);
+                              }}
+                              style={{
+                                padding: '10px 14px',
+                                borderRadius: '10px',
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1.5px solid rgba(239, 68, 68, 0.35)',
+                                color: '#EF4444',
+                                fontSize: '0.80rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              <X size={14} />
+                              <span>{isBangla ? 'রিমুভ' : 'Remove'}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={couponChecking}
+                              onClick={() => checkAndApplyCouponForUser(checkoutCouponCode, selectedDealForClaim)}
+                              style={{
+                                padding: '10px 16px',
+                                borderRadius: '10px',
+                                background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
+                                border: 'none',
+                                color: '#FFFFFF',
+                                fontSize: '0.82rem',
+                                fontWeight: 800,
+                                cursor: couponChecking ? 'wait' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                boxShadow: '0 3px 10px rgba(16, 185, 129, 0.35)',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {couponChecking ? (
+                                <span>{isBangla ? 'যাচাই হচ্ছে...' : 'Verifying...'}</span>
+                              ) : (
+                                <>
+                                  <KeyRound size={14} />
+                                  <span>{isBangla ? 'অ্যাপ্লাই' : 'Apply'}</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Success Message */}
+                        {couponSuccessMsg && (
+                          <div style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            border: '1px solid rgba(16, 185, 129, 0.35)',
+                            color: '#10B981',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                          }}>
+                            <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
+                            <span>{couponSuccessMsg}</span>
+                          </div>
+                        )}
+
+                        {/* Error Message with Connect Button if login required */}
+                        {couponErrorMsg && (
+                          <div style={{
+                            padding: '9px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1.5px solid rgba(239, 68, 68, 0.35)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#EF4444', fontSize: '0.78rem', fontWeight: 700 }}>
+                              <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                              <span>{couponErrorMsg}</span>
+                            </div>
+                            {(couponErrorMsg.includes('কানেক্ট') || couponErrorMsg.includes('connect')) && !currentUser && (
+                              <button
+                                type="button"
+                                onClick={() => setIsConnectModalOpen(true)}
+                                style={{
+                                  alignSelf: 'flex-start',
+                                  padding: '5px 12px',
+                                  borderRadius: '6px',
+                                  background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                  border: 'none',
+                                  color: '#FFFFFF',
+                                  fontSize: '0.74rem',
+                                  fontWeight: 800,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px'
+                                }}
+                              >
+                                <LogIn size={12} />
+                                <span>{isBangla ? 'এখনই একাউন্ট কানেক্ট করুন' : 'Connect Account Now'}</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 6. NOTES / SCOPE TEXTAREA */}
+                      <div>
+                        <label style={{ fontSize: '0.76rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', fontWeight: 600 }}>
+                          <MessageSquare size={13} />
+                          <span>{isBangla ? 'সংক্ষিপ্ত মেসেজ / নোট (Notes - Optional)' : 'Brief Message / Notes (Optional)'}</span>
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={checkoutMessage}
+                          onChange={(e) => setCheckoutMessage(e.target.value)}
+                          placeholder={isBangla ? 'প্রজেক্ট সম্পর্কিত কোনো বিশেষ নির্দেশনা বা নোট লিখুন...' : 'Write any specific note or instructions...'}
+                          style={{
+                            width: '100%',
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                            border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                            color: isDark ? '#FFFFFF' : '#0F172A',
+                            fontSize: '0.84rem',
+                            boxSizing: 'border-box',
+                            resize: 'vertical',
+                            outline: 'none'
+                          }}
+                        />
+                      </div>
+
+                      {/* Unique Order Code Badge */}
+                      <div style={{
+                        padding: '8px 12px',
+                        borderRadius: '10px',
+                        background: isDark ? 'rgba(0, 240, 255, 0.06)' : 'rgba(0, 105, 92, 0.05)',
+                        border: '1px dashed rgba(0, 240, 255, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: '0.76rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Tag size={13} color="#00F0FF" />
+                          <span style={{ color: '#94A3B8' }}>{isBangla ? 'অর্ডার ট্র্যাকিং কোড:' : 'Order Code:'}</span>
+                          <span style={{ color: '#00F0FF', fontWeight: 800, fontFamily: "'Space Grotesk', monospace" }}>
+                            {orderCode || 'ORD-92841'}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                          {isBangla ? 'স্বয়ংক্রিয় জেনারেটেড' : 'Auto-generated'}
+                        </span>
+                      </div>
+
+                      {/* Form Error Banner */}
+                      {checkoutError && (
+                        <div style={{
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1.5px solid #EF4444',
+                          color: '#F87171',
+                          fontSize: '0.80rem',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}>
+                          <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                          <span>{checkoutError}</span>
+                        </div>
+                      )}
+
+                      {/* 7. PROMINENT SUBMIT BUTTON */}
+                      <div style={{ paddingTop: '8px', marginTop: '4px' }}>
+                        <button
+                          type="submit"
+                          disabled={checkoutSubmitting}
+                          style={{
+                            width: '100%',
+                            minHeight: '52px',
+                            padding: '14px 24px',
+                            borderRadius: '16px',
+                            background: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
+                            color: '#FFFFFF',
+                            fontWeight: 800,
+                            fontSize: '1rem',
+                            letterSpacing: '0.5px',
+                            boxShadow: '0 10px 25px -4px rgba(5, 150, 105, 0.45), 0 0 15px rgba(16, 185, 129, 0.25)',
+                            border: '1.5px solid rgba(52, 211, 153, 0.4)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '10px',
+                            cursor: checkoutSubmitting ? 'wait' : 'pointer',
+                            opacity: checkoutSubmitting ? 0.75 : 1,
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          {checkoutSubmitting ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ display: 'inline-block', width: '18px', height: '18px', border: '2px solid #FFFFFF', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                              <span>{isBangla ? 'অর্ডার সাবমিট হচ্ছে...' : 'Submitting Order...'}</span>
+                            </span>
+                          ) : (
+                            <>
+                              <Send size={18} color="#FFFFFF" />
+                              <span style={{ color: '#FFFFFF', fontWeight: 800 }}>
+                                {isBangla ? 'অর্ডার সাবমিট (Submit Order)' : 'Submit Order'}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* GUEST ORDER INTERCEPT MODAL: Fixed Centered Overlay Verification Modal (createPortal to document.body) */}
+        {typeof document !== 'undefined' && createPortal(
+          <AnimatePresence>
+            {isGuestInterceptOpen && (
+              <div
+                className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+                style={{ zIndex: 9999999 }}
+                onClick={() => setIsGuestInterceptOpen(false)}
+              >
+                <div
+                  className="relative w-full max-w-md bg-slate-900 border border-amber-500/50 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-auto text-left"
+                  style={{
+                    boxShadow: '0 25px 65px rgba(0, 0, 0, 0.8), 0 0 35px rgba(245, 158, 11, 0.25)'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Top Ambient Glow Line */}
+                  <div
+                    className="absolute top-0 left-0 right-0 h-1.5 rounded-t-3xl"
+                    style={{
+                      background: 'linear-gradient(90deg, #F59E0B 0%, #10B981 50%, #00F0FF 100%)'
+                    }}
+                  />
+
+                  {/* 1. Modal Header: Icon + Title + Close Button (✕) */}
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-2xl flex items-center justify-center text-amber-500 shrink-0"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.3) 100%)',
+                          border: '1.5px solid rgba(245, 158, 11, 0.5)',
+                          boxShadow: '0 0 16px rgba(245, 158, 11, 0.3)'
+                        }}
+                      >
+                        <AlertCircle size={22} />
+                      </div>
+                      <div>
+                        <h3 className="m-0 text-lg font-black text-white">
+                          No Account Connected
+                        </h3>
+                        <span className="text-xs font-bold text-amber-400">
+                          {isBangla ? 'গেস্ট অর্ডার নিশ্চিতকরণ ও যোগাযোগ তথ্য' : 'Guest Checkout Contact Verification'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsGuestInterceptOpen(false)}
+                      className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border-none"
+                      title={isBangla ? 'বন্ধ করুন' : 'Close'}
+                      aria-label="Close"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* 2. Instruction Message Box */}
+                  <div
+                    className="mt-4 p-3.5 rounded-2xl flex items-start gap-3"
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.12)',
+                      border: '1.5px solid rgba(245, 158, 11, 0.4)'
+                    }}
+                  >
+                    <Info size={20} className="text-amber-400 shrink-0 mt-0.5" />
+                    <p className="m-0 text-xs sm:text-[13px] leading-relaxed font-semibold text-amber-200">
+                      {isBangla
+                        ? 'আপনার এই মুহুর্তে একাউন্ট নেই, অর্ডার সংক্রান্ত তথ্য ও যোগাযোগের জন্য অবশ্যই একটি ইমেইল ও হোয়াটসঅ্যাপ নাম্বার দিন।'
+                        : 'আপনার এই মুহুর্তে একাউন্ট নেই, অর্ডার সংক্রান্ত তথ্য ও যোগাযোগের জন্য অবশ্যই একটি ইমেইল ও হোয়াটসঅ্যাপ নাম্বার দিন।'}
+                    </p>
+                  </div>
+
+                  {/* 3. Form: Email & WhatsApp Fields */}
+                  <form onSubmit={(e) => { if (e) { e.preventDefault(); e.stopPropagation(); } handleConfirmGuestIntercept(e); }} noValidate className="mt-4 flex flex-col gap-3.5 text-left">
+                    {/* Mandatory Email Field */}
+                    <div>
+                      <label className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Mail size={14} className="text-cyan-400" />
+                          <span>{isBangla ? 'ইমেইল অ্যাড্রেস' : 'Email Address'}</span>
+                          <span className="text-red-400">*</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-normal">
+                          {isBangla ? 'ইনভয়েস পাঠানো হবে' : 'For invoice'}
+                        </span>
+                      </label>
+                      <input
+                        type="email"
+                        value={guestInterceptEmail}
+                        onChange={(e) => {
+                          setGuestInterceptEmail(e.target.value);
+                          if (guestInterceptError) setGuestInterceptError(null);
+                        }}
+                        placeholder="yourname@gmail.com"
+                        className="w-full px-3.5 py-2.5 rounded-xl text-sm outline-none transition-all box-border bg-slate-950 border border-slate-700 text-white focus:border-cyan-400"
+                      />
+                    </div>
+
+                    {/* Mandatory WhatsApp Number Field */}
+                    <div>
+                      <label className="flex items-center justify-between text-xs font-bold text-slate-300 mb-1.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Smartphone size={14} className="text-emerald-400" />
+                          <span>{isBangla ? 'হোয়াটসঅ্যাপ / মোবাইল নম্বর' : 'WhatsApp / Mobile Number'}</span>
+                          <span className="text-red-400">*</span>
+                        </span>
+                        <span className="text-[11px] text-emerald-400 font-semibold">
+                          {isBangla ? 'প্রিফিক্স 01 সহ ১১ ডিজিট' : '11-digits starting with 01'}
+                        </span>
+                      </label>
+                      <div className="relative flex items-center">
+                        <span
+                          className="absolute left-3 text-xs font-black text-emerald-400 pointer-events-none select-none font-mono"
+                        >
+                          BD +88
+                        </span>
+                        <input
+                          type="tel"
+                          value={guestInterceptPhone}
+                          onChange={(e) => {
+                            setGuestInterceptPhone(e.target.value);
+                            if (guestInterceptError) setGuestInterceptError(null);
+                          }}
+                          placeholder="01XXXXXXXXX"
+                          className="w-full py-2.5 pr-3.5 pl-20 rounded-xl text-sm font-bold tracking-wide outline-none transition-all box-border bg-slate-950 border border-slate-700 text-white focus:border-emerald-400 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Error Feedback */}
+                    {guestInterceptError && (
+                      <div className="p-2.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 text-xs font-bold flex items-center gap-2">
+                        <AlertCircle size={16} className="shrink-0" />
+                        <span>{guestInterceptError}</span>
+                      </div>
+                    )}
+
+                    {/* Action Buttons: Confirm & Cancel */}
+                    <div className="flex flex-col sm:flex-row items-center gap-2.5 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsGuestInterceptOpen(false)}
+                        className="w-full sm:w-1/3 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors cursor-pointer text-center"
+                      >
+                        {isBangla ? 'বাতিল' : 'Cancel'}
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={checkoutSubmitting}
+                        className="w-full sm:w-2/3 min-h-[46px] py-2.5 px-5 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all outline-none cursor-pointer border-none shadow-lg disabled:opacity-50"
+                        style={{
+                          background: 'linear-gradient(135deg, #059669 0%, #10B981 50%, #047857 100%)',
+                          border: '1.5px solid rgba(52, 211, 153, 0.5)',
+                          boxShadow: '0 8px 24px rgba(16, 185, 129, 0.35)'
+                        }}
+                      >
+                        {checkoutSubmitting ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <span>{isBangla ? 'অর্ডার প্রসেস হচ্ছে...' : 'Processing...'}</span>
+                          </span>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={16} className="text-white" />
+                            <span>{isBangla ? 'অর্ডার নিশ্চিত করুন' : 'Confirm Order'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+        {/* PREMIUM DIGITAL ORDER CONFIRMATION RECEIPT MODAL */}
+        {typeof document !== 'undefined' && createPortal(
+          <AnimatePresence>
+            {orderConfirmationAlert && (
+              <div
+                className="fixed inset-0 z-[99999999] flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto"
+                onClick={() => {
+                  setOrderConfirmationAlert(null);
+                  handleCloseCheckoutModal();
+                }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 320 }}
+                  id="digital-order-receipt-printable"
+                  className="relative w-full max-w-lg bg-[#0F172A] border-2 border-emerald-500/50 rounded-3xl p-5 sm:p-6 shadow-2xl text-left my-auto text-white overflow-hidden max-h-[92vh] flex flex-col"
+                  style={{
+                    boxShadow: '0 25px 65px rgba(0, 0, 0, 0.85), 0 0 35px rgba(16, 185, 129, 0.22)'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Top Ambient Glow Line */}
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400" />
+
+                  {/* Print Stylesheet */}
+                  <style>{`
+                    @media print {
+                      body * {
+                        visibility: hidden !important;
+                      }
+                      #digital-order-receipt-printable,
+                      #digital-order-receipt-printable * {
+                        visibility: visible !important;
+                      }
+                      #digital-order-receipt-printable {
+                        position: fixed !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        padding: 24px !important;
+                        background: #ffffff !important;
+                        color: #0f172a !important;
+                        border: 1px solid #cbd5e1 !important;
+                        border-radius: 0 !important;
+                        box-shadow: none !important;
+                        z-index: 99999999 !important;
+                      }
+                      .print-hide {
+                        display: none !important;
+                      }
+                      .print-text-dark {
+                        color: #0f172a !important;
+                      }
+                      .print-border-light {
+                        border-color: #e2e8f0 !important;
+                        background: #f8fafc !important;
+                      }
+                    }
+                  `}</style>
+
+                  {/* Close (X) Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderConfirmationAlert(null);
+                      handleCloseCheckoutModal();
+                    }}
+                    className="print-hide absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors border border-slate-700 cursor-pointer z-10"
+                    title={isBangla ? 'বন্ধ করুন' : 'Close'}
+                  >
+                    <X size={18} />
+                  </button>
+
+                  <div className="overflow-y-auto pr-1 space-y-4 text-left custom-scrollbar">
+                    {/* 1. Success Animation Header */}
+                    <div className="text-center pt-2 pb-1">
+                      <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 mx-auto shadow-lg shadow-emerald-500/30 mb-3 animate-pulse">
+                        <CheckCircle2 size={36} />
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight m-0">
+                        {isBangla ? 'অর্ডার সফল হয়েছে!' : 'Order Confirmed!'}
+                      </h3>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1 mb-0">
+                        {isBangla
+                          ? 'আপনার ডিজিটাল ডিল বুকিং সফলভাবে গ্রহণ করা হয়েছে।'
+                          : 'Your exclusive deal booking has been successfully recorded.'}
+                      </p>
+                    </div>
+
+                    {/* 2. Order Code & Date Bar with 1-Click Copy */}
+                    <div className="bg-slate-800/60 border border-cyan-500/30 rounded-2xl p-3.5 flex items-center justify-between flex-wrap gap-2.5 print-border-light">
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 print-text-dark">
+                          <Tag size={12} className="text-cyan-400" />
+                          <span>{isBangla ? 'অর্ডার কোড ও সময়:' : 'Order Code & Timestamp:'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base sm:text-lg font-black font-mono text-cyan-300 tracking-wider print-text-dark">
+                            {orderConfirmationAlert.orderCode}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 flex items-center gap-1 print-text-dark">
+                          <Clock size={11} />
+                          <span>{orderConfirmationAlert.orderDate}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (orderConfirmationAlert?.orderCode) {
+                            navigator.clipboard.writeText(orderConfirmationAlert.orderCode);
+                            setReceiptCopied(true);
+                            setTimeout(() => setReceiptCopied(false), 2000);
+                          }
+                        }}
+                        className="print-hide px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                      >
+                        {receiptCopied ? (
+                          <>
+                            <Check size={14} className="text-emerald-400" />
+                            <span className="text-emerald-300">{isBangla ? 'কপি হয়েছে!' : 'Copied!'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} />
+                            <span>{isBangla ? 'কপি কোড' : 'Copy Code'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* 3. Customer Summary Card */}
+                    <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-3.5 space-y-2 print-border-light">
+                      <div className="flex items-center justify-between border-b border-slate-700/50 pb-2">
+                        <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 print-text-dark">
+                          <User size={13} className="text-emerald-400" />
+                          <span>{isBangla ? 'গ্রাহকের তথ্য (Customer Summary)' : 'Customer Summary'}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide uppercase ${
+                          orderConfirmationAlert.isGuest 
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' 
+                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        }`}>
+                          {orderConfirmationAlert.isGuest 
+                            ? (isBangla ? 'গেস্ট চেকআউট' : 'Guest Checkout') 
+                            : (isBangla ? 'কানেক্টেড ইউজার' : 'Member Checkout')}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className="flex items-start gap-2 text-slate-300 print-text-dark">
+                          <span className="text-slate-400 font-medium shrink-0 print-text-dark">{isBangla ? 'নাম:' : 'Name:'}</span>
+                          <span className="font-bold text-white truncate print-text-dark">{orderConfirmationAlert.customerName || orderConfirmationAlert.clientName}</span>
+                        </div>
+
+                        <div className="flex items-start gap-2 text-slate-300 print-text-dark">
+                          <Phone size={13} className="text-emerald-400 shrink-0 mt-0.5" />
+                          <span className="text-slate-400 font-medium shrink-0 print-text-dark">{isBangla ? 'মোবাইল/হোয়াটসঅ্যাপ:' : 'Phone:'}</span>
+                          <span className="font-mono font-bold text-emerald-300 truncate print-text-dark">{orderConfirmationAlert.phone}</span>
+                        </div>
+
+                        <div className="flex items-start gap-2 text-slate-300 sm:col-span-2 print-text-dark">
+                          <MapPin size={13} className="text-red-400 shrink-0 mt-0.5" />
+                          <span className="text-slate-400 font-medium shrink-0 print-text-dark">{isBangla ? 'ঠিকানা:' : 'Address:'}</span>
+                          <span className="text-slate-200 line-clamp-2 print-text-dark">{orderConfirmationAlert.address}</span>
+                        </div>
+
+                        {orderConfirmationAlert.email && orderConfirmationAlert.email !== 'guest@noemail.com' && (
+                          <div className="flex items-start gap-2 text-slate-300 sm:col-span-2 print-text-dark">
+                            <Mail size={13} className="text-cyan-400 shrink-0 mt-0.5" />
+                            <span className="text-slate-400 font-medium shrink-0 print-text-dark">{isBangla ? 'ইমেইল:' : 'Email:'}</span>
+                            <span className="text-slate-200 truncate print-text-dark">{orderConfirmationAlert.email}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 4. Item & Payment Details */}
+                    <div className="bg-slate-800/40 border border-slate-700/60 rounded-2xl p-3.5 space-y-2.5 print-border-light">
+                      <div className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-700/50 pb-2 print-text-dark">
+                        <Package size={13} className="text-emerald-400" />
+                        <span>{isBangla ? 'আইটেম ও পেমেন্ট বিবরণ' : 'Item & Payment Details'}</span>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {orderConfirmationAlert.dealThumbnail && (
+                          <img
+                            src={orderConfirmationAlert.dealThumbnail}
+                            alt={orderConfirmationAlert.dealTitle}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0"
+                            onError={(e) => { e.currentTarget.src = '/add1.png'; }}
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <h5 className="text-sm font-bold text-white line-clamp-1 m-0 print-text-dark">
+                            {orderConfirmationAlert.dealTitle}
+                          </h5>
+                          <span className="text-[11px] text-slate-400 print-text-dark">
+                            {isBangla ? 'সার্ভিস / প্রজেক্ট ডিল প্যাকেজ' : 'Service / Project Deal Package'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-700/50 space-y-1.5 text-xs">
+                        <div className="flex justify-between text-slate-400 print-text-dark">
+                          <span>{isBangla ? 'মূল প্যাকেজ রেট:' : 'Regular Package Rate:'}</span>
+                          <span className="font-mono text-slate-300 print-text-dark">৳{orderConfirmationAlert.regularPrice || 5000} BDT</span>
+                        </div>
+
+                        {orderConfirmationAlert.discountAmount > 0 ? (
+                          <div className="flex justify-between text-emerald-400 font-semibold">
+                            <span>{isBangla ? 'ছাড় / কুপন স্ট্যাটাস:' : 'Discount / Coupon Benefit:'}</span>
+                            <span className="font-mono">-৳{orderConfirmationAlert.discountAmount} BDT {orderConfirmationAlert.rate ? `(${orderConfirmationAlert.rate}% OFF)` : ''}</span>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between text-slate-500 text-[11px] print-text-dark">
+                            <span>{isBangla ? 'ছাড় / কুপন স্ট্যাটাস:' : 'Coupon / Discount:'}</span>
+                            <span>{isBangla ? 'নিয়মিত মূল্য প্রযোজ্য' : 'Regular Price (No coupon)'}</span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-baseline pt-2 border-t border-slate-700/60">
+                          <span className="font-bold text-white text-sm print-text-dark">
+                            {isBangla ? 'সর্বমোট প্রদেয় মূল্য:' : 'Total Payable Amount:'}
+                          </span>
+                          <span className="font-mono font-black text-lg sm:text-xl text-emerald-400">
+                            ৳{orderConfirmationAlert.finalPrice} BDT
+                          </span>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="flex justify-between items-center pt-2">
+                          <span className="text-slate-400 text-xs font-semibold print-text-dark">{isBangla ? 'বর্তমান স্ট্যাটাস:' : 'Current Status:'}</span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                            <span>{isBangla ? 'পেন্ডিং (Pending)' : 'Pending'}</span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 5. Important Guidance Note */}
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 text-amber-200 text-xs flex items-start gap-2.5 leading-relaxed print-border-light">
+                      <Info size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="block text-amber-300 mb-0.5 font-bold print-text-dark">
+                          {isBangla ? 'গুরুত্বপূর্ণ নির্দেশনা:' : 'Important Notice:'}
+                        </strong>
+                        <span className="print-text-dark">
+                          {isBangla
+                            ? 'আপনার অর্ডারটি পর্যালোচনার জন্য পেন্ডিং রয়েছে। অর্ডার ট্র্যাক করতে এই অর্ডার কোড অথবা আপনার প্রদত্ত ইমেইল/নম্বর ব্যবহার করুন।'
+                            : 'Your order is currently pending review. Please use this Order Code or your provided phone/email to track order progress.'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 6. Action Buttons */}
+                    <div className="print-hide pt-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
+                        >
+                          <Printer size={14} className="text-cyan-400" />
+                          <span>{isBangla ? 'রিসিট প্রিন্ট / PDF' : 'Print / Save Receipt'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const text = `Order Code: ${orderConfirmationAlert.orderCode}\nDeal: ${orderConfirmationAlert.dealTitle}\nCustomer: ${orderConfirmationAlert.customerName || orderConfirmationAlert.clientName}\nPhone: ${orderConfirmationAlert.phone}\nTotal: ৳${orderConfirmationAlert.finalPrice} BDT\nStatus: Pending`;
+                            navigator.clipboard.writeText(text);
+                            setReceiptCopied(true);
+                            setTimeout(() => setReceiptCopied(false), 2000);
+                          }}
+                          className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 hover:text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
+                        >
+                          <Copy size={14} className="text-emerald-400" />
+                          <span>{receiptCopied ? (isBangla ? 'কপি হয়েছে!' : 'Copied!') : (isBangla ? 'কপি ট্র্যাকিং তথ্য' : 'Copy Tracking Info')}</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderConfirmationAlert(null);
+                          handleCloseCheckoutModal();
+                        }}
+                        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer border border-emerald-400/40 active:scale-98"
+                      >
+                        <CheckCircle2 size={16} />
+                        <span>{isBangla ? 'সম্পন্ন / বন্ধ করুন' : 'Done / Close'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+        {/* USER ORDER TRACKING MODAL (Real-time FirestoreStreamBuilder) */}
+        <AnimatePresence>
+          {isTrackModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-0 sm:p-4 md:p-6 box-border"
+              style={{
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(5, 10, 24, 0.88)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)'
+              }}
+              onClick={() => setIsTrackModalOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.94, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.94, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full h-full min-h-screen sm:min-h-0 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl rounded-none sm:rounded-3xl flex flex-col overflow-hidden relative"
+                style={{
+                  background: isDark ? 'linear-gradient(145deg, #0F172A 0%, #132338 100%)' : '#FFFFFF',
+                  border: '1.5px solid rgba(16, 185, 129, 0.4)',
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(16, 185, 129, 0.25)'
+                }}
+              >
+                {/* Modal Header */}
+                <div style={{
+                  padding: '18px 24px',
                   borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   flexShrink: 0
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{
                       width: '42px',
                       height: '42px',
@@ -1163,7 +3456,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                       justifyContent: 'center',
                       color: '#FFFFFF'
                     }}>
-                      <Calculator size={20} />
+                      <Clock size={20} />
                     </div>
                     <div>
                       <h3 style={{
@@ -1171,25 +3464,944 @@ const DealsDiscountsModal = ({ onClose }) => {
                         fontSize: '1.15rem',
                         fontWeight: 900,
                         color: isDark ? '#FFFFFF' : '#0F172A',
-                        fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
+                        fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
                       }}>
-                        {checkoutSuccess 
-                          ? (isBangla ? 'ডিজিটাল রসিদ ও ইনভয়েস' : 'Digital Receipt & Invoice') 
-                          : (isBangla ? 'অর্ডার চেকআউট ও ডিসকাউন্ট ভ্যালিডেশন' : 'Claim Offer & Discount Checkout')}
+                        {isBangla ? 'Shipment & Order History (শিপমেন্ট ও অর্ডার হিস্ট্রি)' : 'Shipment & Order History'}
                       </h3>
                       <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
-                        {checkoutSuccess 
-                          ? (isBangla ? 'অর্ডারটি সফলভাবে গ্রহণ ও নিবন্ধিত হয়েছে' : 'Order successfully placed & recorded') 
-                          : (isBangla ? 'এক ইমেইলে একবারই প্রযোজ্য' : 'Single-use discount per verified subscriber')}
+                        {isBangla ? 'রিয়েলটাইম ডেলিভারি ট্র্যাকিং ও অর্ডার হিস্ট্রি' : 'Real-time delivery tracking & order records'}
                       </span>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => {
-                      setSelectedDealForClaim(null);
-                      setCheckoutSuccess(null);
+                    type="button"
+                    onClick={() => setIsTrackModalOpen(false)}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                      border: 'none',
+                      color: isDark ? '#FFFFFF' : '#0F172A',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
                     }}
+                    title={isBangla ? 'বন্ধ করুন' : 'Close'}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Top Search Bar & Compact Filter Icon */}
+                <div style={{
+                  padding: '12px 24px',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                  background: isDark ? 'rgba(15, 23, 42, 0.5)' : '#F8FAFC',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  flexShrink: 0
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <input
+                        type="text"
+                        value={trackingSearchTerm}
+                        onChange={(e) => setTrackingSearchTerm(e.target.value)}
+                        placeholder="Search Tracking ID / Order Code..."
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px 10px 38px',
+                          borderRadius: '9999px',
+                          background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
+                          border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
+                          color: isDark ? '#FFFFFF' : '#0F172A',
+                          fontSize: '0.84rem',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                      <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+                      {trackingSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setTrackingSearchTerm('')}
+                          style={{
+                            position: 'absolute',
+                            right: '12px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            background: 'none',
+                            border: 'none',
+                            color: '#94A3B8',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Compact Filter Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsFilterDropdownOpen((prev) => !prev)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '12px',
+                        background: isFilterDropdownOpen || trackingStatusFilter !== 'all'
+                          ? 'linear-gradient(135deg, #0284C7 0%, #00F0FF 100%)'
+                          : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#FFFFFF'),
+                        border: `1.5px solid ${isFilterDropdownOpen || trackingStatusFilter !== 'all' ? '#00F0FF' : (isDark ? 'rgba(255, 255, 255, 0.12)' : '#CBD5E1')}`,
+                        color: isFilterDropdownOpen || trackingStatusFilter !== 'all' ? '#020617' : (isDark ? '#F1F5F9' : '#475569'),
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        boxShadow: isFilterDropdownOpen || trackingStatusFilter !== 'all' ? '0 2px 10px rgba(0, 240, 255, 0.3)' : 'none',
+                        transition: 'all 0.2s ease'
+                      }}
+                      title={isBangla ? 'ফিল্টার অপশন' : 'Filter Options'}
+                    >
+                      <SlidersHorizontal size={18} />
+                    </button>
+                  </div>
+
+                  {/* Filter Chips / Dropdown Row */}
+                  {isFilterDropdownOpen && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                      paddingTop: '2px'
+                    }}>
+                      <span style={{ fontSize: '0.74rem', color: '#94A3B8', fontWeight: 700 }}>
+                        {isBangla ? 'ফিল্টার:' : 'Filter:'}
+                      </span>
+                      {[
+                        { id: 'all', label: isBangla ? 'সকল (All)' : 'All' },
+                        { id: 'pending', label: isBangla ? 'পেন্ডিং / ইন ট্রানজিট' : 'Pending / In Transit' },
+                        { id: 'confirmed', label: isBangla ? 'কনফার্মড / ডেলিভার্ড' : 'Confirmed / Delivered' },
+                        { id: 'cancelled', label: isBangla ? 'বাতিল' : 'Cancelled' }
+                      ].map((tab) => {
+                        const isActive = trackingStatusFilter === tab.id;
+                        return (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setTrackingStatusFilter(tab.id)}
+                            style={{
+                              padding: '4px 12px',
+                              borderRadius: '9999px',
+                              fontSize: '0.74rem',
+                              fontWeight: 800,
+                              background: isActive
+                                ? 'linear-gradient(135deg, #059669 0%, #10B981 100%)'
+                                : (isDark ? 'rgba(255, 255, 255, 0.06)' : '#E2E8F0'),
+                              color: isActive ? '#FFFFFF' : (isDark ? '#94A3B8' : '#64748B'),
+                              border: isActive ? '1px solid #10B981' : 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {tab.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tracking Content Body */}
+                <div style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  WebkitOverflowScrolling: 'touch'
+                }}>
+                  {/* GUEST ORDER HISTORY FINDER OR AUTHENTICATION GATE */}
+                  {isGuestSearchOpen ? (
+                    /* GUEST ORDER HISTORY FINDER VIEW (Category-based Phone & Email search) */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {/* Sub-Header Return Bar */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingBottom: '12px',
+                        borderBottom: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGuestSearchOpen(false);
+                            setGuestSearchSubmittedQuery(null);
+                            setGuestSearchInputError(null);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 14px',
+                            borderRadius: '10px',
+                            background: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
+                            border: 'none',
+                            color: isDark ? '#CBD5E1' : '#475569',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <ArrowLeft size={15} />
+                          <span>{isBangla ? 'ফিরে যান' : 'Back'}</span>
+                        </button>
+
+                        <span style={{
+                          fontSize: '0.78rem',
+                          fontWeight: 800,
+                          color: '#00F0FF',
+                          background: 'rgba(0, 240, 255, 0.1)',
+                          padding: '3px 12px',
+                          borderRadius: '20px',
+                          border: '1px solid rgba(0, 240, 255, 0.3)'
+                        }}>
+                          {isBangla ? 'গেস্ট হিস্ট্রি সার্চ' : 'Guest History Finder'}
+                        </span>
+                      </div>
+
+                      {/* Search Control Box with 2 Category Tabs */}
+                      <div style={{
+                        padding: '16px',
+                        borderRadius: '18px',
+                        background: isDark ? 'rgba(15, 23, 42, 0.65)' : '#F8FAFC',
+                        border: `1.5px solid ${isDark ? 'rgba(0, 240, 255, 0.25)' : 'rgba(8, 145, 178, 0.25)'}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '14px'
+                      }}>
+                        {/* 2 Category Tabs */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: '8px',
+                          background: isDark ? 'rgba(2, 6, 23, 0.6)' : '#E2E8F0',
+                          padding: '4px',
+                          borderRadius: '14px'
+                        }}>
+                          {/* Category 1: WhatsApp / Mobile Number */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGuestSearchCategory('phone');
+                              if (!guestSearchInput || guestSearchInput.includes('@') || !guestSearchInput.startsWith('01')) {
+                                setGuestSearchInput('01');
+                              }
+                              setGuestSearchInputError(null);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              background: guestSearchCategory === 'phone'
+                                ? 'linear-gradient(135deg, #059669 0%, #10B981 100%)'
+                                : 'transparent',
+                              color: guestSearchCategory === 'phone' ? '#FFFFFF' : (isDark ? '#94A3B8' : '#64748B'),
+                              fontWeight: 800,
+                              fontSize: '0.84rem',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              boxShadow: guestSearchCategory === 'phone' ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none'
+                            }}
+                          >
+                            <Smartphone size={16} />
+                            <span>{isBangla ? '১. হোয়াটসঅ্যাপ / মোবাইল' : '1. WhatsApp / Mobile'}</span>
+                          </button>
+
+                          {/* Category 2: Email Address */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGuestSearchCategory('email');
+                              if (guestSearchInput === '01') {
+                                setGuestSearchInput('');
+                              }
+                              setGuestSearchInputError(null);
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '8px',
+                              padding: '10px 14px',
+                              borderRadius: '10px',
+                              background: guestSearchCategory === 'email'
+                                ? 'linear-gradient(135deg, #0891B2 0%, #00F0FF 100%)'
+                                : 'transparent',
+                              color: guestSearchCategory === 'email' ? (isDark ? '#020617' : '#FFFFFF') : (isDark ? '#94A3B8' : '#64748B'),
+                              fontWeight: 800,
+                              fontSize: '0.84rem',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              boxShadow: guestSearchCategory === 'email' ? '0 4px 12px rgba(0, 240, 255, 0.35)' : 'none'
+                            }}
+                          >
+                            <Mail size={16} />
+                            <span>{isBangla ? '২. ইমেইল অ্যাড্রেস' : '2. Email Address'}</span>
+                          </button>
+                        </div>
+
+                        {/* Search Input Box with Default Prefills & Helpers */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+                              {guestSearchCategory === 'phone' ? (
+                                <>
+                                  <span style={{
+                                    position: 'absolute',
+                                    left: '12px',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 800,
+                                    color: '#10B981',
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    pointerEvents: 'none'
+                                  }}>
+                                    BD +88
+                                  </span>
+                                  <input
+                                    type="tel"
+                                    value={guestSearchInput}
+                                    onChange={(e) => {
+                                      setGuestSearchInput(e.target.value);
+                                      if (guestSearchInputError) setGuestSearchInputError(null);
+                                    }}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleExecuteGuestSearch()}
+                                    placeholder="01XXXXXXXXX"
+                                    style={{
+                                      width: '100%',
+                                      padding: '12px 14px 12px 76px',
+                                      borderRadius: '12px',
+                                      background: isDark ? 'rgba(2, 6, 23, 0.7)' : '#FFFFFF',
+                                      border: `1.5px solid ${guestSearchInputError ? 'rgba(239, 68, 68, 0.5)' : (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)')}`,
+                                      color: isDark ? '#FFFFFF' : '#0F172A',
+                                      fontSize: '0.92rem',
+                                      fontWeight: 700,
+                                      outline: 'none',
+                                      boxSizing: 'border-box'
+                                    }}
+                                  />
+                                </>
+                              ) : (
+                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                  <input
+                                    type="email"
+                                    value={guestSearchInput}
+                                    onChange={(e) => {
+                                      setGuestSearchInput(e.target.value);
+                                      if (guestSearchInputError) setGuestSearchInputError(null);
+                                    }}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleExecuteGuestSearch()}
+                                    placeholder="example@gmail.com"
+                                    style={{
+                                      width: '100%',
+                                      padding: '12px 64px 12px 14px',
+                                      borderRadius: '12px',
+                                      background: isDark ? 'rgba(2, 6, 23, 0.7)' : '#FFFFFF',
+                                      border: `1.5px solid ${guestSearchInputError ? 'rgba(239, 68, 68, 0.5)' : (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)')}`,
+                                      color: isDark ? '#FFFFFF' : '#0F172A',
+                                      fontSize: '0.92rem',
+                                      fontWeight: 600,
+                                      outline: 'none',
+                                      boxSizing: 'border-box'
+                                    }}
+                                  />
+                                  {/* Suffix Helper: .com button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!guestSearchInput.endsWith('.com')) {
+                                        setGuestSearchInput((prev) => (prev ? prev.replace(/\.com.*$/, '') + '.com' : ''));
+                                      }
+                                    }}
+                                    style={{
+                                      position: 'absolute',
+                                      right: '8px',
+                                      padding: '4px 8px',
+                                      borderRadius: '6px',
+                                      background: isDark ? 'rgba(0, 240, 255, 0.15)' : 'rgba(8, 145, 178, 0.12)',
+                                      border: '1px solid rgba(0, 240, 255, 0.35)',
+                                      color: isDark ? '#00F0FF' : '#0891B2',
+                                      fontSize: '0.74rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer'
+                                    }}
+                                    title={isBangla ? '.com যোগ করুন' : 'Append .com'}
+                                  >
+                                    .com
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleExecuteGuestSearch}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                padding: '12px 22px',
+                                borderRadius: '12px',
+                                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                border: 'none',
+                                color: '#FFFFFF',
+                                fontSize: '0.9rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+                                transition: 'all 0.2s ease',
+                                flexShrink: 0
+                              }}
+                            >
+                              <Search size={16} />
+                              <span>{isBangla ? 'অর্ডার খুঁজুন' : 'Search Orders'}</span>
+                            </button>
+                          </div>
+
+                          {guestSearchInputError && (
+                            <div style={{
+                              fontSize: '0.78rem',
+                              color: '#F87171',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              marginTop: '2px'
+                            }}>
+                              <AlertCircle size={14} />
+                              <span>{guestSearchInputError}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Real-time Order Stream Builder for Guest Search Results */}
+                      <FirestoreStreamBuilder collectionName="deal_orders" orderByField="createdAt" orderDirection="desc">
+                        {({ data, loading }) => {
+                          if (loading) {
+                            return (
+                              <div style={{ textAlign: 'center', padding: '36px 20px', color: '#94A3B8', fontSize: '0.84rem' }}>
+                                {isBangla ? 'অর্ডার ডাটা লোড হচ্ছে...' : 'Loading order stream...'}
+                              </div>
+                            );
+                          }
+
+                          if (!guestSearchSubmittedQuery) {
+                            return (
+                              <div style={{
+                                textAlign: 'center',
+                                padding: '36px 20px',
+                                borderRadius: '18px',
+                                background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                                border: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+                              }}>
+                                <Search size={34} color="#00F0FF" style={{ margin: '0 auto 10px auto', opacity: 0.8 }} />
+                                <h5 style={{ margin: '0 0 4px 0', color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '0.94rem', fontWeight: 800 }}>
+                                  {isBangla ? 'ফোন বা ইমেইল দিয়ে সার্চ করুন' : 'Search by Phone or Email'}
+                                </h5>
+                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.80rem' }}>
+                                  {isBangla ? 'উপরে আপনার অর্ডার করার সময় ব্যবহৃত নাম্বার বা ইমেইল দিয়ে সার্চ বাটনে চাপুন।' : 'Enter the phone or email used during order placement and click search.'}
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          const allOrders = data || [];
+                          const matchedOrders = allOrders.filter((order) => {
+                            if (guestSearchSubmittedQuery.category === 'phone') {
+                              const targetPhone = normalizePhone(guestSearchSubmittedQuery.query);
+                              const orderPhone = normalizePhone(order.clientPhone || order.phone || order.whatsapp || '');
+                              return targetPhone && orderPhone && (orderPhone === targetPhone || orderPhone.includes(targetPhone) || targetPhone.includes(orderPhone));
+                            } else {
+                              const targetEmail = (guestSearchSubmittedQuery.query || '').trim().toLowerCase();
+                              const orderEmail = (order.clientEmail || order.email || '').trim().toLowerCase();
+                              return targetEmail && orderEmail === targetEmail;
+                            }
+                          });
+
+                          if (matchedOrders.length === 0) {
+                            return (
+                              <div style={{
+                                textAlign: 'center',
+                                padding: '40px 20px',
+                                borderRadius: '18px',
+                                background: isDark ? 'rgba(239, 68, 68, 0.04)' : 'rgba(239, 68, 68, 0.03)',
+                                border: `1px dashed ${isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.2)'}`
+                              }}>
+                                <AlertCircle size={36} color="#EF4444" style={{ margin: '0 auto 10px auto' }} />
+                                <h4 style={{ margin: '0 0 6px 0', color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '1rem', fontWeight: 800 }}>
+                                  {isBangla ? 'কোনো অর্ডার পাওয়া যায়নি' : 'No Orders Found'}
+                                </h4>
+                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.82rem', maxWidth: '360px', marginLeft: 'auto', marginRight: 'auto' }}>
+                                  {isBangla 
+                                    ? 'আপনার দেওয়া তথ্যের সাথে মিল রেখে কোনো রেকর্ড পাওয়া যায়নি। অনুগ্রহ করে সঠিক ফোন নাম্বার বা ইমেইল চেক করুন।' 
+                                    : 'No orders matched your search criteria. Please check if your phone or email was entered correctly.'}
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          const filteredGuestOrders = filterOrders(matchedOrders);
+
+                          if (filteredGuestOrders.length === 0) {
+                            return (
+                              <div style={{
+                                textAlign: 'center',
+                                padding: '36px 20px',
+                                borderRadius: '18px',
+                                background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                                border: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+                              }}>
+                                <Search size={32} color="#94A3B8" style={{ margin: '0 auto 10px auto' }} />
+                                <h4 style={{ margin: '0 0 6px 0', color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '0.96rem', fontWeight: 800 }}>
+                                  {isBangla ? 'ফিল্টারে কোনো অর্ডার পাওয়া যায়নি' : 'No Orders Match Your Filter'}
+                                </h4>
+                                <p style={{ margin: '0 0 12px 0', color: '#94A3B8', fontSize: '0.80rem' }}>
+                                  {isBangla ? 'অন্য কোনো ট্র্যাকিং আইডি বা ফিল্টার নির্বাচন করুন।' : 'Try clearing your search query or selecting a different status filter.'}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTrackingSearchTerm('');
+                                    setTrackingStatusFilter('all');
+                                  }}
+                                  style={{
+                                    padding: '6px 14px',
+                                    borderRadius: '10px',
+                                    background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                                    border: 'none',
+                                    color: isDark ? '#FFFFFF' : '#0F172A',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {isBangla ? 'ফিল্টার রিসেট করুন' : 'Reset Filters'}
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: '0.78rem',
+                                color: '#10B981',
+                                fontWeight: 700
+                              }}>
+                                <span>
+                                  {isBangla ? `মোট ${filteredGuestOrders.length}টি অর্ডার পাওয়া গেছে` : `Found ${filteredGuestOrders.length} matching shipment(s)`}
+                                </span>
+                                <span style={{ color: '#94A3B8', fontSize: '0.72rem' }}>
+                                  {isBangla ? 'কুয়েরি: ' : 'Query: '}
+                                  <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{guestSearchSubmittedQuery.query}</strong>
+                                </span>
+                              </div>
+
+                              {filteredGuestOrders.map((order) => renderDeliveryTrackingCard(order))}
+                            </div>
+                          );
+                        }}
+                      </FirestoreStreamBuilder>
+                    </div>
+                  ) : !currentUser ? (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '48px 20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flex: 1,
+                      gap: '18px'
+                    }}>
+                      <div style={{
+                        width: '70px',
+                        height: '70px',
+                        borderRadius: '50%',
+                        background: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+                        border: '2px solid rgba(239, 68, 68, 0.35)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#EF4444',
+                        boxShadow: '0 0 25px rgba(239, 68, 68, 0.25)'
+                      }}>
+                        <Lock size={32} />
+                      </div>
+
+                      <div>
+                        <h4 style={{
+                          margin: '0 0 8px 0',
+                          fontSize: '1.2rem',
+                          fontWeight: 900,
+                          color: isDark ? '#FFFFFF' : '#0F172A',
+                          fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                        }}>
+                          {isBangla ? 'অ্যাকাউন্ট কানেকশন আবশ্যক' : 'Account Connection Required'}
+                        </h4>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '0.92rem',
+                          lineHeight: 1.6,
+                          color: isDark ? '#CBD5E1' : '#475569',
+                          maxWidth: '420px',
+                          fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                        }}>
+                          {isBangla ? 'আপনার অর্ডার হিস্ট্রি দেখতে অনুগ্রহ করে অ্যাকাউন্ট কানেক্ট করুন।' : 'Please connect your account to view your order history.'}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsTrackModalOpen(false);
+                          setIsConnectModalOpen(true);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '12px 28px',
+                          borderRadius: '14px',
+                          background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                          border: 'none',
+                          color: '#FFFFFF',
+                          fontSize: '0.92rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 18px rgba(16, 185, 129, 0.35)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <LogIn size={16} />
+                        <span>{isBangla ? 'অ্যাকাউন্ট কানেক্ট / লগইন করুন' : 'Connect Account / Sign-In'}</span>
+                      </button>
+
+                      {/* Secondary Action Button: Guest Order History Search */}
+                      <div style={{
+                        marginTop: '6px',
+                        paddingTop: '16px',
+                        borderTop: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+                        width: '100%',
+                        maxWidth: '380px',
+                        textAlign: 'center'
+                      }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGuestSearchOpen(true);
+                            setGuestSearchCategory('phone');
+                            setGuestSearchInput('01');
+                            setGuestSearchSubmittedQuery(null);
+                            setGuestSearchInputError(null);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            padding: '12px 20px',
+                            borderRadius: '14px',
+                            background: isDark ? 'rgba(0, 240, 255, 0.08)' : 'rgba(8, 145, 178, 0.08)',
+                            border: '1.5px solid rgba(0, 240, 255, 0.4)',
+                            color: isDark ? '#00F0FF' : '#0891B2',
+                            fontSize: '0.88rem',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 16px rgba(0, 240, 255, 0.15)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Search size={16} />
+                          <span>👉 {isBangla ? 'একাউন্ট ছাড়া নাম্বার বা ইমেইল দিয়ে হিস্ট্রি দেখুন' : 'Search History with Phone or Email'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Active Connected User Header Bar */}
+                      <div style={{
+                        padding: '12px 18px',
+                        borderRadius: '14px',
+                        background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+                        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        flexWrap: 'wrap'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Mail size={16} color="#10B981" />
+                          <span style={{ fontSize: '0.84rem', color: isDark ? '#FFFFFF' : '#0F172A', fontWeight: 700 }}>
+                            {currentUser.email}
+                          </span>
+                        </div>
+                        <div style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          fontSize: '0.74rem',
+                          color: '#10B981',
+                          fontWeight: 700
+                        }}>
+                          <CheckCircle2 size={13} />
+                          <span>{isBangla ? 'ভেরিফাইড অ্যাকাউন্ট' : 'Connected Account'}</span>
+                        </div>
+                      </div>
+
+                      {/* Real-time FirestoreStreamBuilder for deal_orders (Filtered by user) */}
+                      <FirestoreStreamBuilder collectionName="deal_orders" orderByField="createdAt" orderDirection="desc">
+                        {({ data, loading }) => {
+                          if (loading) {
+                            return (
+                              <div style={{ textAlign: 'center', padding: '36px 20px', color: '#94A3B8', fontSize: '0.84rem' }}>
+                                {isBangla ? 'অর্ডার লোড হচ্ছে...' : 'Loading orders...'}
+                              </div>
+                            );
+                          }
+
+                          const allOrders = data || [];
+                          const targetEmail = currentUser.email.trim().toLowerCase();
+                          const myOrders = allOrders.filter(o => (o.clientEmail || o.email || '').toLowerCase() === targetEmail);
+
+                          if (myOrders.length === 0) {
+                            return (
+                              <div style={{
+                                textAlign: 'center',
+                                padding: '44px 20px',
+                                borderRadius: '18px',
+                                background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                                border: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+                              }}>
+                                <Clock size={38} color="#64748B" style={{ margin: '0 auto 12px auto' }} />
+                                <h4 style={{ margin: '0 0 6px 0', color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '1rem', fontWeight: 800 }}>
+                                  {isBangla ? 'কোনো অর্ডার রেকর্ড পাওয়া যায়নি' : 'No Order Records Found'}
+                                </h4>
+                                <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.82rem' }}>
+                                  {isBangla ? 'ডিল ক্লেইম করার পর আপনার অর্ডার এখানে রিয়েলটাইমে প্রদর্শিত হবে।' : 'Once you claim a deal, your orders will appear here live.'}
+                                </p>
+                                <div style={{ marginTop: '16px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsGuestSearchOpen(true);
+                                      setGuestSearchCategory('phone');
+                                      setGuestSearchInput('01');
+                                      setGuestSearchSubmittedQuery(null);
+                                      setGuestSearchInputError(null);
+                                    }}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
+                                      padding: '9px 18px',
+                                      borderRadius: '12px',
+                                      background: isDark ? 'rgba(0, 240, 255, 0.08)' : 'rgba(8, 145, 178, 0.08)',
+                                      border: '1.2px solid rgba(0, 240, 255, 0.35)',
+                                      color: isDark ? '#00F0FF' : '#0891B2',
+                                      fontSize: '0.82rem',
+                                      fontWeight: 800,
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <Search size={14} />
+                                    <span>👉 {isBangla ? 'একাউন্ট ছাড়া নাম্বার বা ইমেইল দিয়ে হিস্ট্রি দেখুন' : 'Search History with Phone or Email'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const filteredOrders = filterOrders(myOrders);
+
+                          if (filteredOrders.length === 0) {
+                            return (
+                              <div style={{
+                                textAlign: 'center',
+                                padding: '36px 20px',
+                                borderRadius: '18px',
+                                background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                                border: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`
+                              }}>
+                                <Search size={32} color="#94A3B8" style={{ margin: '0 auto 10px auto' }} />
+                                <h4 style={{ margin: '0 0 6px 0', color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '0.96rem', fontWeight: 800 }}>
+                                  {isBangla ? 'ফিল্টারে কোনো অর্ডার পাওয়া যায়নি' : 'No Orders Match Your Filter'}
+                                </h4>
+                                <p style={{ margin: '0 0 12px 0', color: '#94A3B8', fontSize: '0.80rem' }}>
+                                  {isBangla ? 'অন্য কোনো ট্র্যাকিং আইডি বা ফিল্টার নির্বাচন করুন।' : 'Try clearing your search query or selecting a different status filter.'}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTrackingSearchTerm('');
+                                    setTrackingStatusFilter('all');
+                                  }}
+                                  style={{
+                                    padding: '6px 14px',
+                                    borderRadius: '10px',
+                                    background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0',
+                                    border: 'none',
+                                    color: isDark ? '#FFFFFF' : '#0F172A',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {isBangla ? 'ফিল্টার রিসেট করুন' : 'Reset Filters'}
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: '0.78rem',
+                                color: '#10B981',
+                                fontWeight: 700
+                              }}>
+                                <span>
+                                  {isBangla ? `মোট ${filteredOrders.length}টি অর্ডার পাওয়া গেছে` : `Showing ${filteredOrders.length} shipment(s)`}
+                                </span>
+                                {trackingSearchTerm && (
+                                  <span style={{ color: '#94A3B8', fontSize: '0.72rem' }}>
+                                    {isBangla ? 'সার্চ: ' : 'Search: '}
+                                    <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{trackingSearchTerm}</strong>
+                                  </span>
+                                )}
+                              </div>
+
+                              {filteredOrders.map((order) => renderDeliveryTrackingCard(order))}
+
+                              {/* Option for connected users to also search unauthenticated guest orders */}
+                              <div style={{ textAlign: 'center', marginTop: '8px', paddingTop: '14px', borderTop: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}` }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsGuestSearchOpen(true);
+                                    setGuestSearchCategory('phone');
+                                    setGuestSearchInput('01');
+                                    setGuestSearchSubmittedQuery(null);
+                                    setGuestSearchInputError(null);
+                                  }}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '9px 18px',
+                                    borderRadius: '12px',
+                                    background: isDark ? 'rgba(0, 240, 255, 0.06)' : 'rgba(8, 145, 178, 0.06)',
+                                    border: `1px solid ${isDark ? 'rgba(0, 240, 255, 0.3)' : 'rgba(8, 145, 178, 0.3)'}`,
+                                    color: isDark ? '#00F0FF' : '#0891B2',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  <Search size={14} />
+                                  <span>👉 {isBangla ? 'একাউন্ট ছাড়া নাম্বার বা ইমেইল দিয়ে হিস্ট্রি দেখুন' : 'Search History with Phone or Email'}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      </FirestoreStreamBuilder>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* INTERACTIVE SHIPMENT & DELIVERY TIMELINE MODAL */}
+        <AnimatePresence>
+          {selectedShipmentDetail && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100000] flex items-center justify-center p-3 sm:p-6 box-border"
+              style={{
+                width: '100vw',
+                height: '100vh',
+                background: 'rgba(5, 10, 24, 0.88)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)'
+              }}
+              onClick={() => setSelectedShipmentDetail(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.94, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.94, y: 20 }}
+                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full max-w-lg rounded-2xl sm:rounded-3xl flex flex-col overflow-hidden relative"
+                style={{
+                  background: isDark ? 'linear-gradient(145deg, #0F172A 0%, #132338 100%)' : '#FFFFFF',
+                  border: '1.5px solid rgba(0, 240, 255, 0.4)',
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 35px rgba(0, 240, 255, 0.25)',
+                  maxHeight: '90vh'
+                }}
+              >
+                {/* Modal Header */}
+                <div style={{
+                  padding: '16px 20px',
+                  borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexShrink: 0
+                }}>
+                  <div>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#00F0FF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                      LIVE SHIPMENT TRACKING
+                    </span>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: isDark ? '#FFFFFF' : '#0F172A', fontFamily: "'Space Grotesk', monospace" }}>
+                      #{selectedShipmentDetail.orderCode || selectedShipmentDetail.orderId}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedShipmentDetail(null)}
                     style={{
                       width: '34px',
                       height: '34px',
@@ -1202,869 +4414,205 @@ const DealsDiscountsModal = ({ onClose }) => {
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
+                    title={isBangla ? 'বন্ধ করুন' : 'Close'}
                   >
-                    <X size={17} />
+                    <X size={16} />
                   </button>
                 </div>
 
-                {/* 2. Scrollable Middle Body */}
+                {/* Modal Body */}
                 <div style={{
-                  flex: 1,
+                  padding: '20px',
                   overflowY: 'auto',
-                  padding: '20px 24px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '16px',
-                  WebkitOverflowScrolling: 'touch'
+                  gap: '16px'
                 }}>
-                  {!checkoutSuccess && (
-                    <>
-                      {/* Deal Summary Banner Preview */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px',
-                  borderRadius: '14px',
-                  background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
-                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`
-                }}>
-                  <div style={{ width: '64px', height: '64px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0 }}>
-                    <img 
-                      src={selectedDealForClaim.bannerUrl || '/add1.png'} 
-                      alt="Deal preview"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A' }}>
-                      {selectedDealForClaim.title}
-                    </h4>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                      <span style={{
-                        fontSize: '0.72rem',
-                        fontWeight: 800,
-                        padding: '2px 8px',
-                        borderRadius: '8px',
-                        background: 'rgba(16, 185, 129, 0.15)',
-                        color: '#10B981'
-                      }}>
-                        {selectedDealForClaim.discountPercent || 'Special Offer'}
-                      </span>
-                      <span style={{ fontSize: '0.74rem', color: '#94A3B8', fontFamily: "'Space Grotesk', monospace" }}>
-                        Coupon: <strong style={{ color: isCouponApplied && appliedCouponCode ? '#10B981' : '#F59E0B' }}>
-                          {isCouponApplied && appliedCouponCode 
-                            ? appliedCouponCode 
-                            : (isBangla ? '🔒 লকড (ভেরিফিকেশন আবশ্যক)' : '🔒 Locked (Verification Required)')}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  {/* 4-Step Visual Progress Bar */}
+                  {(() => {
+                    const status = (selectedShipmentDetail.status || 'pending').toLowerCase();
+                    const isDelivered = status === 'confirmed' || status === 'accepted';
+                    const isCancelled = status === 'cancelled';
+                    const steps = [
+                      { title: isBangla ? 'অর্ডার গৃহীত' : 'Order Placed', desc: selectedShipmentDetail.orderDate || 'Received', done: true },
+                      { title: isBangla ? 'তথ্য যাচাইকৃত' : 'Verified', desc: isBangla ? 'ডাটাবেস ভ্যালিডেশন' : 'Info Checked', done: true },
+                      { title: isBangla ? 'প্রসেসিং / ট্রানজিট' : 'In Transit', desc: isCancelled ? (isBangla ? 'বাতিল' : 'Cancelled') : (isDelivered ? (isBangla ? 'সম্পন্ন' : 'Completed') : (isBangla ? 'চলমান' : 'In Progress')), done: isDelivered, current: !isDelivered && !isCancelled },
+                      { title: isBangla ? 'ডেলিভার্ড / সম্পন্ন' : 'Delivered', desc: isDelivered ? (isBangla ? 'সফল ডেলিভারি' : 'Finalized') : (isBangla ? 'অপেক্ষমান' : 'Pending'), done: isDelivered }
+                    ];
 
-                {/* Dynamic Price Calculation Breakdown */}
-                {(() => {
-                  const hasEffectiveCoupon = isCouponApplied && !!appliedCouponCode;
-                  const pricing = calculatePricing(selectedDealForClaim, hasEffectiveCoupon);
-                  return (
-                    <div style={{
-                      padding: '16px 18px',
-                      borderRadius: '16px',
-                      background: isDark ? 'rgba(0, 105, 92, 0.15)' : 'rgba(0, 105, 92, 0.06)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: '#94A3B8' }}>
-                        <span>{isBangla ? 'প্যাকেজের মূল রেগুলার মূল্য:' : 'Standard Package Rate:'}</span>
-                        <span style={{ fontFamily: "'Space Grotesk', monospace" }}>৳{pricing.basePrice} BDT</span>
-                      </div>
-
-                      {/* Coupon discount line */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.84rem', color: hasEffectiveCoupon ? '#10B981' : '#94A3B8', fontWeight: 700 }}>
-                        <span>{hasEffectiveCoupon ? (isBangla ? `প্রযোজ্য কুপন ছাড় (${pricing.rateFormatted}):` : `Applied Coupon Discount (${pricing.rateFormatted}):`) : (isBangla ? 'কুপন প্রয়োগ ছাড়া (রেগুলার মূল্য):' : 'Without Coupon (Regular Rate):')}</span>
-                        <span style={{ fontFamily: "'Space Grotesk', monospace" }}>
-                          {hasEffectiveCoupon ? `-৳${pricing.discountAmount} BDT` : '৳0 BDT'}
-                        </span>
-                      </div>
-
-                      {/* Final Net Payable Total */}
+                    return (
                       <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        paddingTop: '8px',
-                        borderTop: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-                        fontSize: '1.05rem',
-                        fontWeight: 900,
-                        color: isDark ? '#FFFFFF' : '#0F172A'
+                        padding: '16px',
+                        borderRadius: '16px',
+                        background: isDark ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC',
+                        border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`
                       }}>
-                        <span>{isBangla ? 'চূড়ান্ত প্রদেয় মূল্য (Net Total):' : 'Final Net Payable:'}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {hasEffectiveCoupon && (
-                            <span style={{ fontSize: '0.82rem', color: '#94A3B8', textDecoration: 'line-through', fontFamily: "'Space Grotesk', monospace" }}>
-                              ৳{pricing.basePrice}
-                            </span>
-                          )}
-                          <span style={{ color: '#10B981', fontSize: '1.25rem', fontFamily: "'Space Grotesk', monospace" }}>
-                            ৳{pricing.finalPrice} BDT
-                          </span>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#38BDF8', textTransform: 'uppercase', marginBottom: '14px', letterSpacing: '0.05em' }}>
+                          {isBangla ? 'ডেলিভারি টাইমলাইন ও স্ট্যাটাস' : 'Delivery Progress Lifecycle'}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', position: 'relative' }}>
+                          {steps.map((step, idx) => (
+                            <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', position: 'relative' }}>
+                              <div style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                background: step.done
+                                  ? '#10B981'
+                                  : (step.current ? '#F59E0B' : (isDark ? 'rgba(255, 255, 255, 0.1)' : '#CBD5E1')),
+                                color: '#FFFFFF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.72rem',
+                                fontWeight: 900,
+                                boxShadow: step.done ? '0 0 12px rgba(16, 185, 129, 0.5)' : (step.current ? '0 0 12px rgba(245, 158, 11, 0.5)' : 'none')
+                              }}>
+                                {step.done ? <Check size={14} /> : (idx + 1)}
+                              </div>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: step.done ? '#10B981' : (step.current ? '#F59E0B' : '#94A3B8'), marginTop: '6px', lineHeight: 1.2 }}>
+                                {step.title}
+                              </span>
+                              <span style={{ fontSize: '0.62rem', color: '#94A3B8', marginTop: '2px' }}>
+                                {step.desc}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    </div>
-                  );
-                })()}
-              </>
-            )}
+                    );
+                  })()}
 
-            {/* Validation Error Message Box */}
-            {checkoutError && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1.5px solid #EF4444',
-                  color: '#F87171',
-                  fontSize: '0.82rem',
-                  fontWeight: 800,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px'
-                }}
-              >
-                <AlertCircle size={18} style={{ flexShrink: 0 }} />
-                <span>{checkoutError}</span>
-              </motion.div>
-            )}
-
-            {/* Directly Show Full Detailed Digital Invoice Card */}
-            {checkoutSuccess ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.3 }}
-                style={{
-                  borderRadius: '20px',
-                  overflow: 'hidden',
-                  background: isDark ? '#0F172A' : '#FFFFFF',
-                  border: `1.5px solid ${isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.3)'}`,
-                  boxShadow: '0 20px 45px rgba(0, 0, 0, 0.35)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0'
-                }}
-              >
-                {/* 1. Branding Bar */}
-                <div style={{
-                  padding: '16px 20px',
-                  background: isDark ? '#091124' : '#F8FAFC',
-                  borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}>
-                  <div>
-                    <div style={{ fontSize: '1rem', fontWeight: 900, letterSpacing: '1.5px', color: '#14B8A6', textTransform: 'uppercase' }}>
-                      RASEDUL KARIM
-                    </div>
-                    <div style={{ fontSize: '0.65rem', color: '#94A3B8', letterSpacing: '0.5px' }}>
-                      PORTFOLIO & DIGITAL SOLUTIONS
-                    </div>
-                  </div>
-                  {checkoutSuccess.hasCoupon ? (
-                    <span style={{
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      background: 'rgba(16, 185, 129, 0.15)',
-                      border: '1px solid #10B981',
-                      color: '#10B981',
-                      fontSize: '0.72rem',
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <CheckCircle2 size={12} />
-                      {isBangla ? 'অর্ডার ভেরিফাইড' : 'Order Verified'}
-                    </span>
-                  ) : (
-                    <span style={{
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      background: 'rgba(59, 130, 246, 0.15)',
-                      border: '1.5px solid #3B82F6',
-                      color: '#60A5FA',
-                      fontSize: '0.72rem',
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      <CheckCircle2 size={12} />
-                      {isBangla ? 'অর্ডার গৃহীত' : 'Order Received'}
-                    </span>
-                  )}
-                </div>
-
-                {/* 2. Hero Banner (Conditional: Offer vs Regular Order) */}
-                <div style={{
-                  padding: '20px 20px',
-                  background: checkoutSuccess.hasCoupon 
-                    ? 'linear-gradient(135deg, #0D9488 0%, #14B8A6 100%)' 
-                    : 'linear-gradient(135deg, #334155 0%, #1E293B 100%)',
-                  textAlign: 'center',
-                  color: '#FFFFFF'
-                }}>
-                  <div style={{ fontSize: '1.8rem', marginBottom: '4px' }}>
-                    {checkoutSuccess.hasCoupon ? '🎉' : '📦'}
-                  </div>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '1.15rem', fontWeight: 900, color: '#FFFFFF' }}>
-                    {checkoutSuccess.hasCoupon 
-                      ? (isBangla ? 'আপনার অফার অর্ডার কনফার্ম হয়েছে!' : 'Your Offer Order is Confirmed!')
-                      : (isBangla ? 'আপনার অর্ডার সফলভাবে গ্রহণ করা হয়েছে!' : 'Your Order is Confirmed!')}
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '0.76rem', color: checkoutSuccess.hasCoupon ? '#E6FFFA' : '#CBD5E1' }}>
-                    {checkoutSuccess.hasCoupon 
-                      ? (isBangla 
-                          ? 'আপনার স্পেশাল ডিসকাউন্ট ক্লেইম অর্ডারটি গ্রহণ করা হয়েছে।' 
-                          : 'Your special discount claim order was received.')
-                      : (isBangla 
-                          ? 'আপনার প্রজেক্ট রিকোয়েস্টটি সফলভাবে গ্রহণ করা হয়েছে।' 
-                          : 'Your project request was received successfully.')}
-                  </p>
-                </div>
-
-                {/* 3. Order Metadata Row */}
-                <div style={{
-                  padding: '12px 20px',
-                  background: isDark ? '#111E38' : '#F8FAFC',
-                  borderBottom: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.1)'}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '0.76rem',
-                  color: '#94A3B8'
-                }}>
-                  <div>
-                    {isBangla ? 'অর্ডার নম্বর:' : 'Order ID:'} <strong style={{ color: '#22D3EE', fontFamily: "'Space Grotesk', monospace" }}>#{checkoutSuccess.orderId}</strong>
-                  </div>
-                  <div>
-                    {isBangla ? 'তারিখ:' : 'Date:'} <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{checkoutSuccess.orderDate}</strong>
-                  </div>
-                </div>
-
-                {/* 4. Structured Pricing Table */}
-                <div style={{ padding: '18px 20px' }}>
-                  <div style={{ fontSize: '0.76rem', fontWeight: 800, color: '#22D3EE', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {isBangla ? '📋 প্রজেক্ট ও প্রাইসিং বিবরণ' : '📋 Project & Pricing Details'}
-                  </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '8px', borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}` }}>
-                      <div>
-                        <div style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A', fontSize: '0.92rem' }}>
-                          {checkoutSuccess.dealTitle}
-                        </div>
-                        {checkoutSuccess.hasCoupon && checkoutSuccess.couponCode && (
-                          <div style={{ fontSize: '0.74rem', color: '#14B8A6', marginTop: '2px' }}>
-                            {isBangla ? 'কুপন কোড:' : 'Coupon:'} <strong>{checkoutSuccess.couponCode}</strong>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.74rem', color: '#94A3B8' }}>{isBangla ? 'পরিমাণ: ১টি' : 'Qty: 1'}</div>
-                        <div style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0F172A', fontFamily: "'Space Grotesk', monospace" }}>
-                          {checkoutSuccess.hasCoupon ? checkoutSuccess.originalPrice : `৳${checkoutSuccess.finalPrice} BDT`}
-                        </div>
-                      </div>
-                    </div>
-
-                    {checkoutSuccess.hasCoupon && (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94A3B8' }}>
-                          <span>{isBangla ? 'প্যাকেজের নিয়মিত মূল্য:' : 'Standard Package Rate:'}</span>
-                          <span style={{ fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.originalPrice}</span>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#10B981', fontWeight: 700 }}>
-                          <span>{isBangla ? `প্রযোজ্য কুপন ছাড় (${checkoutSuccess.discountPercentage}%):` : `Applied Coupon Discount (${checkoutSuccess.discountPercentage}%):`}</span>
-                          <span style={{ fontFamily: "'Space Grotesk', monospace" }}>-{checkoutSuccess.discountAmount}</span>
-                        </div>
-                      </>
-                    )}
-
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      paddingTop: '8px',
-                      borderTop: `1.5px solid ${isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.3)'}`,
-                      fontSize: '0.98rem',
-                      fontWeight: 900,
-                      color: isDark ? '#FFFFFF' : '#0F172A'
-                    }}>
-                      <span>{isBangla ? 'চূড়ান্ত প্রদেয় মূল্য (Total):' : 'Final Net Payable:'}</span>
-                      <span style={{ color: '#10B981', fontSize: '1.2rem', fontFamily: "'Space Grotesk', monospace" }}>
-                        ৳{checkoutSuccess.finalPrice} BDT
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5. Customer Details Box */}
-                <div style={{ padding: '0 20px 16px' }}>
+                  {/* Route & Delivery Location Details */}
                   <div style={{
-                    background: isDark ? '#111E38' : '#F8FAFC',
-                    borderRadius: '12px',
-                    padding: '12px 14px',
+                    padding: '16px',
+                    borderRadius: '16px',
+                    background: isDark ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC',
                     border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
-                    fontSize: '0.78rem'
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
                   }}>
-                    <div style={{ fontWeight: 800, color: '#22D3EE', marginBottom: '6px' }}>
-                      {isBangla ? '👤 গ্রাহকের তথ্য ও বার্তা' : '👤 Customer Information'}
+                    <div style={{ fontSize: '0.74rem', fontWeight: 800, color: '#10B981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {isBangla ? 'রুট ও গন্তব্য বিবরণ' : 'Route & Destination Details'}
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8', marginBottom: '3px' }}>
-                      <span>{isBangla ? 'নাম:' : 'Name:'}</span>
-                      <span style={{ color: isDark ? '#FFFFFF' : '#0F172A', fontWeight: 700 }}>{checkoutSuccess.clientName}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94A3B8', marginBottom: '5px' }}>
-                      <span>{isBangla ? 'ভেরিফাইড ইমেইল:' : 'Email:'}</span>
-                      <span style={{ color: '#10B981', fontWeight: 700, fontFamily: "'Space Grotesk', monospace" }}>{checkoutSuccess.clientEmail}</span>
-                    </div>
-                    {checkoutSuccess.message && (
-                      <div style={{ color: '#94A3B8', borderTop: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`, paddingTop: '5px', marginTop: '5px' }}>
-                        <span>{isBangla ? 'বার্তা:' : 'Message:'}</span> <span style={{ color: isDark ? '#E2E8F0' : '#334155' }}>{checkoutSuccess.message}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* 6. Done / Close Button */}
-                <div style={{ padding: '0 20px 20px' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: '3px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3B82F6' }} />
+                        <span style={{ width: '2px', height: '24px', borderLeft: '2px dashed #93C5FD', margin: '2px 0' }} />
+                        <MapPin size={12} color="#10B981" />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                        <div>
+                          <span style={{ fontSize: '0.66rem', color: '#94A3B8', textTransform: 'uppercase' }}>Origin Hub:</span>
+                          <div style={{ fontSize: '0.80rem', fontWeight: 700, color: isDark ? '#E2E8F0' : '#1E293B' }}>
+                            Dhaka, Bangladesh (Developer Studio)
+                          </div>
+                        </div>
+
+                        <div>
+                          <span style={{ fontSize: '0.66rem', color: '#94A3B8', textTransform: 'uppercase' }}>Destination / Address:</span>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: isDark ? '#FFFFFF' : '#0F172A' }}>
+                            {selectedShipmentDetail.clientAddress || selectedShipmentDetail.address || (isBangla ? 'ঠিকানা প্রযোজ্য নয় / ডিজিটাল ডেলিভারি' : 'Digital Delivery / Address not specified')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Customer Contact row */}
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '10px',
+                      paddingTop: '10px',
+                      borderTop: `1px dashed ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'}`,
+                      fontSize: '0.76rem'
+                    }}>
+                      <div>
+                        <span style={{ color: '#94A3B8' }}>{isBangla ? 'গ্রাহক:' : 'Customer:'} </span>
+                        <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{selectedShipmentDetail.clientName || 'Valued Client'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#94A3B8' }}>{isBangla ? 'মোবাইল:' : 'Phone:'} </span>
+                        <strong style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>{selectedShipmentDetail.clientPhone || selectedShipmentDetail.phone || selectedShipmentDetail.whatsapp || 'N/A'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pricing & Single-Discount Validation Badge */}
+                  <div style={{
+                    padding: '14px 16px',
+                    borderRadius: '16px',
+                    background: isDark ? 'rgba(16, 185, 129, 0.06)' : 'rgba(16, 185, 129, 0.04)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '8px'
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '0.70rem', color: '#94A3B8' }}>
+                        {isBangla ? 'পরিশোধযোগ্য মোট মূল্য:' : 'Payable Amount:'}
+                      </span>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#10B981', fontFamily: "'Space Grotesk', monospace" }}>
+                        ৳{selectedShipmentDetail.finalPrice} BDT
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        color: '#10B981',
+                        background: 'rgba(16, 185, 129, 0.15)',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(16, 185, 129, 0.3)'
+                      }}>
+                        ✓ Single Discount Verified
+                      </span>
+                      <div style={{ fontSize: '0.66rem', color: '#94A3B8', marginTop: '3px' }}>
+                        {selectedShipmentDetail.couponCode ? `Coupon: ${selectedShipmentDetail.couponCode}` : 'Regular / Standard Plan'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action button: Close */}
                   <button
                     type="button"
-                    onClick={handleCloseCheckoutModal}
-                    className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 active:scale-[0.98] text-white font-bold text-base shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer border border-emerald-400/30"
+                    onClick={() => setSelectedShipmentDetail(null)}
                     style={{
                       width: '100%',
-                      minHeight: '50px',
-                      padding: '14px 24px',
-                      borderRadius: '16px',
-                      background: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
+                      padding: '12px 20px',
+                      borderRadius: '14px',
+                      background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
                       color: '#FFFFFF',
                       fontWeight: 800,
-                      fontSize: '0.98rem',
-                      boxShadow: '0 10px 25px -5px rgba(5, 150, 105, 0.4)',
-                      border: '1.5px solid rgba(52, 211, 153, 0.4)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '10px',
+                      fontSize: '0.90rem',
+                      border: 'none',
                       cursor: 'pointer',
-                      outline: 'none',
-                      boxSizing: 'border-box'
+                      boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)'
                     }}
                   >
-                    <Check className="w-5 h-5 flex-shrink-0" style={{ width: '20px', height: '20px', minWidth: '20px', minHeight: '20px' }} />
-                    <span>{isBangla ? '✓ সম্পন্ন করুন (Done)' : 'Done / Close'}</span>
+                    {isBangla ? 'ট্র্যাকিং বন্ধ করুন' : 'Close Tracking'}
                   </button>
-                </div>
-              </motion.div>
-            ) : (
-              /* Checkout Form Fields */
-              <form id="checkout-claim-form" onSubmit={handleFinalSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.78rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
-                        <User size={13} />
-                        <span>{isBangla ? 'আপনার নাম (Client Name)' : 'Your Full Name'}</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={checkoutName}
-                        onChange={(e) => setCheckoutName(e.target.value)}
-                        placeholder={isBangla ? 'এখানে আপনার নাম লিখুন' : 'Enter your name here'}
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#F8FAFC',
-                          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
-                          color: isDark ? '#FFFFFF' : '#0F172A',
-                          fontSize: '0.84rem',
-                          boxSizing: 'border-box',
-                          outline: 'none'
-                        }}
-                      />
-                    </div>
-
-                    {/* Verified Email Field with Dedicated Verification & Auto-Fill Button */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <label style={{ fontSize: '0.78rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <Mail size={13} />
-                          <span>{isBangla ? 'ভেরিফাইড ইমেইল ঠিকানা (Email Verification) *' : 'Verified Email (Email Verification) *'}</span>
-                        </label>
-                        {isEmailVerified && (
-                          <span style={{
-                            fontSize: '0.68rem',
-                            padding: '2px 8px',
-                            borderRadius: '8px',
-                            background: 'rgba(16, 185, 129, 0.2)',
-                            color: '#10B981',
-                            fontWeight: 800,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            <CheckCircle2 size={12} />
-                            {isBangla ? 'ভেরিফাইড' : 'Verified'}
-                          </span>
-                        )}
-                      </div>
-
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-                        <div style={{ position: 'relative', width: '100%', boxSizing: 'border-box' }}>
-                          <input
-                            type="email"
-                            required
-                            value={checkoutEmail}
-                            onChange={(e) => {
-                              setCheckoutEmail(e.target.value);
-                              setIsEmailVerified(false);
-                              setIsCouponApplied(false);
-                              setAppliedCouponCode('');
-                              setCouponSuccessMsg(null);
-                              setEmailFeedback(null);
-                            }}
-                            placeholder={isBangla ? 'এখানে আপনার ইমেইল লিখুন' : 'Enter your email here'}
-                            style={{
-                              width: '100%',
-                              padding: '11px 14px',
-                              paddingRight: isEmailVerified ? '36px' : '14px',
-                              borderRadius: '12px',
-                              background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#F8FAFC',
-                              border: isEmailVerified
-                                ? '1.5px solid #10B981'
-                                : `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
-                              color: isDark ? '#FFFFFF' : '#0F172A',
-                              fontSize: '0.84rem',
-                              boxSizing: 'border-box',
-                              outline: 'none'
-                            }}
-                          />
-                          {isEmailVerified && (
-                            <CheckCircle2
-                              size={16}
-                              color="#10B981"
-                              style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}
-                            />
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          disabled={emailChecking}
-                          onClick={handleVerifyEmailAndAutoFill}
-                          style={{
-                            width: '100%',
-                            padding: '11px 16px',
-                            borderRadius: '12px',
-                            background: isEmailVerified
-                              ? 'rgba(16, 185, 129, 0.18)'
-                              : 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
-                            border: isEmailVerified ? '1px solid #10B981' : 'none',
-                            color: isEmailVerified ? '#10B981' : '#FFFFFF',
-                            fontSize: '0.84rem',
-                            fontWeight: 800,
-                            cursor: emailChecking ? 'wait' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '8px',
-                            boxShadow: isEmailVerified ? 'none' : '0 4px 14px rgba(16, 185, 129, 0.35)',
-                            opacity: emailChecking ? 0.75 : 1,
-                            boxSizing: 'border-box'
-                          }}
-                        >
-                          {emailChecking ? (
-                            <span>{isBangla ? 'যাচাই হচ্ছে...' : 'Verifying...'}</span>
-                          ) : isEmailVerified ? (
-                            <>
-                              <CheckCircle2 size={14} />
-                              <span>{isBangla ? 'যাচাইকৃত' : 'Verified'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck size={14} />
-                              <span>{isBangla ? 'Verify Email / যাচাই করুন' : 'Verify Email'}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Email Feedback (Error with State-Preserving Subscribe or Success) */}
-                      {emailFeedback && (
-                        <div style={{
-                          marginTop: '8px',
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          background: emailFeedback.type === 'error' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-                          border: `1.5px solid ${emailFeedback.type === 'error' ? 'rgba(239, 68, 68, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px'
-                        }}>
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            color: emailFeedback.type === 'error' ? '#EF4444' : '#10B981',
-                            fontSize: '0.8rem',
-                            fontWeight: 700
-                          }}>
-                            {emailFeedback.type === 'error' ? <AlertCircle size={14} style={{ flexShrink: 0 }} /> : <CheckCircle2 size={14} style={{ flexShrink: 0 }} />}
-                            <span>{emailFeedback.message}</span>
-                          </div>
-                          {emailFeedback.needsSubscribe && (
-                            <button
-                              type="button"
-                              onClick={handleStatePreservedSubscribeAndRestore}
-                              style={{
-                                alignSelf: 'flex-start',
-                                padding: '6px 14px',
-                                borderRadius: '8px',
-                                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-                                border: 'none',
-                                color: '#FFFFFF',
-                                fontSize: '0.78rem',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)'
-                              }}
-                            >
-                              <Sparkles size={13} />
-                              <span>{isBangla ? 'এখনই সাবস্ক্রাইব করুন' : 'Subscribe Now'}</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Internal Coupon Verification Section (Have a coupon code?) */}
-                    <div style={{
-                      padding: '14px 16px',
-                      borderRadius: '14px',
-                      background: isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(241, 245, 249, 0.9)',
-                      border: isCouponApplied 
-                        ? '1.5px solid #10B981' 
-                        : `1.5px dashed ${isDark ? 'rgba(16, 185, 129, 0.4)' : 'rgba(0, 105, 92, 0.35)'}`,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                          <Tag size={15} color="#10B981" />
-                          <span style={{
-                            fontSize: '0.82rem',
-                            fontWeight: 800,
-                            color: isDark ? '#FFFFFF' : '#0F172A',
-                            fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
-                          }}>
-                            {isBangla ? 'কুপন কোড আছে? (Have a coupon code?)' : 'Have a coupon code?'}
-                          </span>
-                        </div>
-                        {isCouponApplied && (
-                          <span style={{
-                            fontSize: '0.68rem',
-                            padding: '2px 8px',
-                            borderRadius: '8px',
-                            background: 'rgba(16, 185, 129, 0.2)',
-                            color: '#10B981',
-                            fontWeight: 800,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            <CheckCircle2 size={12} />
-                            {isBangla ? 'ভেরিফাইড' : 'Verified'}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* উল্লম্ব লেআউট (Vertical Stacking): উপরে ইনপুট, নিচে বাটন (পূর্ণ প্রস্থে) */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', boxSizing: 'border-box' }}>
-                        {/* টাইপিং ইনপুট ঘর (পূর্ণ প্রস্থে উপরে) */}
-                        <input
-                          type="text"
-                          value={checkoutCouponCode}
-                          onChange={(e) => {
-                            setCheckoutCouponCode(e.target.value.toUpperCase());
-                            if (isCouponApplied) {
-                              setIsCouponApplied(false);
-                              setAppliedCouponCode('');
-                              setCouponSuccessMsg(null);
-                            }
-                          }}
-                          placeholder={isBangla ? 'কুপন কোড লিখুন...' : 'ENTER COUPON CODE...'}
-                          style={{
-                            width: '100%',
-                            padding: '12px 14px',
-                            borderRadius: '12px',
-                            background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#FFFFFF',
-                            border: `1.5px solid ${isDark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.12)'}`,
-                            color: isDark ? '#FFFFFF' : '#0F172A',
-                            fontSize: '0.86rem',
-                            fontFamily: "'Space Grotesk', monospace",
-                            textTransform: 'uppercase',
-                            letterSpacing: '1px',
-                            outline: 'none',
-                            boxSizing: 'border-box'
-                          }}
-                        />
-
-                        {/* ভেরিফাই বাটন (ইনপুটের ঠিক নিচে পূর্ণ প্রস্থে) */}
-                        {isCouponApplied ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsCouponApplied(false);
-                              setAppliedCouponCode('');
-                              setCouponSuccessMsg(null);
-                              setCouponErrorMsg(null);
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '12px 16px',
-                              borderRadius: '12px',
-                              background: 'rgba(239, 68, 68, 0.15)',
-                              border: '1.5px solid rgba(239, 68, 68, 0.35)',
-                              color: '#EF4444',
-                              fontSize: '0.86rem',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '8px',
-                              boxSizing: 'border-box',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            <X size={15} />
-                            <span>{isBangla ? 'কুপন রিমুভ করুন' : 'Remove Coupon'}</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={couponChecking}
-                            onClick={handleApplyCouponInsideModal}
-                            style={{
-                              width: '100%',
-                              padding: '12px 16px',
-                              borderRadius: '12px',
-                              background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
-                              border: 'none',
-                              color: '#FFFFFF',
-                              fontSize: '0.88rem',
-                              fontWeight: 800,
-                              cursor: couponChecking ? 'wait' : 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: '8px',
-                              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
-                              opacity: couponChecking ? 0.75 : 1,
-                              boxSizing: 'border-box',
-                              transition: 'all 0.2s ease'
-                            }}
-                          >
-                            {couponChecking ? (
-                              <span>{isBangla ? 'যাচাই হচ্ছে...' : 'Verifying...'}</span>
-                            ) : (
-                              <>
-                                <KeyRound size={15} />
-                                <span>{isBangla ? 'কুপন ভেরিফাই করুন' : 'Apply Coupon'}</span>
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Success Feedback Badge */}
-                      {couponSuccessMsg && (
-                        <div style={{
-                          padding: '8px 12px',
-                          borderRadius: '8px',
-                          background: 'rgba(16, 185, 129, 0.15)',
-                          border: '1px solid rgba(16, 185, 129, 0.35)',
-                          color: '#10B981',
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px'
-                        }}>
-                          <CheckCircle2 size={14} style={{ flexShrink: 0 }} />
-                          <span>{couponSuccessMsg}</span>
-                        </div>
-                      )}
-
-                      {/* Error / Validation Feedback with State-Preserving Subscribe Button */}
-                      {couponErrorMsg && (
-                        <div style={{
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          background: 'rgba(239, 68, 68, 0.12)',
-                          border: '1.5px solid rgba(239, 68, 68, 0.35)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#EF4444', fontSize: '0.8rem', fontWeight: 700 }}>
-                            <AlertCircle size={14} style={{ flexShrink: 0 }} />
-                            <span>{couponErrorMsg}</span>
-                          </div>
-                          {(couponErrorMsg.includes('not subscribed') || couponErrorMsg.includes('সাবস্ক্রাইব করা নেই') || couponErrorMsg.includes('সাবস্ক্রাইব করেননি')) && (
-                            <button
-                              type="button"
-                              disabled={couponChecking}
-                              onClick={handleStatePreservedSubscribeAndRestore}
-                              style={{
-                                alignSelf: 'flex-start',
-                                padding: '6px 14px',
-                                borderRadius: '8px',
-                                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-                                border: 'none',
-                                color: '#FFFFFF',
-                                fontSize: '0.78rem',
-                                fontWeight: 800,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.4)'
-                              }}
-                            >
-                              <Sparkles size={13} />
-                              <span>{isBangla ? 'এখনই সাবস্ক্রাইব করুন' : 'Subscribe Now'}</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.78rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
-                        <MessageSquare size={13} />
-                        <span>{isBangla ? 'প্রজেক্ট নোট বা বার্তা (Project Scope)' : 'Project Scope / Message'}</span>
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={checkoutMessage}
-                        onChange={(e) => setCheckoutMessage(e.target.value)}
-                        placeholder={isBangla ? 'আপনার প্রজেক্টের সংক্ষিপ্ত বিবরণ লিখুন...' : 'Briefly describe your requirements...'}
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          background: isDark ? 'rgba(0, 0, 0, 0.35)' : '#F8FAFC',
-                          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)'}`,
-                          color: isDark ? '#FFFFFF' : '#0F172A',
-                          fontSize: '0.84rem',
-                          boxSizing: 'border-box',
-                          resize: 'vertical',
-                          outline: 'none'
-                        }}
-                      />
-                    </div>
-
-                    {/* চেকআউট ফর্মের ইনপুট ফিল্ডগুলোর পর একদম নিচে সাবমিট বাটন */}
-                    <div 
-                      className="pt-4 mt-6 border-t border-emerald-500/20"
-                      style={{
-                        paddingTop: '16px',
-                        marginTop: '24px',
-                        borderTop: '1px solid rgba(16, 185, 129, 0.25)',
-                        width: '100%',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <button
-                        type="button"
-                        disabled={checkoutSubmitting}
-                        onClick={handleFinalSubmit}
-                        className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 active:scale-[0.98] text-white font-bold text-base shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-3 transition-all duration-200 cursor-pointer border border-emerald-400/30"
-                        style={{
-                          width: '100%',
-                          minHeight: '52px',
-                          padding: '16px 24px',
-                          borderRadius: '16px',
-                          background: 'linear-gradient(135deg, #059669 0%, #0d9488 50%, #047857 100%)',
-                          color: '#FFFFFF',
-                          fontWeight: 800,
-                          fontSize: '1rem',
-                          letterSpacing: '0.5px',
-                          boxShadow: '0 12px 28px -6px rgba(5, 150, 105, 0.45), 0 0 20px rgba(16, 185, 129, 0.25)',
-                          border: '1.5px solid rgba(52, 211, 153, 0.4)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '12px',
-                          cursor: checkoutSubmitting ? 'wait' : 'pointer',
-                          opacity: checkoutSubmitting ? 0.75 : 1,
-                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                          outline: 'none',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        {checkoutSubmitting ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ display: 'inline-block', width: '18px', height: '18px', border: '2px solid #FFFFFF', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                            <span>{isBangla ? 'মেইল পাঠানো হচ্ছে...' : 'Sending Mail & Finalizing...'}</span>
-                          </span>
-                        ) : (
-                          <>
-                            {/* আধুনিক সেন্ড পেপার-প্লেন আইকন */}
-                            <svg 
-                              className="w-5 h-5 flex-shrink-0 text-white animate-pulse" 
-                              fill="currentColor" 
-                              viewBox="0 0 20 20"
-                              style={{
-                                width: '20px',
-                                height: '20px',
-                                minWidth: '20px',
-                                minHeight: '20px',
-                                flexShrink: 0,
-                                color: '#FFFFFF',
-                                fill: '#FFFFFF',
-                                display: 'block'
-                              }}
-                            >
-                              <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                            </svg>
-                            <span className="tracking-wide" style={{ color: '#FFFFFF', fontWeight: 800 }}>
-                              Send Mail / Order Submit
-                            </span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                  </form>
-                )}
                 </div>
               </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Connect Modal for sign-in / authentication */}
+        <ConnectModal
+          isOpen={isConnectModalOpen}
+          onClose={() => {
+            setIsConnectModalOpen(false);
+            setPendingClaimDeal(null);
+          }}
+        />
 
         {/* Floating Share Feedback Toast Notification */}
         <AnimatePresence>

@@ -2,8 +2,8 @@ import React, { useState, Suspense, lazy } from 'react';
 import { FirestoreStreamBuilder } from './firebase/FirestoreStreamBuilder';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
-import Footer from './components/Footer';
-import MaintenanceScreen from './components/MaintenanceScreen';
+
+import ConnectModal from './components/ConnectModal';
 
 // Lazy loading modals for maximum performance
 const DreamModal = lazy(() => import('./components/DreamModal'));
@@ -37,9 +37,6 @@ function App() {
     <FirestoreStreamBuilder collectionName="portfolio">
       {({ data, loading, error }) => (
         <>
-          {/* Full-Screen Maintenance Lock Screen Overlay */}
-          <MaintenanceScreen onOpenAdmin={() => setShowAdmin(true)} />
-
           {/* Navigation Header */}
           <Navbar 
             isDrawerOpen={isDrawerOpen}
@@ -66,10 +63,31 @@ function App() {
             {showUpcoming && <UpcomingProjectsModal onClose={() => setShowUpcoming(false)} />}
             {showFavorite && <FavoriteToolsModal onClose={() => setShowFavorite(false)} />}
             {showDeals && <DealsDiscountsModal onClose={() => setShowDeals(false)} />}
+            {showSubscribe && (
+              <ConnectModal
+                isOpen={showSubscribe}
+                onClose={() => setShowSubscribe(false)}
+                onOpenProjects={() => setShowProjects(true)}
+                onOpenDeals={() => setShowDeals(true)}
+              />
+            )}
           </Suspense>
           
-          {/* Main Mobile-First Digital Business Card Layout - Clean & Unobstructed */}
-          <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Main Mobile-First Digital Business Card Layout - Clean & Scroll Locked */}
+          <div 
+            id="main-homepage-container"
+            className="h-screen overflow-hidden" 
+            style={{ 
+              position: 'relative', 
+              zIndex: 1, 
+              height: '100vh', 
+              maxHeight: '100vh', 
+              width: '100%', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              overflow: 'hidden' 
+            }}
+          >
             {/* Digital Profile, Metrics, Social Icons & Bento Cards */}
             <HeroSection 
               isDreamOpen={showProjects || showDream || showAbout || showSkill || showAdmin || showQR || showReview || showDesign || showUpcoming || showFavorite || showDeals} 
@@ -87,14 +105,6 @@ function App() {
               onOpenDeals={() => setShowDeals(true)}
               isSubscribeOpen={showSubscribe}
               setIsSubscribeOpen={setShowSubscribe}
-            />
-
-            {/* Global Portfolio Footer */}
-            <Footer 
-              onOpenDream={() => setShowDream(true)}
-              onOpenAbout={() => setShowAbout(true)}
-              onOpenAdmin={() => setShowAdmin(true)}
-              onOpenSubscribe={() => setShowSubscribe(true)}
             />
           </div>
         </>

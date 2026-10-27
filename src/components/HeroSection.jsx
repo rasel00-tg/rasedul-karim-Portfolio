@@ -27,9 +27,10 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import { recordUniqueVisit, listenVisitorCount, formatVisitorCount } from '../services/visitorService';
-import { listenSubscriberCount, formatSubscriberCount, subscribeEmail, sendSubscriptionOtp, isEmailSubscribed } from '../services/subscriptionService';
+import { recordUniqueVisit } from '../services/visitorService';
+import { subscribeEmail, sendSubscriptionOtp, isEmailSubscribed } from '../services/subscriptionService';
 import BentoGridSection from './StackedLinkCapsules';
+import ConnectModal from './ConnectModal';
 
 const CleanAmbientBackdrop = ({ isDark }) => {
   return (
@@ -113,8 +114,6 @@ const HeroSection = ({
 }) => {
   const { isDark, toggleTheme } = useTheme();
   const { isBangla, t } = useLanguage();
-  const [visitorCount, setVisitorCount] = useState(123300);
-  const [subscriberCount, setSubscriberCount] = useState(10340);
   const [localIsSubscribeOpen, setLocalIsSubscribeOpen] = useState(false);
   const isSubscribeOpen = propIsSubscribeOpen !== undefined ? propIsSubscribeOpen : localIsSubscribeOpen;
   const setIsSubscribeOpen = propSetIsSubscribeOpen || setLocalIsSubscribeOpen;
@@ -157,19 +156,9 @@ const HeroSection = ({
     });
   }, []);
 
-  // Initialize unique visit tracking & live listeners (Visitors 123.3K baseline, Subscribers 10.34K baseline)
+  // Initialize unique visit tracking
   useEffect(() => {
     recordUniqueVisit();
-    const unsubVisitor = listenVisitorCount((count) => {
-      if (count) setVisitorCount(count);
-    });
-    const unsubSubscriber = listenSubscriberCount((count) => {
-      if (count) setSubscriberCount(count);
-    });
-    return () => {
-      unsubVisitor();
-      unsubSubscriber();
-    };
   }, []);
 
   const handleSubscribeSubmit = async (e) => {
@@ -370,6 +359,7 @@ const HeroSection = ({
   return (
     <section 
       id="hero" 
+      className="h-screen overflow-hidden"
       style={{ 
         width: '100%',
         margin: '0',
@@ -378,8 +368,11 @@ const HeroSection = ({
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        justifyContent: 'flex-start',
         zIndex: 2,
-        minHeight: '100vh',
+        height: '100vh',
+        maxHeight: '100vh',
+        overflow: 'hidden',
         boxSizing: 'border-box'
       }}
     >
@@ -543,32 +536,7 @@ const HeroSection = ({
               </div>
             </div>
 
-            {/* Line 1: Designation (Responsive 12px -> 14px, High Contrast) */}
-            <div 
-              className="hero-designation-text"
-              style={{
-                color: isDark ? '#F1F5F9' : '#0A192F',
-                fontWeight: 800,
-                fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
-              }}
-            >
-              <span>{t('hero.bio', 'Software & Web Developer | Photo Editor | Digital Creator')}</span>
-            </div>
-
-            {/* Line 2: Location & Address (Responsive 11px -> 13px, High Contrast) */}
-            <div 
-              className="hero-location-text"
-              style={{
-                color: isDark ? '#CBD5E1' : '#1E293B',
-                fontWeight: 600,
-                fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
-              }}
-            >
-              <MapPin size={13} color="var(--primary-color)" style={{ flexShrink: 0 }} />
-              <span>{t('hero.location', "Natun Pollan Para, Teknaf, Cox's Bazar, Bangladesh")}</span>
-            </div>
-
-            {/* RESTORED: [ Chat in Mail ] & [ Subscribe ] Dual Action Buttons */}
+            {/* RESTORED: [ Chat in Mail ] & [ Connect ] Dual Action Buttons */}
             <div className="hero-action-buttons-row">
               {/* Button 1: Chat in Mail (High Contrast Surface) */}
               <motion.button
@@ -590,69 +558,26 @@ const HeroSection = ({
                 <span style={{ fontWeight: 800 }}>{t('hero.chatInMail', 'Chat in Mail')}</span>
               </motion.button>
 
-              {/* Button 2: Subscribe */}
+              {/* Button 2: Connect (Google & GitHub 1-Click Auth) */}
               <motion.button
                 onClick={() => setIsSubscribeOpen(true)}
                 whileHover={{ scale: 1.03, y: -1 }}
                 whileTap={{ scale: 0.97 }}
                 className="hero-action-btn"
                 style={{
-                  background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
-                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)',
+                  border: '1px solid rgba(0, 240, 255, 0.45)',
                   color: '#FFFFFF',
-                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
                   fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
                 }}
+                title={isBangla ? 'কানেক্ট করুন' : 'Connect'}
               >
-                <Bell size={16} color="#FFFFFF" />
-                <span>{t('hero.subscribe', 'Subscribe')}</span>
+                <Sparkles size={16} color="#FFFFFF" />
+                <span style={{ fontWeight: 800 }}>{isBangla ? 'কানেক্ট' : 'Connect'}</span>
               </motion.button>
             </div>
 
-            {/* Realtime Live Counter Badges (Visitors & Subscribers - Responsive 13.5px -> 14.5px) */}
-            <div className="hero-counters-container">
-              {/* Visitors Pill */}
-              <div 
-                className="hero-counter-pill"
-                style={{
-                  background: isDark ? 'rgba(0, 240, 255, 0.1)' : 'rgba(14, 74, 89, 0.09)',
-                  border: `1.5px solid ${isDark ? 'rgba(0, 240, 255, 0.35)' : 'rgba(14, 74, 89, 0.25)'}`,
-                  color: isDark ? '#00f0ff' : '#0E4A59',
-                  boxShadow: isDark ? '0 2px 8px rgba(0, 240, 255, 0.15)' : '0 2px 6px rgba(0, 0, 0, 0.04)',
-                }}
-              >
-                <span style={{ 
-                  width: '8px', 
-                  height: '8px', 
-                  borderRadius: '50%', 
-                  background: '#00E676', 
-                  display: 'inline-block',
-                  boxShadow: '0 0 6px #00E676'
-                }} />
-                <span>{t('hero.visitors', 'Visitors')}: <strong style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#0E4A59' }}>{formatVisitorCount(visitorCount)}</strong></span>
-              </div>
-
-              {/* Subscribers Pill */}
-              <div 
-                className="hero-counter-pill"
-                style={{
-                  background: 'rgba(255, 23, 68, 0.1)',
-                  border: '1.5px solid rgba(255, 23, 68, 0.35)',
-                  color: '#FF1744',
-                  boxShadow: '0 2px 8px rgba(255, 23, 68, 0.15)',
-                }}
-              >
-                <span style={{ 
-                  width: '8px', 
-                  height: '8px', 
-                  borderRadius: '50%', 
-                  background: '#FF1744', 
-                  display: 'inline-block',
-                  boxShadow: '0 0 6px #FF1744'
-                }} />
-                <span>{t('hero.subscribers', 'Subscribers')}: <strong style={{ fontWeight: 800, color: isDark ? '#FFFFFF' : '#D50000' }}>{formatSubscriberCount(subscriberCount)}</strong></span>
-              </div>
-            </div>
 
             {/* Enlarged Social Icons Row (Responsive 38px -> 44px on Desktop) */}
             <div className="hero-social-links-row">
@@ -1115,547 +1040,13 @@ const HeroSection = ({
         document.body
       )}
 
-      {/* 7. Interactive Email Subscription Modal Dialog with Firestore Integration & Duplicate Prevention */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
-          {isSubscribeOpen && (
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                width: '100vw',
-                height: '100vh',
-                background: 'rgba(0, 0, 0, 0.85)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 999999,
-                padding: '16px',
-                boxSizing: 'border-box'
-              }}
-              onClick={() => {
-                setIsSubscribeOpen(false);
-                setSubResult(null);
-                setSubEmailInput('');
-              }}
-            >
-              <motion.div
-                initial={{ opacity: 0, scale: 0.85, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.85, y: 20 }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  width: '100%',
-                  maxWidth: '390px',
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--card-border)',
-                  borderRadius: '24px',
-                  padding: '28px 22px',
-                  textAlign: 'center',
-                  boxShadow: isDark 
-                    ? '0 25px 60px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 23, 68, 0.3)' 
-                    : '0 25px 60px rgba(0, 0, 0, 0.25)',
-                  position: 'relative',
-                  maxHeight: '90vh',
-                  overflowY: 'auto'
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setIsSubscribeOpen(false);
-                    setSubResult(null);
-                    setSubEmailInput('');
-                  }}
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    right: '16px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    padding: '4px'
-                  }}
-                  aria-label="Close modal"
-                >
-                  <X size={20} />
-                </button>
-
-                {/* 1. Already Subscribed State Dialog */}
-                {subStep === 'alreadySubscribed' ? (
-                  <div>
-                    <div style={{
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '50%',
-                      background: 'rgba(255, 23, 68, 0.12)',
-                      border: '1px solid rgba(255, 23, 68, 0.4)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 16px auto',
-                      boxShadow: '0 0 25px rgba(255, 23, 68, 0.35)'
-                    }}>
-                      <AlertTriangle size={28} color="#FF1744" />
-                    </div>
-
-                    <h3 style={{
-                      fontFamily: "'Space Grotesk', sans-serif",
-                      fontSize: '1.22rem',
-                      fontWeight: 800,
-                      color: '#FF1744',
-                      margin: '0 0 8px 0'
-                    }}>
-                      {isBangla ? 'ইতোপূর্বে সাবস্ক্রাইব করা হয়েছে' : 'Already Subscribed'}
-                    </h3>
-
-                    <p style={{
-                      fontSize: '0.88rem',
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.55,
-                      margin: '0 0 22px 0',
-                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                    }}>
-                      {isBangla 
-                        ? 'আপনার এই ইমেইলটি ইতোমধ্যেই নিবন্ধিত রয়েছে। আপনি যেকোনো ডিল ও কুপন সুবিধা সরাসরি উপভোগ করতে পারবেন!' 
-                        : 'Your email is already subscribed! You can directly enjoy all exclusive deals and coupons.'}
-                    </p>
-
-                    <motion.button
-                      onClick={handleCloseSubscribeModal}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      style={{
-                        width: '100%',
-                        padding: '11px',
-                        borderRadius: '30px',
-                        background: 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)',
-                        border: 'none',
-                        color: '#000000',
-                        fontWeight: 800,
-                        fontSize: '0.88rem',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)',
-                        fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                      }}
-                    >
-                      {t('subscribeModal.ok', 'OK')}
-                    </motion.button>
-                  </div>
-                ) : subStep === 'success' ? (
-                  /* 2. Subscribed Success State Dialog (Strict user requested message) */
-                  <div>
-                    <div style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: '50%',
-                      background: 'rgba(0, 230, 118, 0.12)',
-                      border: '1.5px solid rgba(0, 230, 118, 0.4)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 16px auto',
-                      boxShadow: '0 0 25px rgba(0, 230, 118, 0.35)'
-                    }}>
-                      <CheckCircle2 size={32} color="#00E676" />
-                    </div>
-
-                    <h3 style={{
-                      fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
-                      fontSize: '1.25rem',
-                      fontWeight: 800,
-                      color: 'var(--text-primary)',
-                      margin: '0 0 10px 0'
-                    }}>
-                      {isBangla ? 'সাবস্ক্রিপশন সফল হয়েছে!' : 'Subscription Confirmed!'}
-                    </h3>
-
-                    <p style={{
-                      fontSize: '0.90rem',
-                      color: isDark ? '#E2E8F0' : '#1E293B',
-                      lineHeight: 1.6,
-                      margin: '0 0 22px 0',
-                      fontWeight: 600,
-                      fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
-                    }}>
-                      {isBangla 
-                        ? 'আপনার সাবস্ক্রিপশন সফল হয়েছে! এখন আপনি যেকোনো এক্সক্লুসিভ ডিল ও কুপন উপভোগ করতে পারবেন।' 
-                        : 'Your subscription is successful! Now you can enjoy all exclusive deals and coupons.'}
-                    </p>
-
-                    <motion.button
-                      onClick={handleCloseSubscribeModal}
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        borderRadius: '30px',
-                        background: 'linear-gradient(135deg, #00f0ff 0%, #00e676 100%)',
-                        border: 'none',
-                        color: '#000000',
-                        fontWeight: 800,
-                        fontSize: '0.88rem',
-                        cursor: 'pointer',
-                        boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)',
-                        fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                      }}
-                    >
-                      {isBangla ? 'ধন্যবাদ, সম্পন্ন হয়েছে' : 'Awesome, Done'}
-                    </motion.button>
-                  </div>
-                ) : subStep === 'otp' ? (
-                  /* 3. 6-Digit Email Verification OTP Form State */
-                  <div>
-                    {/* Header Icon */}
-                    <div style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '16px',
-                      background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 14px auto',
-                      color: '#FFFFFF',
-                      boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
-                    }}>
-                      <KeyRound size={26} />
-                    </div>
-
-                    <h3 style={{
-                      fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
-                      fontSize: '1.2rem',
-                      fontWeight: 800,
-                      color: 'var(--text-primary)',
-                      margin: '0 0 6px 0'
-                    }}>
-                      {isBangla ? 'ইমেইল যাচাইকরণ ওটিপি' : 'Email Verification OTP'}
-                    </h3>
-
-                    <p style={{
-                      fontSize: '0.82rem',
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.5,
-                      margin: '0 0 16px 0'
-                    }}>
-                      {isBangla ? 'আপনার ইনবক্সে ৬-ডিজিটের ভেরিফিকেশন কোড পাঠানো হয়েছে:' : 'A 6-digit verification code has been dispatched to:'}
-                      <br />
-                      <strong style={{ color: '#00E5FF', wordBreak: 'break-all' }}>{subEmailInput}</strong>
-                    </p>
-
-                    {/* 6-Digit OTP Input */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
-                        {isBangla ? '৬ ডিজিটের কোডটি লিখুন:' : 'Enter 6-digit Code:'}
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        autoFocus
-                        value={enteredSubOtp}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                          setEnteredSubOtp(val);
-                          if (subOtpError) setSubOtpError(null);
-                        }}
-                        placeholder="______"
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          borderRadius: '14px',
-                          background: isDark ? 'rgba(0, 0, 0, 0.45)' : '#F8FAFC',
-                          border: subOtpError ? '1.5px solid #EF4444' : `1.5px solid ${isDark ? 'rgba(0, 229, 255, 0.4)' : '#00E5FF'}`,
-                          color: 'var(--text-primary)',
-                          fontSize: '1.7rem',
-                          fontWeight: 900,
-                          letterSpacing: '12px',
-                          textAlign: 'center',
-                          fontFamily: "'Space Grotesk', monospace",
-                          boxSizing: 'border-box',
-                          outline: 'none'
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleVerifySubOtpAndComplete();
-                          }
-                        }}
-                      />
-
-                      {subOtpError && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          style={{
-                            color: '#EF4444',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            textAlign: 'center',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          <AlertCircle size={14} />
-                          <span>{subOtpError}</span>
-                        </motion.div>
-                      )}
-
-                      {/* Countdown Timer & Resend */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        fontSize: '0.76rem',
-                        color: 'var(--text-secondary)',
-                        marginTop: '4px'
-                      }}>
-                        <span>
-                          ⏱️ {isBangla ? 'মেয়াদ:' : 'Valid:'}{' '}
-                          <strong style={{ color: subOtpTimer < 60 ? '#EF4444' : 'var(--text-primary)' }}>
-                            {String(Math.floor(subOtpTimer / 60)).padStart(2, '0')}:{String(subOtpTimer % 60).padStart(2, '0')}
-                          </strong>
-                        </span>
-
-                        <button
-                          type="button"
-                          disabled={subOtpSending}
-                          onClick={handleResendSubOtp}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--primary-color)',
-                            fontSize: '0.76rem',
-                            fontWeight: 700,
-                            cursor: subOtpSending ? 'wait' : 'pointer',
-                            padding: 0,
-                            textDecoration: 'underline'
-                          }}
-                        >
-                          {subOtpSending ? (isBangla ? 'পাঠানো হচ্ছে...' : 'Sending...') : (isBangla ? 'কোড পাননি? পুনরায় পাঠান' : 'Resend Code')}
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
-                        <button
-                          type="button"
-                          onClick={() => setSubStep('email')}
-                          style={{
-                            flex: 1,
-                            padding: '11px',
-                            borderRadius: '30px',
-                            background: 'transparent',
-                            border: '1px solid var(--card-border)',
-                            color: 'var(--text-secondary)',
-                            fontWeight: 700,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {isBangla ? 'পেছনে' : 'Back'}
-                        </button>
-
-                        <motion.button
-                          type="button"
-                          disabled={subOtpVerifying || enteredSubOtp.length !== 6}
-                          onClick={handleVerifySubOtpAndComplete}
-                          whileHover={enteredSubOtp.length === 6 && !subOtpVerifying ? { scale: 1.02 } : {}}
-                          whileTap={enteredSubOtp.length === 6 && !subOtpVerifying ? { scale: 0.98 } : {}}
-                          style={{
-                            flex: 1.5,
-                            padding: '11px',
-                            borderRadius: '30px',
-                            background: 'linear-gradient(135deg, #00f0ff 0%, #0080ff 100%)',
-                            border: 'none',
-                            color: '#000000',
-                            fontWeight: 800,
-                            fontSize: '0.85rem',
-                            cursor: (subOtpVerifying || enteredSubOtp.length !== 6) ? 'not-allowed' : 'pointer',
-                            opacity: (subOtpVerifying || enteredSubOtp.length !== 6) ? 0.6 : 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            boxShadow: '0 4px 18px rgba(0, 240, 255, 0.35)'
-                          }}
-                        >
-                          {subOtpVerifying ? (
-                            <>
-                              <Loader2 size={14} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
-                              <span>{isBangla ? 'যাচাই করা হচ্ছে...' : 'Verifying...'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <ShieldCheck size={16} />
-                              <span>{isBangla ? 'যাচাই ও সম্পন্ন করুন' : 'Verify & Complete'}</span>
-                            </>
-                          )}
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* 4. Initial Email Input Form State */
-                  <div>
-                    {/* Animated Bell Icon */}
-                    <div style={{
-                      width: '56px',
-                      height: '56px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, rgba(255, 23, 68, 0.2), rgba(255, 23, 68, 0.05))',
-                      border: '1px solid rgba(255, 23, 68, 0.4)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 14px auto',
-                      boxShadow: '0 0 25px rgba(255, 23, 68, 0.35)'
-                    }}>
-                      <Bell size={26} color="#FF1744" />
-                    </div>
-
-                    <h3 style={{
-                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : "'Space Grotesk', sans-serif",
-                      fontSize: '1.2rem',
-                      fontWeight: 800,
-                      color: 'var(--text-primary)',
-                      margin: '0 0 8px 0'
-                    }}>
-                      {t('subscribeModal.title', 'Stay Updated')}
-                    </h3>
-
-                    {/* Notice / Disclosure */}
-                    <p style={{
-                      fontSize: '0.84rem',
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.5,
-                      margin: '0 0 16px 0',
-                      padding: '0 6px',
-                      fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                    }}>
-                      {isBangla 
-                        ? 'আপনার ইমেইল লিখে সাবস্ক্রাইব করুন। আপনার ইনবক্সে ৬-সংখ্যার যাচাইকরণ ওটিপি পাঠানো হবে।' 
-                        : 'Enter your email to subscribe. A 6-digit OTP code will be sent to your inbox.'}
-                    </p>
-
-                    {/* Feedback Alert for Duplicate / Invalid Email */}
-                    {subResult && !subResult.success && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        style={{
-                          padding: '9px 12px',
-                          borderRadius: '12px',
-                          background: 'rgba(255, 23, 68, 0.12)',
-                          border: '1px solid rgba(255, 23, 68, 0.4)',
-                          color: '#FF1744',
-                          fontSize: '0.82rem',
-                          fontWeight: 600,
-                          marginBottom: '14px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                        }}
-                      >
-                        <AlertCircle size={14} />
-                        <span>{subResult.message}</span>
-                      </motion.div>
-                    )}
-
-                    {/* Input Form */}
-                    <form onSubmit={handleSubscribeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <input
-                        type="email"
-                        required
-                        placeholder={t('subscribeModal.placeholder', 'Enter your email address')}
-                        value={subEmailInput}
-                        onChange={(e) => {
-                          setSubEmailInput(e.target.value);
-                          if (subResult) setSubResult(null);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '12px 16px',
-                          borderRadius: '14px',
-                          background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
-                          border: '1px solid var(--card-border)',
-                          color: 'var(--text-primary)',
-                          fontSize: '0.88rem',
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                        }}
-                      />
-
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                        <button
-                          type="button"
-                          onClick={handleCloseSubscribeModal}
-                          style={{
-                            flex: 1,
-                            padding: '11px',
-                            borderRadius: '30px',
-                            background: 'transparent',
-                            border: '1px solid var(--card-border)',
-                            color: 'var(--text-secondary)',
-                            fontWeight: 700,
-                            fontSize: '0.85rem',
-                            cursor: 'pointer',
-                            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                          }}
-                        >
-                          {t('subscribeModal.cancel', 'Cancel')}
-                        </button>
-
-                        <motion.button
-                          type="submit"
-                          disabled={subLoading}
-                          whileHover={!subLoading ? { scale: 1.02 } : {}}
-                          whileTap={!subLoading ? { scale: 0.98 } : {}}
-                          style={{
-                            flex: 1.4,
-                            padding: '11px',
-                            borderRadius: '30px',
-                            background: 'linear-gradient(135deg, #FF1744 0%, #D50000 100%)',
-                            border: 'none',
-                            color: '#FFFFFF',
-                            fontWeight: 700,
-                            fontSize: '0.85rem',
-                            cursor: subLoading ? 'not-allowed' : 'pointer',
-                            boxShadow: '0 4px 18px rgba(255, 23, 68, 0.45)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            fontFamily: isBangla ? "'LiAdorNoirrit', sans-serif" : 'inherit'
-                          }}
-                        >
-                          {subLoading ? (
-                            <>
-                              <Loader2 size={14} className="spin-animation" style={{ animation: 'spin 1s linear infinite' }} />
-                              <span>{isBangla ? 'ওটিপি পাঠানো হচ্ছে...' : 'Sending OTP...'}</span>
-                            </>
-                          ) : (
-                            <span>{isBangla ? 'সাবস্ক্রাইব করুন' : 'Subscribe'}</span>
-                          )}
-                        </motion.button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
+      {/* 7. 1-Click Google & GitHub Connect Modal Dialog */}
+      <ConnectModal
+        isOpen={isSubscribeOpen}
+        onClose={() => setIsSubscribeOpen(false)}
+        onOpenProjects={onOpenProjects}
+        onOpenDeals={onOpenDeals}
+      />
     </section>
   );
 };

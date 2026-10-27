@@ -10,7 +10,7 @@ TITLE:Software & Web Developer | Photo Editor
 TEL:+8801871176267
 EMAIL:rasedul.karim.dev@gmail.com
 ADR:;;Natun Pollan Para, Teknaf;Cox's Bazar;;;Bangladesh
-URL:https://rasedul-karim-portfolio.firebaseapp.com
+URL:https://www.rasedulkariminfo.website
 END:VCARD`;
 
   const downloadVCard = () => {

@@ -11,7 +11,9 @@ export const FirestoreStreamBuilder = ({
   collectionName = 'portfolio', 
   builder, 
   children, 
-  fallback = null 
+  fallback = null,
+  orderByField = null,
+  orderDirection = 'desc'
 }) => {
   const [streamState, setStreamState] = useState({
     data: null,
@@ -25,14 +27,15 @@ export const FirestoreStreamBuilder = ({
     let unsubscribe = () => {};
 
     // Feature collection instant local baseline and broadcast listener
-    const isFeatureCollection = collectionName.startsWith('features_') || collectionName === 'projects';
+    const isFeatureCollection = collectionName.startsWith('features_');
+    const isProjectsCollection = collectionName === 'projects';
 
     const handleLocalUpdate = (e) => {
       if (e.detail?.collectionName === collectionName && isMounted) {
         import('../services/featuresService').then(({ getCachedItems }) => {
           const cached = getCachedItems(collectionName);
           const docsMap = {};
-          cached.forEach((item) => { docsMap[item.id] = item; });
+          (cached || []).forEach((item) => { docsMap[item.id] = item; });
           setStreamState({
             data: cached,
             docsMap,
@@ -70,9 +73,14 @@ export const FirestoreStreamBuilder = ({
         const { db } = await initFirebase();
 
         if (db) {
-          const { collection, onSnapshot, query } = await import('firebase/firestore');
+          const { collection, onSnapshot, query, orderBy } = await import('firebase/firestore');
           const colRef = collection(db, collectionName);
-          const q = query(colRef);
+          let q;
+          try {
+            q = orderByField ? query(colRef, orderBy(orderByField, orderDirection)) : query(colRef);
+          } catch (e) {
+            q = query(colRef);
+          }
 
           unsubscribe = onSnapshot(
             q,
@@ -82,12 +90,20 @@ export const FirestoreStreamBuilder = ({
               const items = [];
 
               querySnapshot.forEach((doc) => {
-                const docData = { id: doc.id, ...doc.data() };
+                const docData = { ...doc.data(), id: doc.id, _firestoreDocId: doc.id };
                 items.push(docData);
                 docsMap[doc.id] = docData;
               });
 
-              if (items.length === 0 && isFeatureCollection) {
+              if (isProjectsCollection) {
+                // Direct Firestore data: empty [] remains empty with zero dummy data
+                setStreamState({
+                  data: items,
+                  docsMap,
+                  loading: false,
+                  error: null,
+                });
+              } else if (items.length === 0 && isFeatureCollection) {
                 import('../services/featuresService').then(({ getCachedItems }) => {
                   const fallbackItems = getCachedItems(collectionName);
                   const fbMap = {};
@@ -111,7 +127,14 @@ export const FirestoreStreamBuilder = ({
             (error) => {
               if (!isMounted) return;
               console.warn(`Firestore StreamBuilder listener notice for [${collectionName}]:`, error.message);
-              if (isFeatureCollection) {
+              if (isProjectsCollection) {
+                setStreamState((prev) => ({
+                  ...prev,
+                  loading: false,
+                  data: prev.data || [],
+                  error,
+                }));
+              } else if (isFeatureCollection) {
                 import('../services/featuresService').then(({ getCachedItems }) => {
                   const fallbackItems = getCachedItems(collectionName);
                   const fbMap = {};
@@ -150,7 +173,7 @@ export const FirestoreStreamBuilder = ({
                   fields[k] = valObj.stringValue || valObj.integerValue || valObj.booleanValue || valObj;
                 });
               }
-              const item = { id, ...fields };
+              const item = { ...fields, id, _firestoreDocId: id };
               docsMap[id] = item;
               return item;
             });
@@ -235,7 +258,7 @@ export const FirestoreStreamBuilder = ({
         window.removeEventListener('portfolio_feature_updated', handleLocalUpdate);
       }
     };
-  }, [collectionName]);
+  }, [collectionName, orderByField, orderDirection]);
 
   const contextValue = {
     portfolioData: streamState.docsMap,

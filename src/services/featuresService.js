@@ -15,78 +15,13 @@ export const COLLECTIONS = {
   UPCOMING_PROJECTS: 'features_upcoming_projects',
   FAVORITE_TOOLS: 'features_favorite_tools',
   DEALS_DISCOUNTS: 'features_deals_discounts',
+  DEALS: 'deals',
+  DEAL_ORDERS: 'deal_orders',
   COUPON_REDEMPTIONS: 'coupon_redemptions'
 };
 
-// 0. Baseline Seed Data for Projects (Apps & Website)
-export const BASELINE_PROJECTS = [
-  {
-    id: 'project-hisabnama',
-    title: 'HisabNama',
-    category: 'apps',
-    subCategory: 'Finance & Productivity',
-    mediaUrl: '/icons/hisabnama-icon.png',
-    actionUrl: 'https://play.google.com/store/apps/details?id=com.hisabnama',
-    description: 'Smart bookkeeping and automated daily cash flow ledger for micro-merchants and personal budget tracking.',
-    order: 1,
-    createdAt: new Date(Date.now() - 86400000 * 6).toISOString()
-  },
-  {
-    id: 'project-nafsports',
-    title: 'NAF SPORTS',
-    category: 'apps',
-    subCategory: 'Sports & Entertainment',
-    mediaUrl: '/icons/nafsports-icon.png',
-    actionUrl: 'https://play.google.com/store/apps/details?id=com.nafsports',
-    description: 'Instant live soccer scores, match fixtures, and tournament notifications with real-time push alerts.',
-    order: 2,
-    createdAt: new Date(Date.now() - 86400000 * 5).toISOString()
-  },
-  {
-    id: 'project-goeasy',
-    title: 'GO-Easy Travel',
-    category: 'apps',
-    subCategory: 'Travel & Mobility',
-    mediaUrl: '/icons/goeasy-icon.png',
-    actionUrl: 'https://play.google.com/store/apps/details?id=com.goeasy',
-    description: 'Seamless inter-city transport ticketing, verified vehicle rentals, and real-time GPS route tracking.',
-    order: 3,
-    createdAt: new Date(Date.now() - 86400000 * 4).toISOString()
-  },
-  {
-    id: 'project-madrasah',
-    title: 'Sufia Nuria Dakhil Madrasah',
-    category: 'website',
-    subCategory: 'Education & Portal',
-    mediaUrl: '/banners/madrasah-banner.jpg',
-    actionUrl: 'https://sufianuria.edu.bd',
-    description: 'Modern academic institution portal featuring online admissions, digital notice boards, and student grade tracking.',
-    order: 4,
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString()
-  },
-  {
-    id: 'project-esheba',
-    title: 'Polan Para E-Sheba Portal',
-    category: 'website',
-    subCategory: 'Gov & Civic Services',
-    mediaUrl: '/banners/esheba-banner.jpg',
-    actionUrl: 'https://polanpara-esheba.web.app',
-    description: 'Municipal civic welfare gateway and digital public service hub ensuring instant emergency assistance.',
-    order: 5,
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
-  },
-  {
-    id: 'project-teknafwatch',
-    title: 'Teknaf Community Watch',
-    category: 'website',
-    subCategory: 'Safety & Social Network',
-    mediaUrl: '/banners/community-banner.jpg',
-    actionUrl: 'https://teknafwatch.com',
-    description: 'Community-driven public safety dispatch and neighborhood alert network for rapid emergency communication.',
-    order: 6,
-    createdAt: new Date(Date.now() - 86400000 * 1).toISOString()
-  }
-];
+// 0. Projects Collection: Real-time dynamic Firestore collection (Starts empty, no dummy data)
+export const BASELINE_PROJECTS = [];
 
 // 1. Baseline Seed Data for Design Projects
 export const BASELINE_DESIGN_PROJECTS = [
@@ -254,7 +189,7 @@ export const getBaselineForCollection = (collectionName) => {
   switch (collectionName) {
     case COLLECTIONS.PROJECTS:
     case 'projects':
-      return BASELINE_PROJECTS;
+      return [];
     case COLLECTIONS.DESIGN_PROJECTS:
       return BASELINE_DESIGN_PROJECTS;
     case COLLECTIONS.UPCOMING_PROJECTS:
@@ -273,9 +208,9 @@ const getCacheKey = (collectionName) => `portfolio_cache_${collectionName}`;
 export const getCachedItems = (collectionName) => {
   try {
     const raw = localStorage.getItem(getCacheKey(collectionName));
-    if (raw) {
+    if (raw !== null && raw !== undefined) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {}
   return getBaselineForCollection(collectionName);

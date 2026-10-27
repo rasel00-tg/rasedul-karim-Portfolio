@@ -33,17 +33,30 @@ import {
   FolderGit2,
   LayoutDashboard,
   Activity,
-  BarChart3
+  BarChart3,
+  Eye,
+  Phone,
+  MapPin,
+  FileText,
+  CheckCircle2,
+  MessageSquare,
+  User
 } from 'lucide-react';
 import { uploadImageToCloudinary } from '../services/cloudinaryService';
-import { uploadFileToStorage, createLocalImagePreview } from '../services/storageService';
+import {
+  uploadFileToStorage,
+  createLocalImagePreview,
+  readFileAsBase64,
+  processAndUploadProjectMedia,
+  compressImageWithCanvas
+} from '../services/storageService';
 import { createProject, updateProject, deleteProject } from '../services/adminService';
 import { usePortfolioStream } from '../firebase/usePortfolioStream';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
 import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem } from '../services/featuresService';
-import { firebaseConfig } from '../firebase/config';
+import { firebaseConfig, initFirebase } from '../firebase/config';
 import { useLanguage } from '../context/LanguageContext';
-import AddDealModal from './AddDealModal';
+import AddDealModal, { compressImageClientSide } from './AddDealModal';
 import {
   getDeviceLockoutStatus,
   recordFailedAttempt,
@@ -118,6 +131,7 @@ const AdminModal = ({ onClose }) => {
 
   // Dedicated Admin Tabs: 'overview' | 'projects' | 'design' | 'upcoming' | 'favorite' | 'deals'
   const [activeAdminTab, setActiveAdminTab] = useState('overview');
+  const [currentAdminView, setCurrentAdminView] = useState(null); // null | 'add-deal' | 'order-details'
   const [featureActionLoading, setFeatureActionLoading] = useState(false);
   const [featureToast, setFeatureToast] = useState(null); // { type: 'success' | 'error', text: '' }
   const [isAddDealModalOpen, setIsAddDealModalOpen] = useState(false);
@@ -132,71 +146,153 @@ const AdminModal = ({ onClose }) => {
   const [projectCategory, setProjectCategory] = useState('apps'); // 'apps' | 'website'
   const [projectTitle, setProjectTitle] = useState('');
   const [projectSubCategory, setProjectSubCategory] = useState('');
-  const [projectMediaUrl, setProjectMediaUrl] = useState('/icons/hisabnama-icon.png');
+  const [projectMediaUrl, setProjectMediaUrl] = useState('');
   const [projectActionUrl, setProjectActionUrl] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
+  const [selectedProjectFile, setSelectedProjectFile] = useState(null); // In-memory selected file
+  const [projectLocalPreview, setProjectLocalPreview] = useState(''); // Local preview URL
   const [uploadingProjectMedia, setUploadingProjectMedia] = useState(false);
+  const [projectFormErrors, setProjectFormErrors] = useState({});
+  const [isPublishingModalOpen, setIsPublishingModalOpen] = useState(false);
+  const [publishSuccessModalData, setPublishSuccessModalData] = useState(null);
 
-  const handleProjectMediaChange = async (e) => {
+  // Auto-dismiss success feedback modal
+  useEffect(() => {
+    if (publishSuccessModalData) {
+      const timer = setTimeout(() => {
+        setPublishSuccessModalData(null);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [publishSuccessModalData]);
+
+  // Handle local image file picker selection (Strictly client-side memory retention, NO immediate network upload)
+  const handleProjectMediaChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const localUrl = createLocalImagePreview(file);
-    setProjectMediaUrl(localUrl);
-    setUploadingProjectMedia(true);
-    try {
-      const url = await uploadFileToStorage(file, 'projects', idToken);
-      setProjectMediaUrl(url);
-      showFeatureToast(isBangla ? '✓ মিডিয়া আপলোড সম্পন্ন হয়েছে' : '✓ Media uploaded to storage');
-    } catch (err) {
-      console.warn('Project media upload notice:', err.message);
-    } finally {
-      setUploadingProjectMedia(false);
+
+    // Revoke old object URL if any to prevent memory leaks
+    if (projectLocalPreview && projectLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(projectLocalPreview);
     }
+
+    // Generate instantaneous local preview with createObjectURL
+    const localUrl = createLocalImagePreview(file);
+    setSelectedProjectFile(file);
+    setProjectLocalPreview(localUrl);
+    setProjectMediaUrl(localUrl);
+    setProjectFormErrors((prev) => ({ ...prev, mediaUrl: '' }));
+    showFeatureToast(isBangla ? '✓ ছবি নির্বাচন করা হয়েছে (পাবলিশে কম্প্রেশন ও R2 আপলোড হবে)' : '✓ Image selected (Will compress & upload to R2 on publish)');
   };
 
   const resetProjectsForm = () => {
+    if (projectLocalPreview && projectLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(projectLocalPreview);
+    }
+    setSelectedProjectFile(null);
+    setProjectLocalPreview('');
     setProjectEditingId(null);
     setProjectCategory('apps');
     setProjectTitle('');
     setProjectSubCategory('');
-    setProjectMediaUrl('/icons/hisabnama-icon.png');
+    setProjectMediaUrl('');
     setProjectActionUrl('');
     setProjectDescription('');
+    setProjectFormErrors({});
   };
 
   const handleSaveProjectsItem = async (e) => {
     e.preventDefault();
+
+    // 1. Strict required field validation with clear inline alerts
+    const errors = {};
     if (!projectTitle.trim()) {
-      showFeatureToast(isBangla ? 'অনুগ্রহ করে প্রজেক্ট টাইটেল দিন' : 'Please provide a project title', 'error');
+      errors.title = isBangla ? 'প্রজেক্টের নাম দেওয়া আবশ্যক' : 'Project title is required';
+    }
+    if (!projectSubCategory.trim()) {
+      errors.subCategory = isBangla ? 'সাব-ক্যাটেগরি / প্ল্যাটফর্ম দেওয়া আবশ্যক' : 'Platform / Sub-category is required';
+    }
+    if (!projectActionUrl.trim()) {
+      errors.actionUrl = isBangla ? 'প্রজেক্ট লিংক (URL) দেওয়া আবশ্যক' : 'Project URL is required';
+    }
+    if (!projectMediaUrl.trim() && !selectedProjectFile) {
+      errors.mediaUrl = isBangla ? 'আইকন/ব্যানার ছবি নির্বাচন বা URL প্রদান করুন' : 'Icon/banner image or URL is required';
+    }
+    if (!projectDescription.trim()) {
+      errors.description = isBangla ? 'প্রজেক্টের সংক্ষিপ্ত বিবরণ দেওয়া আবশ্যক' : 'Project description is required';
+    }
+
+    // Abort execution immediately if any required field is missing
+    if (Object.keys(errors).length > 0) {
+      setProjectFormErrors(errors);
+      showFeatureToast(isBangla ? 'অনুগ্রহ করে প্রয়োজনীয় সকল ঘর পূরণ করুন' : 'Please fill all required fields', 'error');
       return;
     }
+
+    setProjectFormErrors({});
+    setIsPublishingModalOpen(true);
     setFeatureActionLoading(true);
+
     try {
+      let finalMediaUrl = projectMediaUrl.trim();
+
+      // 2. Client-Side Canvas Optimization & Delayed Upload to Cloudflare R2 on Form Submit
+      if (selectedProjectFile) {
+        finalMediaUrl = await processAndUploadProjectMedia(selectedProjectFile, { idToken });
+      }
+
       const payload = {
         title: projectTitle.trim(),
+        name: projectTitle.trim(),
+        headline: projectTitle.trim(),
         category: projectCategory,
         subCategory: projectSubCategory.trim(),
-        mediaUrl: projectMediaUrl.trim() || (projectCategory === 'apps' ? '/icons/hisabnama-icon.png' : '/banners/madrasah-banner.jpg'),
+        mediaUrl: finalMediaUrl,
+        icon: finalMediaUrl,
+        banner: finalMediaUrl,
+        logo: finalMediaUrl,
         actionUrl: projectActionUrl.trim(),
-        description: projectDescription.trim()
+        projectUrl: projectActionUrl.trim(),
+        liveUrl: projectActionUrl.trim(),
+        playStoreUrl: projectActionUrl.trim(),
+        description: projectDescription.trim(),
+        updatedAt: new Date().toISOString()
       };
+
       if (projectEditingId) {
         await updateFeatureItem('projects', projectEditingId, payload, idToken);
+        setPublishSuccessModalData({
+          title: payload.title,
+          isUpdate: true,
+          category: projectCategory
+        });
         showFeatureToast(isBangla ? '✓ প্রজেক্ট সফলভাবে আপডেট হয়েছে!' : '✓ Project updated successfully!');
       } else {
         await saveFeatureItem('projects', payload, idToken);
-        showFeatureToast(isBangla ? '✓ নতুন প্রজেক্ট সফলভাবে যুক্ত হয়েছে!' : '✓ New project added successfully!');
+        setPublishSuccessModalData({
+          title: payload.title,
+          isUpdate: false,
+          category: projectCategory
+        });
+        showFeatureToast(isBangla ? '✓ নতুন প্রজেক্ট সফলভাবে পাবলিশ হয়েছে!' : '✓ New project published successfully!');
       }
       resetProjectsForm();
     } catch (err) {
       showFeatureToast(err.message || 'Operation failed', 'error');
     } finally {
       setFeatureActionLoading(false);
+      setIsPublishingModalOpen(false);
     }
   };
 
   const handleEditProjectItem = (item) => {
+    if (projectLocalPreview && projectLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(projectLocalPreview);
+    }
+    setSelectedProjectFile(null);
+    setProjectLocalPreview('');
     setProjectEditingId(item.id);
+    setProjectFormErrors({});
     const cat = (item.category || 'apps').toLowerCase();
     setProjectCategory(cat === 'website' || cat === 'web' ? 'website' : 'apps');
     setProjectTitle(item.title || item.name || '');
@@ -208,11 +304,23 @@ const AdminModal = ({ onClose }) => {
 
   const handleDeleteProjectItem = async (item) => {
     const title = item.title || item.name || 'this item';
-    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত "${title}" মুছে ফেলতে চান?` : `Delete "${title}"?`)) return;
+    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত "${title}" স্থায়ীভাবে মুছে ফেলতে চান?` : `Permanently delete "${title}"?`)) return;
     setFeatureActionLoading(true);
     try {
+      // 1. Direct Firestore SDK deleteDoc execution
+      try {
+        const { db } = await initFirebase();
+        if (db) {
+          const { doc, deleteDoc } = await import('firebase/firestore');
+          await deleteDoc(doc(db, 'projects', item.id));
+        }
+      } catch (sdkErr) {
+        console.warn('Direct Firestore deleteDoc notice:', sdkErr.message);
+      }
+
+      // 2. Also run deleteFeatureItem for REST fallback & cache synchronization
       await deleteFeatureItem('projects', item.id, idToken);
-      showFeatureToast(isBangla ? '✓ প্রজেক্ট মুছে ফেলা হয়েছে!' : '✓ Project deleted successfully!');
+      showFeatureToast(isBangla ? '✓ প্রজেক্ট স্থায়ীভাবে মুছে ফেলা হয়েছে!' : '✓ Project permanently deleted!');
       if (projectEditingId === item.id) resetProjectsForm();
     } catch (err) {
       showFeatureToast(err.message || 'Failed to delete', 'error');
@@ -514,102 +622,350 @@ const AdminModal = ({ onClose }) => {
     }
   };
 
-  // --- TAB 4: DEALS & DISCOUNTS STATE ---
+  // --- TAB 1: DEALS & DISCOUNTS POST STATE ---
+  const [dealToEdit, setDealToEdit] = useState(null);
+  const [selectedAdminOrderDetails, setSelectedAdminOrderDetails] = useState(null);
   const [dealEditingId, setDealEditingId] = useState(null);
   const [dealTitle, setDealTitle] = useState('');
-  const [dealDiscountPercent, setDealDiscountPercent] = useState('75% OFF');
-  const [dealDiscountCode, setDealDiscountCode] = useState('RASEDUL75');
-  const [dealExpiryDate, setDealExpiryDate] = useState('2026-12-31');
-  const [dealPartnerUrl, setDealPartnerUrl] = useState('');
-  const [dealBannerUrl, setDealBannerUrl] = useState('/add1.png');
-  const [dealImageFile, setDealImageFile] = useState(null);
-  const [uploadingDealImage, setUploadingDealImage] = useState(false);
   const [dealDescription, setDealDescription] = useState('');
+  const [dealOriginalPrice, setDealOriginalPrice] = useState('');
+  const [dealDiscountedPrice, setDealDiscountedPrice] = useState('');
+  const [dealCouponCode, setDealCouponCode] = useState('');
+  const [dealDiscountPercent, setDealDiscountPercent] = useState('');
+  const [dealIsLimited, setDealIsLimited] = useState(false);
+  const [dealExpiryDate, setDealExpiryDate] = useState('');
+  const [dealPartnerUrl, setDealPartnerUrl] = useState('');
+  const [dealBannerUrl, setDealBannerUrl] = useState('');
+  const [dealLocalPreview, setDealLocalPreview] = useState('');
+  const [dealFileSizeInfo, setDealFileSizeInfo] = useState('');
+  const [selectedDealFile, setSelectedDealFile] = useState(null);
+  const [uploadingDealImage, setUploadingDealImage] = useState(false);
+  const [isCompressingDealImage, setIsCompressingDealImage] = useState(false);
 
-  const handleDealImageChange = async (e) => {
+  // --- TAB 2: PENDING DEALS & ORDERS STATE ---
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all'); // 'all' | 'pending' | 'accepted' | 'cancelled'
+  const [orderUpdatingId, setOrderUpdatingId] = useState(null);
+  const [localOrderStatusOverrides, setLocalOrderStatusOverrides] = useState({});
+  const [localDeletedOrderIds, setLocalDeletedOrderIds] = useState(new Set());
+
+  const handleDealFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setDealImageFile(file);
-    const localUrl = createLocalImagePreview(file);
-    setDealBannerUrl(localUrl);
-    setUploadingDealImage(true);
-    try {
-      const url = await uploadFileToStorage(file, 'deals', idToken);
-      setDealBannerUrl(url);
-      showFeatureToast(isBangla ? '✓ ব্যানার ইমেজ সফলভাবে আপলোড হয়েছে' : '✓ Banner uploaded to storage');
-    } catch (err) {
-      console.warn('Deals upload notice:', err.message);
-    } finally {
-      setUploadingDealImage(false);
+
+    if (dealLocalPreview && dealLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(dealLocalPreview);
     }
+
+    setSelectedDealFile(file);
+    const previewUrl = URL.createObjectURL(file);
+    setDealLocalPreview(previewUrl);
+    setDealBannerUrl(previewUrl);
+
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    const sizeKb = (file.size / 1024).toFixed(0);
+    const originalSizeStr = file.size > 1024 * 1024 ? `${sizeMb} MB` : `${sizeKb} KB`;
+
+    setDealFileSizeInfo(
+      isBangla 
+        ? `মূল ফাইলের সাইজ: ${originalSizeStr} (ডিল প্রকাশের সময় ব্রাউজারে < ৩০০ KB WebP-তে কম্প্রেস হবে)` 
+        : `Original file size: ${originalSizeStr} (Will compress to < 300 KB WebP on publish)`
+    );
+  };
+
+  const handleRemoveDealImage = () => {
+    if (dealLocalPreview && dealLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(dealLocalPreview);
+    }
+    setSelectedDealFile(null);
+    setDealLocalPreview('');
+    setDealBannerUrl('');
+    setDealFileSizeInfo('');
+  };
+
+  const handleDealImageChange = async (e) => {
+    handleDealFileChange(e);
   };
 
   const resetDealForm = () => {
+    if (dealLocalPreview && dealLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(dealLocalPreview);
+    }
     setDealEditingId(null);
+    setDealToEdit(null);
     setDealTitle('');
-    setDealDiscountPercent('75% OFF');
-    setDealDiscountCode('RASEDUL75');
-    setDealExpiryDate('2026-12-31');
-    setDealPartnerUrl('');
-    setDealBannerUrl('/add1.png');
-    setDealImageFile(null);
     setDealDescription('');
+    setDealOriginalPrice('');
+    setDealDiscountedPrice('');
+    setDealCouponCode('');
+    setDealDiscountPercent('');
+    setDealIsLimited(false);
+    setDealExpiryDate('');
+    setDealPartnerUrl('');
+    setDealBannerUrl('');
+    setDealLocalPreview('');
+    setSelectedDealFile(null);
+    setDealFileSizeInfo('');
   };
 
   const handleSaveDeal = async (e) => {
     e.preventDefault();
     if (!dealTitle.trim()) {
-      showFeatureToast(isBangla ? 'অনুগ্রহ করে অফার টাইটেল দিন' : 'Please provide offer title', 'error');
+      showFeatureToast(isBangla ? 'অনুগ্রহ করে ডিলের নাম দিন' : 'Please provide deal name', 'error');
       return;
     }
+
+    setIsPublishingModalOpen(true);
     setFeatureActionLoading(true);
+
     try {
+      let finalBanner = dealBannerUrl.trim() || '/add1.png';
+      
+      // Deferred Upload with Client-Side HTML5 Canvas Compression (< 300 KB WebP)
+      if (selectedDealFile) {
+        setIsCompressingDealImage(true);
+        try {
+          const compressed = await compressImageClientSide(selectedDealFile, 300);
+          try {
+            finalBanner = await processAndUploadProjectMedia(compressed, { idToken });
+          } catch (e) {
+            finalBanner = await uploadFileToStorage(compressed, 'deals', idToken);
+          }
+        } catch (compErr) {
+          console.warn('Canvas compression notice, fallback to raw upload:', compErr);
+          finalBanner = await uploadFileToStorage(selectedDealFile, 'deals', idToken);
+        } finally {
+          setIsCompressingDealImage(false);
+        }
+      }
+
+      const origPrice = Number(dealOriginalPrice) || 0;
+      const discPercentNum = Number(String(dealDiscountPercent).replace(/[^0-9]/g, '')) || 0;
+      const discPrice = origPrice > 0 && discPercentNum > 0 
+        ? Math.round(origPrice * (1 - discPercentNum / 100)) 
+        : (Number(dealDiscountedPrice) || origPrice);
+      const cleanCoupon = (dealCouponCode || '').trim().toUpperCase();
+
       const payload = {
         title: dealTitle.trim(),
-        discountPercent: dealDiscountPercent.trim(),
-        discountCode: dealDiscountCode.trim(),
-        expiryDate: dealExpiryDate.trim(),
-        partnerUrl: dealPartnerUrl.trim(),
-        bannerUrl: dealBannerUrl.trim() || '/add1.png',
-        description: dealDescription.trim()
+        name: dealTitle.trim(),
+        description: dealDescription.trim(),
+        originalPrice: origPrice,
+        regularPrice: origPrice,
+        discountPercentage: discPercentNum,
+        discountPercent: `${discPercentNum}% OFF`,
+        discountedPrice: discPrice,
+        finalPrice: discPrice || origPrice,
+        couponCode: cleanCoupon || null,
+        discountCode: cleanCoupon || null,
+        hasCoupon: !!cleanCoupon,
+        isLimited: Boolean(dealIsLimited),
+        expiryDate: dealIsLimited ? dealExpiryDate : '',
+        validUntil: dealIsLimited ? dealExpiryDate : '',
+        partnerUrl: dealPartnerUrl.trim() || '',
+        bannerUrl: finalBanner,
+        imagePath: finalBanner,
+        updatedAt: new Date().toISOString()
       };
+
+      // 1. Direct Firestore SDK execution on 'deals' collection
+      try {
+        const { db } = await initFirebase();
+        if (db) {
+          const { collection, addDoc, doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+          if (dealEditingId) {
+            try {
+              await updateDoc(doc(db, 'deals', dealEditingId), {
+                ...payload,
+                updatedAt: serverTimestamp()
+              });
+            } catch (err) {}
+          } else {
+            await addDoc(collection(db, 'deals'), {
+              ...payload,
+              createdAt: serverTimestamp()
+            });
+          }
+        }
+      } catch (firestoreErr) {
+        console.warn('Firestore deals write notice:', firestoreErr);
+      }
+
+      // 2. Synchronization with COLLECTIONS.DEALS_DISCOUNTS ('features_deals_discounts')
       if (dealEditingId) {
         await updateFeatureItem(COLLECTIONS.DEALS_DISCOUNTS, dealEditingId, payload, idToken);
-        showFeatureToast(isBangla ? '✓ অফার ও ডিসকাউন্ট সফলভাবে আপডেট হয়েছে!' : '✓ Deal updated successfully!');
+        setPublishSuccessModalData({
+          title: payload.title,
+          isUpdate: true,
+          isDeal: true
+        });
+        showFeatureToast(isBangla ? '✓ ডিল সফলভাবে আপডেট হয়েছে!' : '✓ Deal updated successfully!');
       } else {
         await saveFeatureItem(COLLECTIONS.DEALS_DISCOUNTS, payload, idToken);
-        showFeatureToast(isBangla ? '✓ নতুন অফার সফলভাবে যুক্ত হয়েছে!' : '✓ New deal added successfully!');
+        setPublishSuccessModalData({
+          title: payload.title,
+          isUpdate: false,
+          isDeal: true
+        });
+        showFeatureToast(isBangla ? '✓ নতুন ডিল সফলভাবে প্রকাশিত হয়েছে!' : '✓ New deal published successfully to Firestore deals collection!');
       }
+
       resetDealForm();
+      setCurrentAdminView(null);
     } catch (err) {
       showFeatureToast(err.message || 'Operation failed', 'error');
     } finally {
       setFeatureActionLoading(false);
+      setIsPublishingModalOpen(false);
     }
   };
 
   const handleEditDeal = (item) => {
-    setDealEditingId(item.id);
-    setDealTitle(item.title || '');
-    setDealDiscountPercent(item.discountPercent || '');
-    setDealDiscountCode(item.discountCode || '');
-    setDealExpiryDate(item.expiryDate || '');
-    setDealPartnerUrl(item.partnerUrl || '');
-    setDealBannerUrl(item.bannerUrl || '/add1.png');
+    setDealEditingId(item.id || item._firestoreDocId);
+    setDealToEdit(item);
+    setDealTitle(item.title || item.name || '');
     setDealDescription(item.description || '');
+    setDealOriginalPrice(String(item.originalPrice || item.regularPrice || ''));
+    const rawRate = item.discountPercentage || item.discountPercent || '';
+    const parsedRate = String(rawRate).replace(/[^0-9]/g, '');
+    setDealDiscountPercent(parsedRate || '');
+    setDealDiscountedPrice(String(item.discountedPrice || item.finalPrice || ''));
+    setDealCouponCode(item.couponCode || item.discountCode || '');
+    setDealIsLimited(Boolean(item.isLimited));
+    setDealExpiryDate(item.expiryDate || item.validUntil || '');
+    setDealPartnerUrl(item.partnerUrl || '');
+    setDealBannerUrl(item.bannerUrl || item.imagePath || '');
+    setDealLocalPreview(item.bannerUrl || item.imagePath || '');
+    setSelectedDealFile(null);
+    setDealFileSizeInfo('');
+    setCurrentAdminView('add-deal');
   };
 
   const handleDeleteDeal = async (item) => {
-    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত "${item.title}" মুছে ফেলতে চান?` : `Delete "${item.title}"?`)) return;
+    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত "${item.title}" ডিলটি মুছে ফেলতে চান?` : `Delete "${item.title}"?`)) return;
     setFeatureActionLoading(true);
     try {
+      try {
+        const { db } = await initFirebase();
+        if (db) {
+          const { doc, deleteDoc } = await import('firebase/firestore');
+          await deleteDoc(doc(db, 'deals', item.id));
+        }
+      } catch (sdkErr) {}
+
       await deleteFeatureItem(COLLECTIONS.DEALS_DISCOUNTS, item.id, idToken);
-      showFeatureToast(isBangla ? '✓ অফার মুছে ফেলা হয়েছে!' : '✓ Deal deleted successfully!');
+      showFeatureToast(isBangla ? '✓ ডিল মুছে ফেলা হয়েছে!' : '✓ Deal deleted successfully!');
       if (dealEditingId === item.id) resetDealForm();
     } catch (err) {
       showFeatureToast(err.message || 'Failed to delete', 'error');
     } finally {
       setFeatureActionLoading(false);
+    }
+  };
+
+  // Real-time Order Action Handlers: Accept (গ্রহণ) and Cancel (বাতিল) - Persistent Firestore Updates
+  const handleUpdateOrderStatus = async (orderOrId, newStatus) => {
+    if (!orderOrId) return;
+    const targetDocId = typeof orderOrId === 'object' ? (orderOrId._firestoreDocId || orderOrId.id) : orderOrId;
+    const orderCode = typeof orderOrId === 'object' ? (orderOrId.orderCode || orderOrId.orderId) : null;
+    const trackingKey = targetDocId || orderCode || 'order_action';
+    setOrderUpdatingId(trackingKey);
+
+    // Instant optimistic state update: immediately transitions between tabs without waiting
+    setLocalOrderStatusOverrides((prev) => {
+      const next = { ...prev };
+      if (targetDocId) next[targetDocId] = newStatus;
+      if (orderCode) next[orderCode] = newStatus;
+      return next;
+    });
+
+    // Update selected modal details view if currently open
+    if (selectedAdminOrderDetails) {
+      const isCurrentSelected = 
+        (targetDocId && (selectedAdminOrderDetails.id === targetDocId || selectedAdminOrderDetails._firestoreDocId === targetDocId)) ||
+        (orderCode && (selectedAdminOrderDetails.orderCode === orderCode || selectedAdminOrderDetails.orderId === orderCode));
+      if (isCurrentSelected) {
+        setSelectedAdminOrderDetails(prev => prev ? ({ ...prev, status: newStatus, claimed: newStatus === 'accepted' }) : null);
+      }
+    }
+
+    try {
+      const { db } = await initFirebase();
+      if (db) {
+        const { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } = await import('firebase/firestore');
+        const updatePayload = {
+          status: newStatus,
+          updatedAt: serverTimestamp()
+        };
+        if (newStatus === 'accepted') {
+          updatePayload.claimed = true;
+          updatePayload.approvedAt = serverTimestamp();
+        } else if (newStatus === 'cancelled') {
+          updatePayload.claimed = false;
+          updatePayload.rejectedAt = serverTimestamp();
+        }
+
+        let docUpdated = false;
+        if (targetDocId) {
+          try {
+            await updateDoc(doc(db, 'deal_orders', targetDocId), updatePayload);
+            docUpdated = true;
+          } catch (directDocErr) {
+            console.warn('Direct doc update by id notice:', directDocErr.message);
+          }
+        }
+
+        // Resilient query fallback by orderCode / orderId if direct doc id update didn't succeed
+        if (!docUpdated && orderCode) {
+          const colRef = collection(db, 'deal_orders');
+          const q = query(colRef, where('orderCode', '==', orderCode));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            for (const d of snap.docs) {
+              await updateDoc(d.ref, updatePayload);
+              docUpdated = true;
+            }
+          } else {
+            const q2 = query(colRef, where('orderId', '==', orderCode));
+            const snap2 = await getDocs(q2);
+            if (!snap2.empty) {
+              for (const d of snap2.docs) {
+                await updateDoc(d.ref, updatePayload);
+                docUpdated = true;
+              }
+            }
+          }
+        }
+
+        const statusLabel = newStatus === 'accepted' 
+          ? (isBangla ? 'অনুমোদিত (Accepted)' : 'Accepted') 
+          : (newStatus === 'cancelled' ? (isBangla ? 'বাতিল (Cancelled)' : 'Cancelled') : 'Pending');
+        showFeatureToast(isBangla ? `✓ অর্ডার স্ট্যাটাস '${statusLabel}' এ ডাটাবেসে সফলভাবে সংরক্ষিত হয়েছে!` : `✓ Order status '${statusLabel}' saved persistently to database!`);
+      }
+    } catch (err) {
+      console.error('Error updating order status in deal_orders:', err);
+      showFeatureToast(err.message || 'Failed to update order status in database', 'error');
+    } finally {
+      setOrderUpdatingId(null);
+    }
+  };
+
+  const handleDeleteOrder = async (order) => {
+    const code = order.orderCode || order.orderId || 'this order';
+    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত অর্ডার "${code}" ডিলিট করতে চান?` : `Delete order "${code}"?`)) return;
+    const targetId = order._firestoreDocId || order.id || order.orderCode;
+    setLocalDeletedOrderIds(prev => new Set([...prev, targetId, order.id, order.orderCode].filter(Boolean)));
+    try {
+      const { db } = await initFirebase();
+      if (db) {
+        const { doc, deleteDoc } = await import('firebase/firestore');
+        const docId = order._firestoreDocId || order.id;
+        if (docId) {
+          await deleteDoc(doc(db, 'deal_orders', docId));
+        }
+        showFeatureToast(isBangla ? '✓ অর্ডার রেকর্ড মুছে ফেলা হয়েছে!' : '✓ Order deleted!');
+      }
+    } catch (err) {
+      showFeatureToast(err.message || 'Failed to delete order', 'error');
     }
   };
 
@@ -666,17 +1022,27 @@ const AdminModal = ({ onClose }) => {
 
   // 4. PopScope / Nested Browser & Hardware Back Interception
   const activeAdminTabRef = useRef(activeAdminTab);
+  const currentAdminViewRef = useRef(currentAdminView);
+
   useEffect(() => {
     activeAdminTabRef.current = activeAdminTab;
   }, [activeAdminTab]);
+
+  useEffect(() => {
+    currentAdminViewRef.current = currentAdminView;
+  }, [currentAdminView]);
 
   useEffect(() => {
     // Initial history push for Admin modal
     window.history.pushState({ modal: 'admin', tab: 'overview' }, '');
 
     const handlePopState = () => {
-      // If user is inside an admin sub-tab, intercept back press and return to overview dashboard
-      if (activeAdminTabRef.current !== 'overview') {
+      // If user is inside a dedicated sub-view, back press exits sub-view first
+      if (currentAdminViewRef.current) {
+        setCurrentAdminView(null);
+        setSelectedAdminOrderDetails(null);
+        window.history.pushState({ modal: 'admin', tab: activeAdminTabRef.current }, '');
+      } else if (activeAdminTabRef.current !== 'overview') {
         setActiveAdminTab('overview');
         window.history.pushState({ modal: 'admin', tab: 'overview' }, '');
       } else {
@@ -690,6 +1056,8 @@ const AdminModal = ({ onClose }) => {
   }, [onClose]);
 
   const handleSelectAdminTab = (tabId) => {
+    setCurrentAdminView(null);
+    setSelectedAdminOrderDetails(null);
     if (activeAdminTab === 'overview' && tabId !== 'overview') {
       window.history.pushState({ modal: 'admin', tab: tabId }, '');
     }
@@ -697,6 +1065,11 @@ const AdminModal = ({ onClose }) => {
   };
 
   const handleAdminBack = () => {
+    if (currentAdminView) {
+      setCurrentAdminView(null);
+      setSelectedAdminOrderDetails(null);
+      return;
+    }
     if (activeAdminTab !== 'overview') {
       setActiveAdminTab('overview');
     } else {
@@ -919,7 +1292,7 @@ const AdminModal = ({ onClose }) => {
         setStatusMessage({ type: 'success', text: 'Project updated successfully with asset sync' });
       } else {
         await createProject(projectPayload, idToken);
-        setStatusMessage({ type: 'success', text: 'New project published to Firestore' });
+        setStatusMessage({ type: 'success', text: 'New project published successfully' });
       }
       resetForm();
     } catch (err) {
@@ -1691,50 +2064,64 @@ const AdminModal = ({ onClose }) => {
               </div>
             </div>
 
-            {/* 6-Tab Navigation Strip */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              overflowX: 'auto',
-              paddingBottom: '12px',
-              marginBottom: '20px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
+            {/* 6-Tab Navigation Strip (Fixed Overflow, Smooth Horizontal Scroll, Zero Clipping) */}
+            <div 
+              className="admin-tab-bar-container"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                minHeight: '48px',
+                padding: '10px 16px',
+                overflowX: 'auto',
+                whiteSpace: 'nowrap',
+                marginBottom: '20px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                boxSizing: 'border-box',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'thin'
+              }}
+            >
               {[
                 { id: 'overview', labelBn: 'ড্যাশবোর্ড ওভারভিউ', labelEn: 'Overview', icon: LayoutDashboard, color: '#38BDF8' },
-                { id: 'projects', labelBn: 'ওয়েব ও অ্যাপস', labelEn: 'Web & Apps', icon: FolderGit2, color: '#00F0FF' },
-                { id: 'design', labelBn: 'ডিজাইন প্রজেক্ট', labelEn: 'Design Project', icon: Palette, color: '#00E5FF' },
-                { id: 'upcoming', labelBn: 'আপকামিং প্রজেক্ট', labelEn: 'Upcoming Project', icon: Rocket, color: '#C084FC' },
+                { id: 'projects', labelBn: 'প্রজেক্টস লাইভ (Projects)', labelEn: 'Projects Live Management', icon: FolderGit2, color: '#10B981' },
+                { id: 'design', labelBn: 'ডিজাইন প্রজেক্ট', labelEn: 'Design Projects', icon: Palette, color: '#00E5FF' },
+                { id: 'upcoming', labelBn: 'আপকামিং প্রজেক্ট', labelEn: 'Upcoming Projects', icon: Rocket, color: '#C084FC' },
                 { id: 'favorite', labelBn: 'ফেভারিট টুলস', labelEn: 'Favorite Tools', icon: Star, color: '#FFB300' },
-                { id: 'deals', labelBn: 'ডিল ও ডিসকাউন্ট', labelEn: 'Deals & Discounts', icon: Percent, color: '#10B981' }
+                { id: 'deals', labelBn: 'Deals & Discounts Post', labelEn: 'Deals & Discounts Post', icon: Percent, color: '#10B981' },
+                { id: 'deal_orders', labelBn: 'Pending Deals & Orders', labelEn: 'Pending Deals & Orders', icon: Clock, color: '#F59E0B' }
               ].map((tab) => {
                 const IconComp = tab.icon;
                 const isActive = activeAdminTab === tab.id;
                 return (
                   <button
                     key={tab.id}
+                    type="button"
                     onClick={() => handleSelectAdminTab(tab.id)}
                     style={{
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
                       gap: '8px',
-                      padding: '8px 14px',
+                      padding: '8px 16px',
+                      minHeight: '38px',
                       borderRadius: '12px',
                       background: isActive ? `${tab.color}22` : 'rgba(255, 255, 255, 0.04)',
-                      border: `1.5px solid ${isActive ? tab.color : 'rgba(255, 255, 255, 0.08)'}`,
+                      border: `1.5px solid ${isActive ? tab.color : 'rgba(255, 255, 255, 0.1)'}`,
                       color: isActive ? '#FFFFFF' : '#94A3B8',
-                      fontSize: '0.82rem',
+                      fontSize: '0.84rem',
                       fontWeight: 700,
                       cursor: 'pointer',
                       whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      lineHeight: 1.2,
+                      boxSizing: 'border-box',
                       boxShadow: isActive ? `0 4px 16px ${tab.color}44` : 'none',
                       transition: 'all 0.2s ease',
                       fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
                     }}
                   >
-                    <IconComp size={15} color={tab.color} />
-                    <span>{isBangla ? tab.labelBn : tab.labelEn}</span>
+                    <IconComp size={15} color={tab.color} style={{ flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap', lineHeight: 1.2 }}>{isBangla ? tab.labelBn : tab.labelEn}</span>
                   </button>
                 );
               })}
@@ -1799,7 +2186,7 @@ const AdminModal = ({ onClose }) => {
                         {isBangla ? 'রিয়েলটাইম সেন্ট্রাল কন্ট্রোল ড্যাশবোর্ড' : 'Central Control Real-Time Overview'}
                       </h3>
                       <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#94A3B8' }}>
-                        {isBangla ? 'ফায়ারস্টোর লাইভ সিঙ্ক ও ডিভাইস গ্যালারি স্টোরেজ হাব' : 'Live Firestore synchronization & device gallery storage hub'}
+                        {isBangla ? 'ক্লাউড লাইভ সিঙ্ক ও ডিভাইস গ্যালারি স্টোরেজ হাব' : 'Cloud live synchronization & device gallery storage hub'}
                       </p>
                     </div>
                   </div>
@@ -2222,6 +2609,82 @@ const AdminModal = ({ onClose }) => {
                       );
                     }}
                   </FirestoreStreamBuilder>
+
+                  {/* CARD 6: PENDING DEALS & ORDERS */}
+                  <FirestoreStreamBuilder collectionName="deal_orders" orderByField="createdAt" orderDirection="desc">
+                    {({ data }) => {
+                      const allOrders = data || [];
+                      const pendingCount = allOrders.filter(o => (o.status || 'pending').toLowerCase() === 'pending').length;
+                      return (
+                        <motion.div
+                          whileHover={{ y: -2, scale: 1.01 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleSelectAdminTab('deal_orders')}
+                          className="admin-compact-card"
+                          style={{
+                            background: 'radial-gradient(circle at top left, rgba(245, 158, 11, 0.18), rgba(15, 23, 42, 0.92))',
+                            border: '1.2px solid rgba(245, 158, 11, 0.4)',
+                            boxShadow: '0 4px 16px rgba(245, 158, 11, 0.12)'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                            <div style={{
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '10px',
+                              background: 'rgba(245, 158, 11, 0.2)',
+                              border: '1px solid rgba(245, 158, 11, 0.4)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#F59E0B',
+                              flexShrink: 0
+                            }}>
+                              <Clock size={17} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <h4 style={{
+                                margin: 0,
+                                fontSize: '12.5px',
+                                fontWeight: 700,
+                                color: '#F59E0B',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                lineHeight: 1.2
+                              }}>
+                                {isBangla ? 'পেন্ডিং ডিল অর্ডার' : 'Pending Deal Orders'}
+                              </h4>
+                              <span style={{
+                                fontSize: '10.5px',
+                                color: '#94A3B8',
+                                display: 'block',
+                                marginTop: '2px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {isBangla ? `${pendingCount}টি অর্ডার পেন্ডিং` : `${pendingCount} Pending Claims`}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: '17px',
+                              fontWeight: 900,
+                              color: '#FFFFFF',
+                              fontFamily: "'Space Grotesk', monospace",
+                              lineHeight: 1
+                            }}>
+                              {pendingCount}
+                            </span>
+                            <ChevronRight size={14} color="#F59E0B" opacity={0.8} />
+                          </div>
+                        </motion.div>
+                      );
+                    }}
+                  </FirestoreStreamBuilder>
                 </div>
               </div>
             )}
@@ -2267,7 +2730,7 @@ const AdminModal = ({ onClose }) => {
                       {isBangla ? '← ড্যাশবোর্ড ওভারভিউতে ফিরুন' : '← Back to Overview Dashboard'}
                     </span>
                     <span style={{ display: 'block', fontSize: '0.7rem', color: '#94A3B8' }}>
-                      {isBangla ? 'প্রজেক্ট ও শোকেস লাইভ ম্যানেজমেন্ট (Firestore)' : 'Projects & Showcase Live Management (Firestore)'}
+                      {isBangla ? 'প্রজেক্ট ও শোকেস লাইভ ম্যানেজমেন্ট' : 'Projects & Showcase Live Management'}
                     </span>
                   </div>
                 </div>
@@ -2281,22 +2744,18 @@ const AdminModal = ({ onClose }) => {
                       <span>{projectEditingId ? (isBangla ? 'প্রজেক্ট সম্পাদনা করুন' : 'Edit Project') : (isBangla ? 'নতুন প্রজেক্ট যুক্ত করুন' : 'Add New Project')}</span>
                     </h3>
 
-                    <form onSubmit={handleSaveProjectsItem} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <form onSubmit={handleSaveProjectsItem} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                       {/* Category Selector */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'ক্যাটাগরি *' : 'Category *'}</label>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8', fontWeight: 600 }}>{isBangla ? 'ক্যাটাগরি *' : 'Category *'}</label>
                         <select
                           value={projectCategory}
                           onChange={(e) => {
                             const newCat = e.target.value;
                             setProjectCategory(newCat);
-                            if (newCat === 'apps' && projectMediaUrl.includes('banner')) {
-                              setProjectMediaUrl('/icons/hisabnama-icon.png');
-                            } else if (newCat === 'website' && projectMediaUrl.includes('icon')) {
-                              setProjectMediaUrl('/banners/madrasah-banner.jpg');
-                            }
+                            setProjectFormErrors((prev) => ({ ...prev, mediaUrl: '' }));
                           }}
-                          style={{ width: '100%', padding: '10px', background: '#0b1329', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontSize: '0.86rem' }}
+                          style={{ width: '100%', padding: '10px', background: '#0b1329', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: '#fff', fontSize: '0.86rem', marginTop: '4px' }}
                         >
                           <option value="apps">Apps (Mobile Application)</option>
                           <option value="website">Website (Web Application)</option>
@@ -2305,100 +2764,129 @@ const AdminModal = ({ onClose }) => {
 
                       {/* Project Title */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'প্রজেক্টের নাম (Project Title) *' : 'Project Title *'}</label>
+                        <label style={{ fontSize: '0.8rem', color: projectFormErrors.title ? '#EF4444' : '#94A3B8', fontWeight: 600 }}>
+                          {isBangla ? 'প্রজেক্টের নাম (Project Title) *' : 'Project Title *'}
+                        </label>
                         <input
                           type="text"
-                          required
                           value={projectTitle}
-                          onChange={(e) => setProjectTitle(e.target.value)}
-                          placeholder={projectCategory === 'apps' ? 'e.g., HisabNama / Naf Sports' : 'e.g., Sufia Nuria Madrasah'}
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                          onChange={(e) => {
+                            setProjectTitle(e.target.value);
+                            if (projectFormErrors.title) setProjectFormErrors((prev) => ({ ...prev, title: '' }));
+                          }}
+                          placeholder={isBangla ? 'প্রজেক্টের নাম লিখুন...' : 'Enter project title...'}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: projectFormErrors.title ? '1.5px solid #EF4444' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                            marginTop: '4px'
+                          }}
                         />
+                        {projectFormErrors.title && (
+                          <span style={{ color: '#EF4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={12} />
+                            {projectFormErrors.title}
+                          </span>
+                        )}
                       </div>
 
                       {/* Sub-category / Platform */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'সাব-ক্যাটেগরি / প্ল্যাটফর্ম (Sub-category / Platform)' : 'Sub-category / Platform'}</label>
+                        <label style={{ fontSize: '0.8rem', color: projectFormErrors.subCategory ? '#EF4444' : '#94A3B8', fontWeight: 600 }}>
+                          {isBangla ? 'সাব-ক্যাটেগরি / প্ল্যাটফর্ম (Sub-category / Platform) *' : 'Sub-category / Platform *'}
+                        </label>
                         <input
                           type="text"
                           value={projectSubCategory}
-                          onChange={(e) => setProjectSubCategory(e.target.value)}
-                          placeholder={projectCategory === 'apps' ? 'e.g., Finance & Productivity / Android' : 'e.g., React, Node.js & Vite'}
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                          onChange={(e) => {
+                            setProjectSubCategory(e.target.value);
+                            if (projectFormErrors.subCategory) setProjectFormErrors((prev) => ({ ...prev, subCategory: '' }));
+                          }}
+                          placeholder={isBangla ? 'যেমন: Android / React / Node.js' : 'e.g. Android / React / Flutter'}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: projectFormErrors.subCategory ? '1.5px solid #EF4444' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                            marginTop: '4px'
+                          }}
                         />
+                        {projectFormErrors.subCategory && (
+                          <span style={{ color: '#EF4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={12} />
+                            {projectFormErrors.subCategory}
+                          </span>
+                        )}
                       </div>
 
                       {/* Media URL (Apps: Icon URL, Website: Banner URL) */}
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                          <label style={{ fontSize: '0.8rem', color: projectFormErrors.mediaUrl ? '#EF4444' : '#94A3B8', fontWeight: 600 }}>
                             {projectCategory === 'apps'
-                              ? (isBangla ? 'অ্যাপ আইকন URL (Icon URL) *' : 'App Icon URL (Media URL) *')
-                              : (isBangla ? 'ওয়েবসাইট ব্যানার URL (Banner URL) *' : 'Website Banner URL (Media URL) *')}
+                              ? (isBangla ? 'অ্যাপ আইকন URL বা আপলোড (Icon URL) *' : 'App Icon URL or Upload (Media URL) *')
+                              : (isBangla ? 'ওয়েবসাইট ব্যানার URL বা আপলোড (Banner URL) *' : 'Website Banner URL or Upload (Media URL) *')}
                           </label>
                         </div>
                         <input
                           type="text"
                           value={projectMediaUrl}
-                          onChange={(e) => setProjectMediaUrl(e.target.value)}
-                          placeholder={projectCategory === 'apps' ? '/icons/hisabnama-icon.png or https://...' : '/banners/madrasah-banner.jpg or https://...'}
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setProjectMediaUrl(val);
+                            if (!val.startsWith('blob:')) {
+                              setSelectedProjectFile(null);
+                              setProjectLocalPreview('');
+                            }
+                            if (projectFormErrors.mediaUrl) setProjectFormErrors((prev) => ({ ...prev, mediaUrl: '' }));
+                          }}
+                          placeholder={isBangla ? 'ইমেজ লিংক দিন অথবা ডিভাইস থেকে ছবি আপলোড করুন...' : 'Paste icon/banner URL or upload from device...'}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: projectFormErrors.mediaUrl ? '1.5px solid #EF4444' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            boxSizing: 'border-box'
+                          }}
                         />
+                        {projectFormErrors.mediaUrl && (
+                          <span style={{ color: '#EF4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={12} />
+                            {projectFormErrors.mediaUrl}
+                          </span>
+                        )}
 
-                        {/* Quick Presets from public/ folder */}
-                        <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>Quick public/ assets:</span>
-                          {(projectCategory === 'apps'
-                            ? [
-                                { label: 'HisabNama', path: '/icons/hisabnama-icon.png' },
-                                { label: 'NafSports', path: '/icons/nafsports-icon.png' },
-                                { label: 'GoEasy', path: '/icons/goeasy-icon.png' },
-                                { label: 'App1', path: '/app1.png' },
-                                { label: 'App2', path: '/app2.png' }
-                              ]
-                            : [
-                                { label: 'Madrasah', path: '/banners/madrasah-banner.jpg' },
-                                { label: 'ESheba', path: '/banners/esheba-banner.jpg' },
-                                { label: 'Community', path: '/banners/community-banner.jpg' },
-                                { label: 'Add1', path: '/add1.png' },
-                                { label: 'Add2', path: '/add2.png' }
-                              ]
-                          ).map((preset) => (
-                            <button
-                              key={preset.path}
-                              type="button"
-                              onClick={() => setProjectMediaUrl(preset.path)}
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: '6px',
-                                background: projectMediaUrl === preset.path ? 'rgba(0, 240, 255, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-                                border: `1px solid ${projectMediaUrl === preset.path ? '#00F0FF' : 'rgba(255, 255, 255, 0.1)'}`,
-                                color: projectMediaUrl === preset.path ? '#00F0FF' : '#CBD5E1',
-                                fontSize: '0.68rem',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              {preset.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Device File Picker Upload Button */}
-                        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        {/* Device File Picker Upload Button (Client-side selection with delayed upload) */}
+                        <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                           <label style={{
-                            padding: '6px 12px',
-                            background: 'rgba(0, 240, 255, 0.12)',
-                            border: '1px solid rgba(0, 240, 255, 0.3)',
+                            padding: '7px 14px',
+                            background: selectedProjectFile ? 'rgba(0, 240, 255, 0.22)' : 'rgba(0, 240, 255, 0.12)',
+                            border: '1.5px solid rgba(0, 240, 255, 0.35)',
                             borderRadius: '8px',
                             color: '#00F0FF',
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.78rem'
+                            gap: '7px',
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            transition: 'all 0.2s ease'
                           }}>
                             <Upload size={14} />
-                            <span>{uploadingProjectMedia ? (isBangla ? 'আপলোড হচ্ছে...' : 'Uploading...') : (isBangla ? 'গ্যালারি থেকে ছবি আপলোড' : 'Upload from Device')}</span>
+                            <span>
+                              {selectedProjectFile 
+                                ? (isBangla ? 'অন্য ছবি পরিবর্তন করুন' : 'Change Selected Image') 
+                                : (isBangla ? 'গ্যালারি থেকে ছবি আপলোড' : 'Upload from Device')}
+                            </span>
                             <input type="file" accept="image/*" onChange={handleProjectMediaChange} style={{ display: 'none' }} />
                           </label>
 
@@ -2406,8 +2894,8 @@ const AdminModal = ({ onClose }) => {
                           {projectMediaUrl && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <div style={{
-                                width: projectCategory === 'apps' ? '42px' : '64px',
-                                height: '42px',
+                                width: projectCategory === 'apps' ? '40px' : '56px',
+                                height: '40px',
                                 borderRadius: projectCategory === 'apps' ? '50%' : '8px',
                                 overflow: 'hidden',
                                 border: '1.5px solid #00F0FF',
@@ -2421,7 +2909,19 @@ const AdminModal = ({ onClose }) => {
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />
                               </div>
-                              <span style={{ fontSize: '0.72rem', color: '#10B981' }}>✓ {isBangla ? 'মিডিয়া প্রস্তুত' : 'Media Ready'}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '0.72rem', color: '#10B981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <CheckCircle size={13} />
+                                  {selectedProjectFile 
+                                    ? (isBangla ? 'ছবি নির্বাচিত (পাবলিশে Canvas কম্প্রেশন ও R2 আপলোড হবে)' : 'Image selected (Compress & R2 upload on publish)') 
+                                    : (isBangla ? 'মিডিয়া প্রস্তুত' : 'Media Ready')}
+                                </span>
+                                {selectedProjectFile && (
+                                  <span style={{ fontSize: '0.66rem', color: '#94A3B8' }}>
+                                    {selectedProjectFile.name} ({(selectedProjectFile.size / 1024).toFixed(0)} KB)
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2429,56 +2929,115 @@ const AdminModal = ({ onClose }) => {
 
                       {/* Action URL */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                        <label style={{ fontSize: '0.8rem', color: projectFormErrors.actionUrl ? '#EF4444' : '#94A3B8', fontWeight: 600 }}>
                           {projectCategory === 'apps'
-                            ? (isBangla ? 'গুগল প্লে স্টোর লিংক (Action URL)' : 'Google Play Store Link (Action URL)')
-                            : (isBangla ? 'ওয়েবসাইট লাইভ লিংক (Action URL)' : 'Live Website Link (Action URL)')}
+                            ? (isBangla ? 'গুগল প্লে স্টোর লিংক (Action URL) *' : 'Google Play Store Link (Action URL) *')
+                            : (isBangla ? 'ওয়েবসাইট লাইভ লিংক (Action URL) *' : 'Live Website Link (Action URL) *')}
                         </label>
                         <input
                           type="url"
                           value={projectActionUrl}
-                          onChange={(e) => setProjectActionUrl(e.target.value)}
-                          placeholder={projectCategory === 'apps' ? 'https://play.google.com/store/apps/details?id=...' : 'https://example.com'}
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
+                          onChange={(e) => {
+                            setProjectActionUrl(e.target.value);
+                            if (projectFormErrors.actionUrl) setProjectFormErrors((prev) => ({ ...prev, actionUrl: '' }));
+                          }}
+                          placeholder={projectCategory === 'apps' ? 'https://play.google.com/store/apps/details?id=...' : 'https://yourwebsite.com'}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: projectFormErrors.actionUrl ? '1.5px solid #EF4444' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                            marginTop: '4px'
+                          }}
                         />
+                        {projectFormErrors.actionUrl && (
+                          <span style={{ color: '#EF4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={12} />
+                            {projectFormErrors.actionUrl}
+                          </span>
+                        )}
                       </div>
 
                       {/* Short Description */}
                       <div>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'সংক্ষিপ্ত বিবরণ (Short Description)' : 'Short Description'}</label>
+                        <label style={{ fontSize: '0.8rem', color: projectFormErrors.description ? '#EF4444' : '#94A3B8', fontWeight: 600 }}>
+                          {isBangla ? 'সংক্ষিপ্ত বিবরণ (Short Description) *' : 'Short Description *'}
+                        </label>
                         <textarea
                           rows={3}
                           value={projectDescription}
-                          onChange={(e) => setProjectDescription(e.target.value)}
-                          placeholder="Brief description of the app or website project..."
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box', resize: 'vertical' }}
+                          onChange={(e) => {
+                            setProjectDescription(e.target.value);
+                            if (projectFormErrors.description) setProjectFormErrors((prev) => ({ ...prev, description: '' }));
+                          }}
+                          placeholder={isBangla ? 'প্রজেক্টের সংক্ষিপ্ত বিবরণ লিখুন...' : 'Enter brief project description...'}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: projectFormErrors.description ? '1.5px solid #EF4444' : '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '8px',
+                            color: '#fff',
+                            boxSizing: 'border-box',
+                            resize: 'vertical',
+                            marginTop: '4px'
+                          }}
                         />
+                        {projectFormErrors.description && (
+                          <span style={{ color: '#EF4444', fontSize: '0.74rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={12} />
+                            {projectFormErrors.description}
+                          </span>
+                        )}
                       </div>
 
                       {/* Submit & Cancel Buttons */}
-                      <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
                         <button
                           type="submit"
                           disabled={featureActionLoading || uploadingProjectMedia}
                           style={{
                             flex: 1,
-                            padding: '11px',
+                            padding: '12px',
                             background: 'linear-gradient(135deg, #00838F 0%, #00F0FF 100%)',
                             color: '#000',
                             fontWeight: 800,
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             border: 'none',
                             cursor: 'pointer',
-                            fontSize: '0.88rem'
+                            fontSize: '0.88rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 16px rgba(0, 240, 255, 0.25)'
                           }}
                         >
-                          {featureActionLoading ? (isBangla ? 'সংরক্ষণ হচ্ছে...' : 'Saving to Firestore...') : (projectEditingId ? (isBangla ? 'প্রজেক্ট আপডেট করুন' : 'Update Project') : (isBangla ? 'ফায়ারস্টোরে পাবলিশ করুন' : 'Publish to Firestore'))}
+                          {featureActionLoading ? (
+                            <>
+                              <RefreshCw size={15} className="animate-spin" />
+                              <span>{isBangla ? 'পাবলিশ হচ্ছে...' : 'Publishing...'}</span>
+                            </>
+                          ) : (
+                            projectEditingId ? (
+                              isBangla ? 'প্রজেক্ট আপডেট করুন' : 'Update Project'
+                            ) : (
+                              projectCategory === 'website' ? (
+                                isBangla ? 'ওয়েবসাইট পাবলিশ করুন' : 'Publish Website'
+                              ) : (
+                                isBangla ? 'প্রজেক্ট পাবলিশ করুন' : 'Publish Project'
+                              )
+                            )
+                          )}
                         </button>
                         {projectEditingId && (
                           <button
                             type="button"
                             onClick={resetProjectsForm}
-                            style={{ padding: '11px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px', cursor: 'pointer', fontSize: '0.88rem' }}
+                            style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '10px', cursor: 'pointer', fontSize: '0.88rem' }}
                           >
                             {isBangla ? 'বাতিল' : 'Cancel'}
                           </button>
@@ -2487,7 +3046,7 @@ const AdminModal = ({ onClose }) => {
                     </form>
                   </div>
 
-                  {/* Right Column: Live Existing Projects List (Streamed Realtime from Firestore) */}
+                  {/* Right Column: Live Existing Projects List (Streamed Realtime) */}
                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
                     <FirestoreStreamBuilder collectionName="projects">
                       {({ data }) => {
@@ -2499,21 +3058,21 @@ const AdminModal = ({ onClose }) => {
                                 <Layers size={17} color="#00F0FF" />
                                 <span>{isBangla ? `বিদ্যমান প্রজেক্টসমূহ (${list.length})` : `Existing Projects (${list.length})`}</span>
                               </h3>
-                              <span style={{ fontSize: '0.72rem', color: '#10B981', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', display: 'inline-block' }} />
-                                <span>Firestore Live</span>
+                              <span style={{ fontSize: '0.72rem', color: '#10B981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10B981', display: 'inline-block', boxShadow: '0 0 8px #10B981' }} />
+                                <span>{isBangla ? 'লাইভ স্ট্যাটাস' : 'Live Status'}</span>
                               </span>
                             </div>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '480px', overflowY: 'auto' }}>
                               {list.length === 0 ? (
                                 <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8', fontSize: '0.84rem', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '12px' }}>
-                                  {isBangla ? 'কোনো প্রজেক্ট পাওয়া যায়নি। বামপাশের ফর্ম পূরণ করে যুক্ত করুন।' : 'No projects found in Firestore. Add one using the form on the left.'}
+                                  {isBangla ? 'এখনো কোনো প্রজেক্ট যুক্ত করা হয়নি। বামপাশের ফর্ম পূরণ করে যুক্ত করুন।' : 'No projects added yet. Add one using the form on the left.'}
                                 </div>
                               ) : (
                                 list.map((item) => {
                                   const isApp = (item.category || '').toLowerCase() === 'apps' || (item.category || '').toLowerCase() === 'app';
-                                  const media = item.mediaUrl || item.icon || item.banner || item.thumbnail?.imageUrl || (isApp ? '/icons/hisabnama-icon.png' : '/banners/madrasah-banner.jpg');
+                                  const media = item.mediaUrl || item.icon || item.banner || item.thumbnail?.imageUrl || (isApp ? '/app1.png' : '/add1.png');
                                   const actionUrl = item.actionUrl || item.playStoreUrl || item.liveUrl || item.link;
 
                                   return (
@@ -3438,312 +3997,1800 @@ const AdminModal = ({ onClose }) => {
           {/* TAB 4: DEALS & DISCOUNTS MANAGER */}
           {activeAdminTab === 'deals' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Dedicated Top-Left Navigation Back Bar */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '8px 14px',
-                borderRadius: '12px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)'
-              }}>
-                <button
-                  onClick={() => setActiveAdminTab('overview')}
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    cursor: 'pointer',
-                    color: '#10B981',
-                    flexShrink: 0,
-                    transition: 'all 0.2s ease'
-                  }}
-                  title={isBangla ? 'ওভারভিউ ড্যাশবোর্ডে ফিরুন' : 'Back to Overview'}
-                  aria-label="Back to Overview"
-                >
-                  <ArrowLeft size={18} />
-                </button>
-                <div>
-                  <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#FFFFFF' }}>
-                    {isBangla ? '← ড্যাশবোর্ড ওভারভিউতে ফিরুন' : '← Back to Overview Dashboard'}
-                  </span>
-                  <span style={{ display: 'block', fontSize: '0.7rem', color: '#94A3B8' }}>
-                    {isBangla ? 'ডিল ও ডিসকাউন্ট অফার ম্যানেজমেন্ট' : 'Deals & Discounts Offer Management'}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsAddDealModalOpen(true)}
-                  style={{
-                    marginLeft: 'auto',
-                    padding: '8px 16px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(16, 185, 129, 0.25) 100%)',
-                    border: '1.5px solid #06B6D4',
-                    color: '#22D3EE',
-                    fontSize: '0.8rem',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 2px 10px rgba(6, 182, 212, 0.3)'
-                  }}
-                >
-                  <Plus size={15} />
-                  <span>{isBangla ? '+ নতুন ডিল মডাল' : '+ Open Add Deal Modal'}</span>
-                </button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
-                {/* Form Column */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                  <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#10B981', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Percent size={18} />
-                    <span>{dealEditingId ? (isBangla ? 'অফার ও ডিসকাউন্ট সম্পাদনা' : 'Edit Deal & Discount') : (isBangla ? 'নতুন ডিল ও ডিসকাউন্ট যুক্ত করুন' : 'Add New Deal & Discount')}</span>
-                  </h3>
-
-                  <form onSubmit={handleSaveDeal} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'অফার টাইটেল *' : 'Offer Title *'}</label>
-                      <input
-                        type="text"
-                        required
-                        value={dealTitle}
-                        onChange={(e) => setDealTitle(e.target.value)}
-                        placeholder="e.g., Hostinger Cloud Pro Hosting"
-                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'ডিসকাউন্ট ব্যাজ' : 'Discount Badge'}</label>
-                        <input
-                          type="text"
-                          value={dealDiscountPercent}
-                          onChange={(e) => setDealDiscountPercent(e.target.value)}
-                          placeholder="e.g., 75% OFF"
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                        />
+              {currentAdminView === 'add-deal' ? (
+                /* 1. DEDICATED ADD / EDIT DEAL COMPACT NO-SCROLL VIEW */
+                <div style={{ display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
+                  {/* Compact Modern Form Card (max-w-4xl, no-scroll fit) */}
+                  <div
+                    style={{
+                      maxWidth: '880px',
+                      width: '100%',
+                      margin: '0 auto',
+                      background: 'linear-gradient(145deg, #0e172a 0%, #131e36 100%)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.25)',
+                      borderRadius: '20px',
+                      padding: '16px 22px',
+                      boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.08)',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {/* Compact Top Header Bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '10px',
+                        paddingBottom: '12px',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                        marginBottom: '14px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '10px',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            border: '1.2px solid rgba(16, 185, 129, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#10B981',
+                            flexShrink: 0
+                          }}
+                        >
+                          <Percent size={18} />
+                        </div>
+                        <div>
+                          <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.2px' }}>
+                            {dealEditingId 
+                              ? (isBangla ? 'ডিল সম্পাদনা করুন (Edit Deal)' : 'Edit Deal Offer') 
+                              : (isBangla ? 'নতুন ডিল প্রকাশ করুন (Create New Deal)' : 'Create & Publish New Deal')}
+                          </h2>
+                          <span style={{ fontSize: '0.70rem', color: '#94A3B8', display: 'block' }}>
+                            {isBangla ? 'ল্যাপটপ স্ক্রিন ফিট কমপ্যাক্ট ফর্ম' : 'Compact no-scroll form'}
+                          </span>
+                        </div>
                       </div>
 
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'কুপন কোড' : 'Coupon Code'}</label>
-                        <input
-                          type="text"
-                          value={dealDiscountCode}
-                          onChange={(e) => setDealDiscountCode(e.target.value)}
-                          placeholder="e.g., RASEDUL75"
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'মেয়াদ শেষ হওয়ার তারিখ' : 'Expiration Date'}</label>
-                        <input
-                          type="text"
-                          value={dealExpiryDate}
-                          onChange={(e) => setDealExpiryDate(e.target.value)}
-                          placeholder="e.g., 2026-12-31"
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                        />
-                      </div>
-
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'অফার পার্টনার লিঙ্ক' : 'Partner Link'}</label>
-                        <input
-                          type="url"
-                          value={dealPartnerUrl}
-                          onChange={(e) => setDealPartnerUrl(e.target.value)}
-                          placeholder="https://hostinger.com"
-                          style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Direct Device Gallery File Picker (NO URL Input) */}
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>
-                        {isBangla ? 'গ্যালারি থেকে ব্যানার নির্বাচন *' : 'Offer Banner from Device Gallery *'}
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                        <label style={{
+                      {/* Clear Back to Dashboard Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetDealForm();
+                          setCurrentAdminView(null);
+                        }}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          color: '#E2E8F0',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '8px',
-                          padding: '10px 18px',
-                          borderRadius: '10px',
-                          background: 'rgba(16, 185, 129, 0.15)',
-                          border: '1.5px solid #10B981',
-                          color: '#10B981',
-                          fontSize: '0.84rem',
-                          fontWeight: 800,
-                          cursor: 'pointer',
+                          gap: '6px',
                           transition: 'all 0.2s ease'
-                        }}>
-                          <Upload size={16} />
-                          <span>
-                            {uploadingDealImage
-                              ? (isBangla ? 'আপলোড হচ্ছে...' : 'Uploading to Storage...')
-                              : (isBangla ? 'গ্যালারি থেকে ছবি বাছুন' : 'Choose from Gallery')}
-                          </span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleDealImageChange}
-                            style={{ display: 'none' }}
-                          />
-                        </label>
-
-                        {dealBannerUrl && (
-                          <span style={{ fontSize: '0.76rem', color: '#4ADE80', fontWeight: 700 }}>
-                            {uploadingDealImage ? (isBangla ? 'স্টোরেজে সেভ হচ্ছে...' : 'Uploading...') : (isBangla ? '✓ ব্যানার প্রস্তুত' : '✓ Banner Ready')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'বিবরণ' : 'Description'}</label>
-                      <textarea
-                        rows={2}
-                        value={dealDescription}
-                        onChange={(e) => setDealDescription(e.target.value)}
-                        placeholder="e.g., Exclusive 75% off on high-performance cloud hosting with free domain name"
-                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box', resize: 'vertical' }}
-                      />
-                    </div>
-
-                    {/* Live Preview Card */}
-                    <div style={{ marginTop: '10px', padding: '12px', borderRadius: '12px', background: 'rgba(0, 105, 92, 0.08)', border: '1px dashed rgba(16, 185, 129, 0.3)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', color: '#10B981', fontSize: '0.74rem', fontWeight: 800 }}>
-                        <Sparkles size={13} />
-                        <span>{isBangla ? 'লাইভ প্রিভিউ কার্ড' : 'Live Preview Card'}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                        <div style={{ width: '56px', height: '40px', borderRadius: '6px', overflow: 'hidden', background: '#000', flexShrink: 0 }}>
-                          <img src={dealBannerUrl || '/add1.png'} alt="Preview" onError={(e) => { e.target.src = '/add1.png'; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dealTitle || 'Offer Title'}</span>
-                            <span style={{ fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px', background: '#00695C', color: '#fff', fontWeight: 800 }}>{dealDiscountPercent || '75% OFF'}</span>
-                          </div>
-                          <div style={{ fontSize: '0.7rem', color: '#10B981', fontFamily: "'Space Grotesk', monospace" }}>Code: {dealDiscountCode || 'NONE'} • Exp: {dealExpiryDate || 'Dec 2026'}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                      <button
-                        type="submit"
-                        disabled={featureActionLoading}
-                        style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #00695C 0%, #10B981 100%)', color: '#FFFFFF', fontWeight: 800, borderRadius: '8px', border: 'none', cursor: 'pointer' }}
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                          e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                        }}
                       >
-                        {featureActionLoading ? 'Saving...' : (dealEditingId ? (isBangla ? 'আপডেট করুন' : 'Update Deal') : (isBangla ? 'সংরক্ষণ করুন' : 'Save Deal & Discount'))}
+                        <ArrowLeft size={14} color="#38BDF8" />
+                        <span>{isBangla ? '← ব্যাক টু ড্যাশবোর্ড' : '← Back to Dashboard'}</span>
                       </button>
-                      {dealEditingId && (
-                        <button
-                          type="button"
-                          onClick={resetDealForm}
-                          style={{ padding: '10px 16px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}
-                        >
-                          Cancel
-                        </button>
-                      )}
                     </div>
-                  </form>
-                </div>
 
-                {/* Live List Column */}
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <FirestoreStreamBuilder collectionName={COLLECTIONS.DEALS_DISCOUNTS}>
-                    {({ data }) => {
-                      const list = data || [];
-                      return (
-                        <>
-                          <h3 style={{ margin: '0 0 16px 0', fontSize: '1.05rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <Percent size={17} color="#10B981" />
-                            <span>{isBangla ? `সক্রিয় ডিল ও ডিসকাউন্ট (${list.length})` : `Active Deals & Discounts (${list.length})`}</span>
-                          </h3>
+                    <form onSubmit={handleSaveDeal} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      {/* Compact 2-Column Responsive Grid */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                          gap: '16px',
+                          width: '100%',
+                          alignItems: 'start'
+                        }}
+                      >
+                        {/* LEFT COLUMN: Title, Pricing/Discount, Coupon, Limited Deal */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {/* 1. Deal Title */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#E2E8F0' }}>
+                              {isBangla ? 'ডিল শিরোনাম (Deal Title) *' : 'Deal Title *'}
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={dealTitle}
+                              onChange={(e) => setDealTitle(e.target.value)}
+                              placeholder={isBangla ? 'ডিলের নাম বা শিরোনাম লিখুন...' : 'Enter deal title...'}
+                              style={{
+                                width: '100%',
+                                height: '36px',
+                                padding: '6px 12px',
+                                borderRadius: '10px',
+                                background: 'rgba(15, 23, 42, 0.95)',
+                                border: '1.2px solid rgba(255, 255, 255, 0.12)',
+                                color: '#FFFFFF',
+                                fontSize: '0.84rem',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                              onFocus={(e) => e.target.style.borderColor = '#10B981'}
+                              onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                            />
+                          </div>
 
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '420px', overflowY: 'auto' }}>
-                            {list.map((item) => (
+                          {/* 2. Package Rate & Discount - 2 Sub-Columns */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            {/* Regular Price */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: '#E2E8F0' }}>
+                                {isBangla ? 'প্যাকেজ রেট (BDT) *' : 'Package Rate (BDT) *'}
+                              </label>
+                              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    left: '10px',
+                                    color: '#10B981',
+                                    fontWeight: 800,
+                                    fontSize: '0.74rem',
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    pointerEvents: 'none'
+                                  }}
+                                >
+                                  ৳ BDT
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  required
+                                  value={dealOriginalPrice}
+                                  onChange={(e) => setDealOriginalPrice(e.target.value)}
+                                  placeholder={isBangla ? 'মূল্য লিখুন (যেমন: ৫০০০)' : 'Regular price (e.g. 5000)'}
+                                  style={{
+                                    width: '100%',
+                                    height: '36px',
+                                    paddingLeft: '56px',
+                                    paddingRight: '10px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(15, 23, 42, 0.95)',
+                                    border: '1.2px solid rgba(255, 255, 255, 0.12)',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.86rem',
+                                    fontWeight: 700,
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    outline: 'none',
+                                    boxSizing: 'border-box'
+                                  }}
+                                  onFocus={(e) => e.target.style.borderColor = '#10B981'}
+                                  onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Discount Rate (%) */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <label style={{ display: 'block', fontSize: '0.76rem', fontWeight: 700, color: '#E2E8F0' }}>
+                                {isBangla ? 'ছাড়ের শতকরা হার (%) *' : 'Discount Rate (%) *'}
+                              </label>
+                              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                <span
+                                  style={{
+                                    position: 'absolute',
+                                    right: '10px',
+                                    color: '#10B981',
+                                    fontWeight: 800,
+                                    fontSize: '0.74rem',
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    pointerEvents: 'none'
+                                  }}
+                                >
+                                  % OFF
+                                </span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  required
+                                  value={dealDiscountPercent}
+                                  onChange={(e) => setDealDiscountPercent(e.target.value)}
+                                  placeholder={isBangla ? 'ছাড়ের হার (যেমন: ২৫)' : 'Discount rate % (e.g. 25)'}
+                                  style={{
+                                    width: '100%',
+                                    height: '36px',
+                                    paddingLeft: '10px',
+                                    paddingRight: '56px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(15, 23, 42, 0.95)',
+                                    border: '1.2px solid rgba(255, 255, 255, 0.12)',
+                                    color: '#FFFFFF',
+                                    fontSize: '0.86rem',
+                                    fontWeight: 700,
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    outline: 'none',
+                                    boxSizing: 'border-box'
+                                  }}
+                                  onFocus={(e) => e.target.style.borderColor = '#10B981'}
+                                  onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 3. Coupon Code (Optional) */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.76rem', fontWeight: 700, color: '#E2E8F0' }}>
+                                <Tag size={13} color="#00E5FF" />
+                                <span>{isBangla ? 'কুপন কোড (ঐচ্ছিক)' : 'Coupon Code (Optional)'}</span>
+                              </label>
+                              <span style={{ fontSize: '0.70rem', color: '#64748B' }}>
+                                {isBangla ? 'কুপন না থাকলে খালি রাখুন' : 'Optional'}
+                              </span>
+                            </div>
+                            <input
+                              type="text"
+                              value={dealCouponCode}
+                              onChange={(e) => setDealCouponCode(e.target.value.toUpperCase())}
+                              placeholder={isBangla ? 'কুপন কোড (যদি থাকে)' : 'Coupon code (optional)'}
+                              style={{
+                                width: '100%',
+                                height: '36px',
+                                padding: '6px 12px',
+                                borderRadius: '10px',
+                                background: 'rgba(15, 23, 42, 0.95)',
+                                border: '1.2px solid rgba(255, 255, 255, 0.12)',
+                                color: '#00F0FF',
+                                fontSize: '0.84rem',
+                                fontWeight: 700,
+                                fontFamily: "'Space Grotesk', monospace",
+                                letterSpacing: '1px',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                              onFocus={(e) => e.target.style.borderColor = '#00E5FF'}
+                              onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                            />
+                          </div>
+
+                          {/* 4. Limited Deal Option */}
+                          <div
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '10px',
+                              background: 'rgba(15, 23, 42, 0.8)',
+                              border: '1px solid rgba(245, 158, 11, 0.3)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: '#FFFFFF' }}>
+                                <Clock size={14} color="#F59E0B" />
+                                <span>{isBangla ? 'সীমিত সময়ের ডিল (Limited Time Deal)' : 'Limited Time Deal'}</span>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={dealIsLimited}
+                                onChange={(e) => setDealIsLimited(e.target.checked)}
+                                style={{ width: '16px', height: '16px', accentColor: '#F59E0B', cursor: 'pointer' }}
+                              />
+                            </label>
+
+                            {dealIsLimited && (
+                              <div style={{ paddingTop: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#FBBF24' }}>
+                                  {isBangla ? 'অফার সমাপ্তির তারিখ ও সময় *' : 'Offer Expiry Date & Time *'}
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={dealExpiryDate}
+                                  onChange={(e) => setDealExpiryDate(e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    height: '32px',
+                                    padding: '4px 10px',
+                                    borderRadius: '8px',
+                                    background: '#090d16',
+                                    border: '1.2px solid rgba(245, 158, 11, 0.5)',
+                                    color: '#FBBF24',
+                                    fontSize: '0.78rem',
+                                    fontFamily: "'Space Grotesk', monospace",
+                                    outline: 'none',
+                                    boxSizing: 'border-box'
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: Banner Image Uploader, Description, Submit Button */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {/* 5. Banner Image Uploader */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#E2E8F0' }}>
+                              {isBangla ? 'ব্যানার ইমেজ আপলোডার (Banner Image)' : 'Banner Image Uploader'}
+                            </label>
+
+                            {dealBannerUrl ? (
                               <div
-                                key={item.id}
                                 style={{
-                                  padding: '12px 14px',
-                                  background: 'rgba(15, 23, 42, 0.8)',
-                                  border: '1px solid rgba(255,255,255,0.08)',
-                                  borderRadius: '12px',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  gap: '12px'
+                                  gap: '12px',
+                                  padding: '8px 12px',
+                                  height: '75px',
+                                  borderRadius: '12px',
+                                  background: 'rgba(15, 23, 42, 0.9)',
+                                  border: '1.2px solid rgba(56, 189, 248, 0.35)',
+                                  boxSizing: 'border-box'
                                 }}
                               >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                                  <div style={{ width: '42px', height: '32px', borderRadius: '6px', overflow: 'hidden', background: '#0b1329', flexShrink: 0 }}>
-                                    <img src={item.bannerUrl || '/add1.png'} alt={item.title} onError={(e) => { e.target.src = '/add1.png'; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  </div>
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <h4 style={{ margin: 0, fontSize: '0.86rem', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</h4>
-                                      <span style={{ fontSize: '0.64rem', padding: '1px 5px', borderRadius: '4px', background: '#00695C', color: '#fff', fontWeight: 800 }}>{item.discountPercent || item.discountCode}</span>
-                                    </div>
-                                    <span style={{ fontSize: '0.7rem', color: '#10B981' }}>{item.discountCode ? `Code: ${item.discountCode}` : ''}</span>
-                                  </div>
+                                <div
+                                  style={{
+                                    width: '65px',
+                                    height: '50px',
+                                    borderRadius: '8px',
+                                    overflow: 'hidden',
+                                    background: '#090d16',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  <img
+                                    src={dealBannerUrl}
+                                    alt="Deal Banner Preview"
+                                    onError={(e) => { e.target.src = '/add1.png'; }}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
                                 </div>
 
-                                <div style={{ display: 'flex', gap: '6px' }}>
-                                  <button
-                                    onClick={() => handleEditDeal(item)}
-                                    style={{ padding: '6px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10B981', borderRadius: '6px', cursor: 'pointer' }}
-                                    title="Edit"
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <span
+                                    style={{
+                                      display: 'block',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 700,
+                                      color: '#FFFFFF',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis'
+                                    }}
                                   >
-                                    <Edit3 size={14} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteDeal(item)}
-                                    style={{ padding: '6px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '6px', cursor: 'pointer' }}
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
+                                    {selectedDealFile ? selectedDealFile.name : (dealBannerUrl.startsWith('http') ? 'ক্লাউড ব্যানার ইমেজ' : 'নির্বাচিত ব্যানার')}
+                                  </span>
+                                  {dealFileSizeInfo ? (
+                                    <span style={{ display: 'block', fontSize: '0.68rem', color: '#10B981', marginTop: '1px' }}>
+                                      {dealFileSizeInfo}
+                                    </span>
+                                  ) : (
+                                    <span style={{ display: 'block', fontSize: '0.68rem', color: '#94A3B8', marginTop: '1px' }}>
+                                      {isBangla ? 'ব্যানার প্রিভিউ সক্রিয়' : 'Banner active'}
+                                    </span>
+                                  )}
                                 </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleRemoveDealImage}
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                                    color: '#EF4444',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    flexShrink: 0
+                                  }}
+                                  title={isBangla ? 'ছবি মুছুন' : 'Remove Image'}
+                                >
+                                  <Trash2 size={15} />
+                                </button>
                               </div>
-                            ))}
+                            ) : (
+                              <label
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  height: '75px',
+                                  padding: '8px 12px',
+                                  borderRadius: '12px',
+                                  border: '1.5px dashed rgba(56, 189, 248, 0.4)',
+                                  background: 'rgba(15, 23, 42, 0.6)',
+                                  cursor: 'pointer',
+                                  textAlign: 'center',
+                                  transition: 'all 0.2s ease',
+                                  boxSizing: 'border-box'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = '#10B981';
+                                  e.currentTarget.style.background = 'rgba(16, 185, 129, 0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+                                  e.currentTarget.style.background = 'rgba(15, 23, 42, 0.6)';
+                                }}
+                              >
+                                <Upload size={20} color="#38BDF8" style={{ marginBottom: '4px' }} />
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#FFFFFF' }}>
+                                  {isBangla ? 'ছবি নির্বাচন করুন (Browse Deal Banner)' : 'Browse Deal Banner Image'}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                                  {isBangla ? 'সিলেক্ট করলে প্রিভিউ দেখাবে (< ৩০০ KB WebP)' : 'Local preview on selection (< 300 KB WebP)'}
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleDealFileChange}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                            )}
                           </div>
-                        </>
+
+                          {/* 6. Short Description */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#E2E8F0' }}>
+                              {isBangla ? 'সংক্ষিপ্ত বিবরণ ও সুবিধাসমূহ (Description)' : 'Short Description & Features'}
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={dealDescription}
+                              onChange={(e) => setDealDescription(e.target.value)}
+                              placeholder={isBangla ? 'অফারের আওতায় অন্তর্ভুক্ত সুবিধাসমূহ ও টেকনোলজি লিখুন...' : 'Key deliverables, features, and terms of this deal...'}
+                              style={{
+                                width: '100%',
+                                height: '62px',
+                                minHeight: '62px',
+                                maxHeight: '75px',
+                                padding: '6px 12px',
+                                borderRadius: '10px',
+                                background: 'rgba(15, 23, 42, 0.95)',
+                                border: '1.2px solid rgba(255, 255, 255, 0.12)',
+                                color: '#FFFFFF',
+                                fontSize: '0.80rem',
+                                outline: 'none',
+                                boxSizing: 'border-box',
+                                resize: 'none',
+                                lineHeight: '1.4'
+                              }}
+                              onFocus={(e) => e.target.style.borderColor = '#10B981'}
+                              onBlur={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                            />
+                          </div>
+
+                          {/* 7. Action Button */}
+                          <div style={{ marginTop: '2px' }}>
+                            <button
+                              type="submit"
+                              disabled={featureActionLoading || isCompressingDealImage}
+                              style={{
+                                width: '100%',
+                                height: '42px',
+                                borderRadius: '12px',
+                                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                border: '1.5px solid #34D399',
+                                color: '#FFFFFF',
+                                fontSize: '0.90rem',
+                                fontWeight: 800,
+                                cursor: featureActionLoading || isCompressingDealImage ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
+                                transition: 'all 0.2s ease',
+                                opacity: featureActionLoading || isCompressingDealImage ? 0.65 : 1
+                              }}
+                            >
+                              {featureActionLoading || isCompressingDealImage ? (
+                                <span>{isBangla ? '⏳ আপলোড ও প্রকাশ করা হচ্ছে...' : '⏳ Processing & Publishing...'}</span>
+                              ) : (
+                                <span>{dealEditingId ? (isBangla ? '💾 পরিবর্তন সংরক্ষণ করুন' : '💾 Update Deal') : (isBangla ? '🚀 ডিল প্রকাশ করুন' : '🚀 Publish Deal')}</span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              ) : (
+                /* 2. DEALS CARDS DASHBOARD VIEW */
+                <>
+                  {/* Dedicated Top Navigation Bar */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '8px 14px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}>
+                    <button
+                      onClick={() => setActiveAdminTab('overview')}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        cursor: 'pointer',
+                        color: '#10B981',
+                        flexShrink: 0,
+                        transition: 'all 0.2s ease'
+                      }}
+                      title={isBangla ? 'ওভারভিউ ড্যাশবোর্ডে ফিরুন' : 'Back to Overview'}
+                      aria-label="Back to Overview"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <div>
+                      <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#FFFFFF' }}>
+                        {isBangla ? '← ড্যাশবোর্ড ওভারভিউতে ফিরুন' : '← Back to Overview Dashboard'}
+                      </span>
+                      <span style={{ display: 'block', fontSize: '0.7rem', color: '#94A3B8' }}>
+                        {isBangla ? 'ডিল ও ডিসকাউন্ট অফার ম্যানেজমেন্ট' : 'Deals & Discounts Offer Management'}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetDealForm();
+                        setCurrentAdminView('add-deal');
+                      }}
+                      style={{
+                        marginLeft: 'auto',
+                        padding: '10px 22px',
+                        borderRadius: '12px',
+                        background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                        border: '1.5px solid #34D399',
+                        color: '#FFFFFF',
+                        fontSize: '0.86rem',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 18px rgba(16, 185, 129, 0.35)',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <Plus size={17} />
+                      <span>{isBangla ? '+ নতুন ডিল যোগ করুন' : '+ Add New Deal'}</span>
+                    </button>
+                  </div>
+
+                  {/* Full Width Deals Cards Section */}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <FirestoreStreamBuilder collectionName={COLLECTIONS.DEALS_DISCOUNTS}>
+                      {({ data }) => {
+                        const list = data || [];
+                        return (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                              <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <Percent size={17} color="#10B981" />
+                                <span>{isBangla ? `সক্রিয় ডিল ও ডিসকাউন্ট (${list.length})` : `Active Deals & Discounts (${list.length})`}</span>
+                              </h3>
+                              <span style={{ fontSize: '0.76rem', color: '#94A3B8' }}>
+                                {isBangla ? 'রিয়েলটাইম ফায়ারস্টোর deals কালেকশন' : 'Real-time Firestore deals stream'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '14px' }}>
+                              {list.map((item) => {
+                                const isExpired = Boolean(item.isLimited && item.expiryDate && (new Date(item.expiryDate).getTime() < Date.now()));
+                                const isLimitedActive = Boolean(item.isLimited && item.expiryDate && (new Date(item.expiryDate).getTime() >= Date.now()));
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    style={{
+                                      padding: '14px',
+                                      background: 'rgba(15, 23, 42, 0.85)',
+                                      border: `1.5px solid ${isExpired ? 'rgba(239, 68, 68, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+                                      borderRadius: '14px',
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: '10px'
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                      <div style={{ width: '48px', height: '38px', borderRadius: '8px', overflow: 'hidden', background: '#0b1329', border: '1px solid rgba(255, 255, 255, 0.1)', flexShrink: 0 }}>
+                                        <img src={item.bannerUrl || item.imagePath || '/add1.png'} alt={item.title} onError={(e) => { e.target.src = '/add1.png'; }} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      </div>
+                                      <div style={{ minWidth: 0, flex: 1 }}>
+                                        <h4 style={{ margin: '0 0 2px 0', fontSize: '0.88rem', color: '#fff', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.title}</h4>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                          <span style={{ fontSize: '0.64rem', padding: '1px 6px', borderRadius: '4px', background: '#00695C', color: '#fff', fontWeight: 800 }}>{item.discountPercent || item.discountCode}</span>
+                                          <span style={{ fontSize: '0.7rem', color: '#10B981', fontFamily: "'Space Grotesk', monospace" }}>{item.couponCode || item.discountCode ? `🏷️ ${item.couponCode || item.discountCode}` : ''}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.02)', fontSize: '0.74rem' }}>
+                                      <div>
+                                        <span style={{ color: '#F59E0B', fontWeight: 800, fontFamily: "'Space Grotesk', monospace" }}>
+                                          ৳{item.originalPrice || item.regularPrice || 0} BDT
+                                        </span>
+                                      </div>
+                                      <div>
+                                        {isExpired ? (
+                                          <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#F87171', fontWeight: 800, fontSize: '0.68rem' }}>
+                                            ⏰ Expired (মেয়াদোত্তীর্ণ)
+                                          </span>
+                                        ) : isLimitedActive ? (
+                                          <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#FBBF24', fontWeight: 800, fontSize: '0.68rem' }}>
+                                            ⏰ Limited Time
+                                          </span>
+                                        ) : (
+                                          <span style={{ padding: '2px 6px', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#34D399', fontWeight: 700, fontSize: '0.68rem' }}>
+                                            ✓ Active
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', paddingTop: '4px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEditDeal(item)}
+                                        style={{ padding: '5px 12px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10B981', borderRadius: '6px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                        title="Edit Deal"
+                                      >
+                                        <Edit3 size={13} />
+                                        <span>{isBangla ? 'সম্পাদনা' : 'Edit'}</span>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteDeal(item)}
+                                        style={{ padding: '5px 10px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: '6px', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                        title="Delete Deal"
+                                      >
+                                        <Trash2 size={13} />
+                                        <span>{isBangla ? 'মুছুন' : 'Delete'}</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        );
+                      }}
+                    </FirestoreStreamBuilder>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: PENDING DEALS & ORDERS */}
+          {activeAdminTab === 'deal_orders' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {currentAdminView === 'order-details' && selectedAdminOrderDetails ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
+                  {/* Full Order Details Dashboard Card (max-w-3xl) */}
+                  <div
+                    style={{
+                      maxWidth: '820px',
+                      width: '100%',
+                      margin: '0 auto',
+                      background: 'linear-gradient(145deg, #0e172a 0%, #131e36 100%)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.25)',
+                      borderRadius: '24px',
+                      padding: '28px 32px',
+                      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.08)',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {/* 1. Top Header & Navigation Bar */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '14px',
+                        paddingBottom: '20px',
+                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                        marginBottom: '22px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.3px' }}>
+                          {isBangla ? 'অর্ডার বিস্তারিত ড্যাশবোর্ড' : 'Order Details Dashboard'}
+                        </h2>
+                        <span
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            background: 'rgba(0, 240, 255, 0.15)',
+                            border: '1px solid rgba(0, 240, 255, 0.4)',
+                            color: '#00F0FF',
+                            fontFamily: "'Space Grotesk', monospace",
+                            fontWeight: 800,
+                            fontSize: '0.82rem',
+                            letterSpacing: '0.5px'
+                          }}
+                        >
+                          {selectedAdminOrderDetails.orderCode || selectedAdminOrderDetails.orderId || 'ORD-84920'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAdminOrderDetails(null);
+                            setCurrentAdminView(null);
+                          }}
+                          style={{
+                            padding: '9px 18px',
+                            borderRadius: '12px',
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                            color: '#E2E8F0',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)';
+                            e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                          }}
+                        >
+                          <ArrowLeft size={16} color="#38BDF8" />
+                          <span>{isBangla ? '← ব্যাক টু লিস্ট' : '← Back to List'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleDeleteOrder(selectedAdminOrderDetails);
+                            setSelectedAdminOrderDetails(null);
+                            setCurrentAdminView(null);
+                          }}
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '12px',
+                            background: 'rgba(239, 68, 68, 0.12)',
+                            border: '1px solid rgba(239, 68, 68, 0.35)',
+                            color: '#EF4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer'
+                          }}
+                          title={isBangla ? 'অর্ডার রেকর্ড মুছুন' : 'Delete Order Record'}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. Order Quick Summary Header */}
+                    <div
+                      style={{
+                        padding: '16px 20px',
+                        borderRadius: '16px',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        marginBottom: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '12px'
+                      }}
+                    >
+                      <div>
+                        <span style={{ fontSize: '0.74rem', color: '#94A3B8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Calendar size={13} color="#64748B" />
+                          <span>
+                            {selectedAdminOrderDetails.orderDate || (selectedAdminOrderDetails.createdAt?.toDate ? selectedAdminOrderDetails.createdAt.toDate().toLocaleString('bn-BD', { dateStyle: 'medium', timeStyle: 'short' }) : (selectedAdminOrderDetails.createdAt ? String(selectedAdminOrderDetails.createdAt) : 'আজকের অর্ডার'))}
+                          </span>
+                        </span>
+                        <h3 style={{ margin: '4px 0 0 0', fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF' }}>
+                          {selectedAdminOrderDetails.dealTitle || (isBangla ? 'এক্সক্লুসিভ অফার ডিল' : 'Exclusive Deal')}
+                        </h3>
+                      </div>
+
+                      {/* Current status badge */}
+                      <div>
+                        {(() => {
+                          const curStatus = (selectedAdminOrderDetails.status || 'pending').toLowerCase();
+                          if (curStatus === 'accepted') {
+                            return (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.18)', border: '1.5px solid #10B981', color: '#34D399', fontSize: '0.82rem', fontWeight: 800 }}>
+                                <CheckCircle2 size={15} color="#34D399" />
+                                <span>{isBangla ? 'অনুমোদিত (ACCEPTED)' : 'ACCEPTED'}</span>
+                              </div>
+                            );
+                          }
+                          if (curStatus === 'cancelled') {
+                            return (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.18)', border: '1.5px solid #EF4444', color: '#F87171', fontSize: '0.82rem', fontWeight: 800 }}>
+                                <X size={15} color="#F87171" />
+                                <span>{isBangla ? 'বাতিল (CANCELLED)' : 'CANCELLED'}</span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.18)', border: '1.5px solid #F59E0B', color: '#FBBF24', fontSize: '0.82rem', fontWeight: 800 }}>
+                              <Clock size={15} color="#FBBF24" />
+                              <span>{isBangla ? 'পেন্ডিং (PENDING)' : 'PENDING'}</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* 3. Information Presentation: 2 Equal Columns Grid */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+                        gap: '20px',
+                        width: '100%'
+                      }}
+                    >
+                      {/* Left Column: Customer Information Card */}
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.75)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '18px',
+                          padding: '20px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '14px',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '10px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                          <User size={18} color="#38BDF8" />
+                          <h4 style={{ margin: 0, fontSize: '0.90rem', fontWeight: 800, color: '#FFFFFF', letterSpacing: '0.5px' }}>
+                            {isBangla ? 'গ্রাহকের তথ্য (Customer Information)' : 'Customer Information'}
+                          </h4>
+                        </div>
+
+                        {/* Customer Name */}
+                        <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ display: 'block', fontSize: '0.74rem', color: '#94A3B8', fontWeight: 600, marginBottom: '2px' }}>
+                            {isBangla ? 'গ্রাহকের নাম:' : 'Client Name:'}
+                          </span>
+                          <span style={{ fontSize: '0.94rem', fontWeight: 800, color: '#FFFFFF' }}>
+                            {selectedAdminOrderDetails.clientName || selectedAdminOrderDetails.name || (isBangla ? 'নাম দেওয়া হয়নি' : 'No Name Provided')}
+                          </span>
+                        </div>
+
+                        {/* Mobile / WhatsApp */}
+                        <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ display: 'block', fontSize: '0.74rem', color: '#94A3B8', fontWeight: 600, marginBottom: '2px' }}>
+                            {isBangla ? 'মোবাইল / হোয়াটসঅ্যাপ:' : 'Mobile / WhatsApp:'}
+                          </span>
+                          <a
+                            href={`tel:${selectedAdminOrderDetails.clientPhone || selectedAdminOrderDetails.phone || selectedAdminOrderDetails.whatsapp}`}
+                            style={{
+                              fontSize: '0.90rem',
+                              fontWeight: 800,
+                              color: '#38BDF8',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              textDecoration: 'none'
+                            }}
+                          >
+                            <Phone size={14} />
+                            <span>{selectedAdminOrderDetails.clientPhone || selectedAdminOrderDetails.phone || selectedAdminOrderDetails.whatsapp || (isBangla ? 'মোবাইল নেই' : 'No Phone')}</span>
+                          </a>
+                        </div>
+
+                        {/* Email Address */}
+                        <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ display: 'block', fontSize: '0.74rem', color: '#94A3B8', fontWeight: 600, marginBottom: '2px' }}>
+                            {isBangla ? 'ইমেইল অ্যাড্রেস:' : 'Email Address:'}
+                          </span>
+                          <a
+                            href={`mailto:${selectedAdminOrderDetails.clientEmail || selectedAdminOrderDetails.email}`}
+                            style={{
+                              fontSize: '0.86rem',
+                              fontWeight: 600,
+                              color: '#E2E8F0',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              textDecoration: 'none',
+                              wordBreak: 'break-all'
+                            }}
+                          >
+                            <Mail size={14} color="#38BDF8" style={{ flexShrink: 0 }} />
+                            <span>{selectedAdminOrderDetails.clientEmail || selectedAdminOrderDetails.email || (isBangla ? 'ইমেইল দেওয়া হয়নি' : 'No Email')}</span>
+                          </a>
+                        </div>
+
+                        {/* Full Delivery/Contact Address */}
+                        <div style={{ padding: '12px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', color: '#94A3B8', fontWeight: 600, marginBottom: '4px' }}>
+                            <MapPin size={13} color="#F59E0B" />
+                            <span>{isBangla ? 'পূর্ণাঙ্গ ডেলিভারি/যোগাযোগের ঠিকানা:' : 'Full Delivery/Contact Address:'}</span>
+                          </span>
+                          <p style={{ margin: 0, fontSize: '0.86rem', color: '#E2E8F0', lineHeight: '1.6', fontWeight: 500 }}>
+                            {selectedAdminOrderDetails.clientAddress || selectedAdminOrderDetails.address || (isBangla ? 'কোনো ঠিকানা উল্লেখ করা হয়নি' : 'No address provided')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Pricing & Deal Details Card */}
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.75)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: '18px',
+                          padding: '20px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '14px',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '10px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                          <Tag size={18} color="#10B981" />
+                          <h4 style={{ margin: 0, fontSize: '0.90rem', fontWeight: 800, color: '#FFFFFF', letterSpacing: '0.5px' }}>
+                            {isBangla ? 'মূল্য ও ডিলের বিবরণ (Pricing & Deal Details)' : 'Pricing & Deal Details'}
+                          </h4>
+                        </div>
+
+                        {/* Deal Name */}
+                        <div style={{ padding: '10px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ display: 'block', fontSize: '0.74rem', color: '#94A3B8', fontWeight: 600, marginBottom: '2px' }}>
+                            {isBangla ? 'ডিলের নাম / প্যাকেজ:' : 'Deal / Package:'}
+                          </span>
+                          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#FFFFFF' }}>
+                            {selectedAdminOrderDetails.dealTitle || (isBangla ? 'এক্সক্লুসিভ অফার ডিল' : 'Exclusive Deal')}
+                          </span>
+                        </div>
+
+                        {/* Regular Price */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ fontSize: '0.82rem', color: '#94A3B8', fontWeight: 600 }}>
+                            {isBangla ? 'প্যাকেজের মূল দাম:' : 'Original Package Rate:'}
+                          </span>
+                          <span style={{ fontSize: '0.88rem', color: '#94A3B8', textDecoration: 'line-through', fontFamily: "'Space Grotesk', monospace" }}>
+                            {selectedAdminOrderDetails.originalPrice ? `৳${selectedAdminOrderDetails.originalPrice} BDT` : '৳5000 BDT'}
+                          </span>
+                        </div>
+
+                        {/* Discount & Coupon */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                          <span style={{ fontSize: '0.82rem', color: '#94A3B8', fontWeight: 600 }}>
+                            {isBangla ? 'ছাড় ও কুপন বিবরণ:' : 'Discount & Coupon:'}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {selectedAdminOrderDetails.couponCode && (
+                              <span
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: '6px',
+                                  background: 'rgba(16, 185, 129, 0.15)',
+                                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                                  color: '#34D399',
+                                  fontFamily: "'Space Grotesk', monospace",
+                                  fontWeight: 800,
+                                  fontSize: '0.74rem'
+                                }}
+                              >
+                                🏷️ {selectedAdminOrderDetails.couponCode}
+                              </span>
+                            )}
+                            <span style={{ color: '#10B981', fontWeight: 800, fontFamily: "'Space Grotesk', monospace", fontSize: '0.88rem' }}>
+                              {selectedAdminOrderDetails.discountAmount || (selectedAdminOrderDetails.discountPercent ? `${selectedAdminOrderDetails.discountPercent}%` : '৳0 BDT')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Total Payable Amount */}
+                        <div
+                          style={{
+                            padding: '14px 16px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(15, 23, 42, 0.9) 100%)',
+                            border: '1.5px solid rgba(245, 158, 11, 0.45)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <span style={{ fontSize: '0.90rem', fontWeight: 800, color: '#FFFFFF' }}>
+                            {isBangla ? 'সর্বমোট প্রদেয় মূল্য:' : 'Total Payable Amount:'}
+                          </span>
+                          <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#FBBF24', fontFamily: "'Space Grotesk', monospace" }}>
+                            {selectedAdminOrderDetails.finalPrice ? `৳${selectedAdminOrderDetails.finalPrice} BDT` : (selectedAdminOrderDetails.originalPrice ? `৳${selectedAdminOrderDetails.originalPrice} BDT` : '৳5000 BDT')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Customer Note / Message (if present) */}
+                    {selectedAdminOrderDetails.message ? (
+                      <div
+                        style={{
+                          marginTop: '18px',
+                          padding: '16px 20px',
+                          borderRadius: '14px',
+                          background: 'rgba(0, 229, 255, 0.08)',
+                          borderLeft: '4px solid #00E5FF',
+                          borderTop: '1px solid rgba(0, 229, 255, 0.2)',
+                          borderRight: '1px solid rgba(0, 229, 255, 0.2)',
+                          borderBottom: '1px solid rgba(0, 229, 255, 0.2)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                          <MessageSquare size={16} color="#00E5FF" />
+                          <h4 style={{ margin: 0, fontSize: '0.82rem', fontWeight: 800, color: '#00E5FF', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            {isBangla ? 'গ্রাহকের বিশেষ বার্তা বা নোট (Customer Message)' : 'Customer Message'}
+                          </h4>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.86rem', color: '#E2E8F0', fontStyle: 'italic', lineHeight: '1.6' }}>
+                          "{selectedAdminOrderDetails.message}"
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {/* 5. Status & Action Control Bar */}
+                    <div
+                      style={{
+                        marginTop: '24px',
+                        paddingTop: '20px',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '16px'
+                      }}
+                    >
+                      {/* Left: Status Badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '0.82rem', color: '#94A3B8', fontWeight: 600 }}>
+                          {isBangla ? 'বর্তমান স্ট্যাটাস:' : 'Current Status:'}
+                        </span>
+                        {(() => {
+                          const orderStatus = (selectedAdminOrderDetails.status || 'pending').toLowerCase();
+                          if (orderStatus === 'accepted' || orderStatus === 'confirmed') {
+                            return (
+                              <span
+                                style={{
+                                  padding: '6px 14px',
+                                  borderRadius: '20px',
+                                  background: 'rgba(16, 185, 129, 0.18)',
+                                  border: '1.5px solid #10B981',
+                                  color: '#34D399',
+                                  fontSize: '0.80rem',
+                                  fontWeight: 800,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <CheckCircle2 size={15} />
+                                <span>{isBangla ? '✓ অনুমোদিত (Accepted)' : '✓ Accepted'}</span>
+                              </span>
+                            );
+                          }
+                          if (orderStatus === 'cancelled' || orderStatus === 'rejected') {
+                            return (
+                              <span
+                                style={{
+                                  padding: '6px 14px',
+                                  borderRadius: '20px',
+                                  background: 'rgba(239, 68, 68, 0.18)',
+                                  border: '1.5px solid #EF4444',
+                                  color: '#F87171',
+                                  fontSize: '0.80rem',
+                                  fontWeight: 800,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                <X size={15} />
+                                <span>{isBangla ? '✕ বাতিল (Cancelled)' : '✕ Cancelled'}</span>
+                              </span>
+                            );
+                          }
+                          return (
+                            <span
+                              style={{
+                                padding: '6px 14px',
+                                borderRadius: '20px',
+                                background: 'rgba(245, 158, 11, 0.18)',
+                                border: '1.5px solid #F59E0B',
+                                color: '#FBBF24',
+                                fontSize: '0.80rem',
+                                fontWeight: 800,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                              }}
+                            >
+                              <Clock size={15} />
+                              <span>{isBangla ? '⏳ পেন্ডিং (Pending)' : '⏳ Pending'}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Right: Action Buttons: Accept & Reject (Visible ONLY when Pending) */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        {(() => {
+                          const orderStatus = (selectedAdminOrderDetails.status || 'pending').toLowerCase();
+                          const isPending = orderStatus === 'pending';
+
+                          // If order is processed (accepted/confirmed/cancelled/rejected), permanently hide action buttons and display a prominent final badge
+                          if (!isPending) {
+                            const isAccepted = orderStatus === 'accepted' || orderStatus === 'confirmed';
+                            return (
+                              <div
+                                style={{
+                                  padding: '8px 18px',
+                                  borderRadius: '12px',
+                                  background: isAccepted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                  border: `1.5px solid ${isAccepted ? '#10B981' : '#EF4444'}`,
+                                  color: isAccepted ? '#34D399' : '#F87171',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 800,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  boxShadow: isAccepted ? '0 2px 10px rgba(16, 185, 129, 0.2)' : '0 2px 10px rgba(239, 68, 68, 0.2)'
+                                }}
+                              >
+                                {isAccepted ? (
+                                  <>
+                                    <CheckCircle2 size={16} color="#10B981" />
+                                    <span>{isBangla ? '✓ অর্ডারটি অনুমোদিত হয়েছে (Action Finalized)' : '✓ Order Accepted (Action Finalized)'}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertCircle size={16} color="#EF4444" />
+                                    <span>{isBangla ? '✕ অর্ডারটি বাতিল করা হয়েছে (Action Finalized)' : '✕ Order Cancelled (Action Finalized)'}</span>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          const orderKey = selectedAdminOrderDetails._firestoreDocId || selectedAdminOrderDetails.id || selectedAdminOrderDetails.orderCode;
+                          const isUpdating = orderUpdatingId === orderKey || orderUpdatingId === selectedAdminOrderDetails.orderCode;
+
+                          return (
+                            <>
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => handleUpdateOrderStatus(selectedAdminOrderDetails, 'accepted')}
+                                style={{
+                                  padding: '10px 22px',
+                                  borderRadius: '12px',
+                                  background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                  border: '1.5px solid #10B981',
+                                  color: '#FFFFFF',
+                                  fontWeight: 800,
+                                  fontSize: '0.84rem',
+                                  cursor: isUpdating ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
+                                  transition: 'all 0.2s ease',
+                                  opacity: isUpdating ? 0.6 : 1
+                                }}
+                              >
+                                <Check size={16} />
+                                <span>{isUpdating ? 'সংরক্ষণ হচ্ছে...' : (isBangla ? '✓ গ্রহণ করুন (Accept)' : '✓ Accept')}</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => handleUpdateOrderStatus(selectedAdminOrderDetails, 'cancelled')}
+                                style={{
+                                  padding: '10px 22px',
+                                  borderRadius: '12px',
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  border: '1.5px solid #EF4444',
+                                  color: '#F87171',
+                                  fontWeight: 800,
+                                  fontSize: '0.84rem',
+                                  cursor: isUpdating ? 'not-allowed' : 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  transition: 'all 0.2s ease',
+                                  opacity: isUpdating ? 0.6 : 1
+                                }}
+                              >
+                                <X size={16} />
+                                <span>{isUpdating ? 'সংরক্ষণ হচ্ছে...' : (isBangla ? '✕ বাতিল করুন (Reject)' : '✕ Reject')}</span>
+                              </button>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Dedicated Top-Left Navigation Back Bar */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '8px 14px',
+                    borderRadius: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
+                  }}>
+                    <button
+                      onClick={() => setActiveAdminTab('overview')}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        cursor: 'pointer',
+                        color: '#F59E0B',
+                        flexShrink: 0,
+                        transition: 'all 0.2s ease'
+                      }}
+                      title={isBangla ? 'ওভারভিউ ড্যাশবোর্ডে ফিরুন' : 'Back to Overview'}
+                      aria-label="Back to Overview"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <div>
+                      <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#FFFFFF' }}>
+                        {isBangla ? '← ড্যাশবোর্ড ওভারভিউতে ফিরুন' : '← Back to Overview Dashboard'}
+                      </span>
+                      <span style={{ display: 'block', fontSize: '0.7rem', color: '#94A3B8' }}>
+                        {isBangla ? 'গ্রাহকদের ডিল ও অর্ডার পেন্ডিং লিস্ট (Pending Deals & Orders)' : 'Customer Deal Claims & Pending Orders'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Real-time FirestoreStreamBuilder for deal_orders with Newest First sorting */}
+                  <FirestoreStreamBuilder collectionName="deal_orders" orderByField="createdAt" orderDirection="desc">
+                    {({ data, loading }) => {
+                      const rawOrders = data || [];
+
+                      // Helper to extract timestamp millis accurately for real-time descending sort
+                      const parseOrderTime = (o) => {
+                        if (!o) return 0;
+                        if (o.createdAt) {
+                          if (typeof o.createdAt.toMillis === 'function') return o.createdAt.toMillis();
+                          if (typeof o.createdAt.toDate === 'function') return o.createdAt.toDate().getTime();
+                          if (o.createdAt.seconds) return o.createdAt.seconds * 1000;
+                          if (typeof o.createdAt === 'number') return o.createdAt;
+                          const parsed = new Date(o.createdAt).getTime();
+                          if (!isNaN(parsed) && parsed > 0) return parsed;
+                        }
+                        if (o.redeemedAt) {
+                          const parsed = new Date(o.redeemedAt).getTime();
+                          if (!isNaN(parsed) && parsed > 0) return parsed;
+                        }
+                        if (o.orderDate) {
+                          const parsed = new Date(o.orderDate).getTime();
+                          if (!isNaN(parsed) && parsed > 0) return parsed;
+                        }
+                        return 0;
+                      };
+
+                      // Merge optimistic local status overrides and exclude locally deleted orders
+                      const allOrders = rawOrders
+                        .filter((o) => !localDeletedOrderIds.has(o.id) && !localDeletedOrderIds.has(o._firestoreDocId) && !localDeletedOrderIds.has(o.orderCode))
+                        .map((o) => {
+                          const key = o._firestoreDocId || o.id || o.orderCode;
+                          const override = localOrderStatusOverrides[key] || 
+                                           (o.orderCode ? localOrderStatusOverrides[o.orderCode] : null) || 
+                                           (o.id ? localOrderStatusOverrides[o.id] : null) ||
+                                           (o._firestoreDocId ? localOrderStatusOverrides[o._firestoreDocId] : null);
+                          if (override) {
+                            return { ...o, status: override, claimed: override === 'accepted' };
+                          }
+                          return o;
+                        })
+                        .sort((a, b) => parseOrderTime(b) - parseOrderTime(a));
+
+                      const pendingCount = allOrders.filter(o => (o.status || 'pending').toLowerCase() === 'pending').length;
+                      const acceptedCount = allOrders.filter(o => (o.status || '').toLowerCase() === 'accepted').length;
+                      const cancelledCount = allOrders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length;
+
+                      const filteredOrders = allOrders.filter(o => {
+                        const s = (o.status || 'pending').toLowerCase();
+                        if (orderStatusFilter === 'pending') return s === 'pending';
+                        if (orderStatusFilter === 'accepted') return s === 'accepted';
+                        if (orderStatusFilter === 'cancelled') return s === 'cancelled';
+                        return true;
+                      });
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                          {/* Filter Control Pills */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '10px',
+                            flexWrap: 'wrap',
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            border: '1px solid rgba(255, 255, 255, 0.06)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              {[
+                                { id: 'all', labelBn: `সকল অর্ডার (${allOrders.length})`, labelEn: `All Orders (${allOrders.length})`, color: '#38BDF8' },
+                                { id: 'pending', labelBn: `পেন্ডিং (${pendingCount})`, labelEn: `Pending (${pendingCount})`, color: '#F59E0B' },
+                                { id: 'accepted', labelBn: `অনুমোদিত (${acceptedCount})`, labelEn: `Accepted (${acceptedCount})`, color: '#10B981' },
+                                { id: 'cancelled', labelBn: `বাতিল (${cancelledCount})`, labelEn: `Cancelled (${cancelledCount})`, color: '#EF4444' }
+                              ].map((f) => {
+                                const isSelected = orderStatusFilter === f.id;
+                                return (
+                                  <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => setOrderStatusFilter(f.id)}
+                                    style={{
+                                      padding: '6px 14px',
+                                      borderRadius: '20px',
+                                      background: isSelected ? `${f.color}25` : 'rgba(255, 255, 255, 0.04)',
+                                      border: `1.5px solid ${isSelected ? f.color : 'rgba(255, 255, 255, 0.1)'}`,
+                                      color: isSelected ? '#FFFFFF' : '#94A3B8',
+                                      fontSize: '0.80rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease',
+                                      boxShadow: isSelected ? `0 2px 10px ${f.color}33` : 'none'
+                                    }}
+                                  >
+                                    {isBangla ? f.labelBn : f.labelEn}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <span style={{ fontSize: '0.78rem', color: '#94A3B8' }}>
+                              {isBangla ? `মোট প্রদর্শিত: ${filteredOrders.length}` : `Showing: ${filteredOrders.length}`}
+                            </span>
+                          </div>
+
+                          {/* Orders List / Empty State */}
+                          {filteredOrders.length === 0 ? (
+                            <div style={{
+                              textAlign: 'center',
+                              padding: '48px 20px',
+                              borderRadius: '16px',
+                              background: 'rgba(255, 255, 255, 0.02)',
+                              border: '1px dashed rgba(255, 255, 255, 0.1)'
+                            }}>
+                              <Clock size={36} color="#64748B" style={{ margin: '0 auto 12px auto' }} />
+                              <h4 style={{ margin: '0 0 6px 0', color: '#FFFFFF', fontSize: '1rem', fontWeight: 700 }}>
+                                {isBangla ? 'কোনো অর্ডার পাওয়া যায়নি' : 'No Orders Found'}
+                              </h4>
+                              <p style={{ margin: 0, color: '#94A3B8', fontSize: '0.82rem' }}>
+                                {isBangla ? 'গ্রাহকরা ডিল ক্লেইম করলে রিয়েলটাইমে এই তালিকায় দেখা যাবে।' : 'Customer orders will appear here live in real-time.'}
+                              </p>
+                            </div>
+                          ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {filteredOrders.map((order) => {
+                                  const status = (order.status || 'pending').toLowerCase();
+                                  const isPending = status === 'pending';
+                                  const isAccepted = status === 'accepted';
+                                  const isCancelled = status === 'cancelled';
+                                  const orderKey = order._firestoreDocId || order.id || order.orderCode;
+                                  const isUpdating = orderUpdatingId === orderKey || orderUpdatingId === order.orderCode;
+
+                                  const statusConfig = isAccepted
+                                    ? { bg: 'rgba(16, 185, 129, 0.15)', border: '#10B981', color: '#34D399', textBn: '✓ অনুমোদিত (Accepted)', textEn: '✓ Accepted' }
+                                    : isCancelled
+                                    ? { bg: 'rgba(239, 68, 68, 0.15)', border: '#EF4444', color: '#F87171', textBn: '✕ বাতিল (Cancelled)', textEn: '✕ Cancelled' }
+                                    : { bg: 'rgba(245, 158, 11, 0.15)', border: '#F59E0B', color: '#FBBF24', textBn: '⏳ পেন্ডিং (Pending)', textEn: '⏳ Pending' };
+
+                                  return (
+                                    <div
+                                      key={orderKey}
+                                      style={{
+                                        padding: '10px 14px',
+                                        borderRadius: '12px',
+                                        background: isPending ? 'rgba(15, 23, 42, 0.90)' : 'rgba(15, 23, 42, 0.70)',
+                                        border: `1.2px solid ${isPending ? 'rgba(245, 158, 11, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+                                        boxShadow: isPending ? '0 2px 10px rgba(245, 158, 11, 0.08)' : 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        flexWrap: 'wrap',
+                                        gap: '12px',
+                                        transition: 'all 0.2s ease'
+                                      }}
+                                    >
+                                      {/* 1. Order Code */}
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: '100px' }}>
+                                        <span style={{
+                                          padding: '3px 8px',
+                                          borderRadius: '6px',
+                                          background: 'rgba(0, 240, 255, 0.12)',
+                                          border: '1px solid rgba(0, 240, 255, 0.35)',
+                                          color: '#00F0FF',
+                                          fontWeight: 800,
+                                          fontSize: '0.78rem',
+                                          fontFamily: "'Space Grotesk', monospace",
+                                          letterSpacing: '0.5px',
+                                          width: 'fit-content'
+                                        }}>
+                                          {order.orderCode || order.orderId || 'ORD-84920'}
+                                        </span>
+                                        <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+                                          {order.orderDate || (order.createdAt?.toDate ? order.createdAt.toDate().toLocaleDateString('bn-BD') : '')}
+                                        </span>
+                                      </div>
+
+                                      {/* 2. Customer Name & Mobile */}
+                                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: '140px', flex: '1 1 140px' }}>
+                                        <span style={{ color: '#FFFFFF', fontWeight: 700, fontSize: '0.86rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                          {order.clientName || order.name || 'গ্রাহকের নাম নেই'}
+                                        </span>
+                                        <span style={{ color: '#38BDF8', fontSize: '0.74rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                          <Phone size={11} />
+                                          <span>{order.clientPhone || order.phone || order.whatsapp || 'মোবাইল নেই'}</span>
+                                        </span>
+                                      </div>
+
+                                      {/* 3. Product / Deal Name */}
+                                      <div style={{ display: 'flex', flexDirection: 'column', minWidth: '150px', flex: '1.5 1 150px' }}>
+                                        <span style={{ color: '#E2E8F0', fontWeight: 600, fontSize: '0.84rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                          {order.dealTitle || (isBangla ? 'এক্সক্লুসিভ ডিল' : 'Exclusive Deal')}
+                                        </span>
+                                        {order.couponCode && (
+                                          <span style={{ color: '#10B981', fontSize: '0.70rem', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                            <Tag size={10} />
+                                            <span>কুপন: {order.couponCode}</span>
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* 4. Price (BDT) */}
+                                      <div style={{ minWidth: '95px', textAlign: 'right' }}>
+                                        <span style={{ color: '#F59E0B', fontWeight: 900, fontSize: '0.90rem', fontFamily: "'Space Grotesk', monospace", display: 'block' }}>
+                                          {order.finalPrice ? `৳${order.finalPrice} BDT` : (order.originalPrice || '৳5000 BDT')}
+                                        </span>
+                                      </div>
+
+                                      {/* 5. Status Badge */}
+                                      <div style={{ minWidth: '105px' }}>
+                                        <span style={{
+                                          padding: '3px 10px',
+                                          borderRadius: '20px',
+                                          background: statusConfig.bg,
+                                          border: `1px solid ${statusConfig.border}`,
+                                          color: statusConfig.color,
+                                          fontSize: '0.74rem',
+                                          fontWeight: 800,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                          whiteSpace: 'nowrap'
+                                        }}>
+                                          {isBangla ? statusConfig.textBn : statusConfig.textEn}
+                                        </span>
+                                      </div>
+
+                                      {/* 6. Action Buttons */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                                        {/* View Details Button (👁️) */}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedAdminOrderDetails(order);
+                                            setCurrentAdminView('order-details');
+                                          }}
+                                          style={{
+                                            padding: '5px 12px',
+                                            borderRadius: '8px',
+                                            background: 'rgba(56, 189, 248, 0.12)',
+                                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                                            color: '#38BDF8',
+                                            fontSize: '0.76rem',
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            transition: 'all 0.15s ease'
+                                          }}
+                                          title={isBangla ? 'বিস্তারিত তথ্য দেখুন' : 'View Details'}
+                                        >
+                                          <Eye size={13} />
+                                          <span>{isBangla ? 'বিস্তারিত' : 'Details'}</span>
+                                        </button>
+
+                                        {/* Quick Accept & Cancel Buttons: Shown ONLY when status === 'pending'. For Accepted/Cancelled orders, buttons are hidden leaving only the status badge */}
+                                        {isPending ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              disabled={isUpdating}
+                                              onClick={() => handleUpdateOrderStatus(order, 'accepted')}
+                                              style={{
+                                                padding: '5px 12px',
+                                                borderRadius: '8px',
+                                                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                                                border: '1px solid #059669',
+                                                color: '#FFFFFF',
+                                                fontSize: '0.76rem',
+                                                fontWeight: 800,
+                                                cursor: isUpdating ? 'wait' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)'
+                                              }}
+                                              title={isBangla ? 'অর্ডার গ্রহণ করুন' : 'Accept Order'}
+                                            >
+                                              <Check size={13} />
+                                              <span>{isUpdating ? '...' : 'Accept'}</span>
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              disabled={isUpdating}
+                                              onClick={() => handleUpdateOrderStatus(order, 'cancelled')}
+                                              style={{
+                                                padding: '5px 12px',
+                                                borderRadius: '8px',
+                                                background: 'rgba(239, 68, 68, 0.12)',
+                                                border: '1px solid #EF4444',
+                                                color: '#F87171',
+                                                fontSize: '0.76rem',
+                                                fontWeight: 800,
+                                                cursor: isUpdating ? 'wait' : 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                              }}
+                                              title={isBangla ? 'অর্ডার বাতিল করুন' : 'Cancel Order'}
+                                            >
+                                              <X size={13} />
+                                              <span>{isUpdating ? '...' : 'Cancel'}</span>
+                                            </button>
+                                          </>
+                                        ) : null}
+
+                                        {/* Delete Record */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteOrder(order)}
+                                          style={{
+                                            padding: '5px 8px',
+                                            borderRadius: '8px',
+                                            background: 'rgba(255, 255, 255, 0.04)',
+                                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                                            color: '#64748B',
+                                            cursor: 'pointer'
+                                          }}
+                                          title={isBangla ? 'রেকর্ড মুছুন' : 'Delete'}
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                        </div>
                       );
                     }}
                   </FirestoreStreamBuilder>
-                </div>
-              </div>
-
-              {/* Standalone Add Deal Modal Integration */}
-              {isAddDealModalOpen && (
-                <AddDealModal
-                  isOpen={isAddDealModalOpen}
-                  onClose={() => setIsAddDealModalOpen(false)}
-                />
+                </>
               )}
             </div>
           )}
           </motion.div>
         )}
+
+        {/* Realtime Publishing Loading Feedback Modal */}
+        <AnimatePresence>
+          {isPublishingModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(3, 7, 18, 0.78)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                padding: '16px'
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.88 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.88 }}
+                style={{
+                  background: '#0B1329',
+                  border: '1.5px solid rgba(0, 240, 255, 0.45)',
+                  borderRadius: '20px',
+                  padding: '30px 36px',
+                  textAlign: 'center',
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(0, 240, 255, 0.25)',
+                  maxWidth: '380px',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <div style={{
+                  width: '54px',
+                  height: '54px',
+                  borderRadius: '50%',
+                  border: '3px solid rgba(0, 240, 255, 0.2)',
+                  borderTopColor: '#00F0FF',
+                  animation: 'spin 0.9s linear infinite',
+                  marginBottom: '18px'
+                }} />
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', color: '#FFFFFF', fontWeight: 800 }}>
+                  {isBangla ? 'প্রজেক্ট পাবলিশ হচ্ছে...' : 'Publishing project, please wait...'}
+                </h4>
+                <p style={{ margin: 0, fontSize: '0.80rem', color: '#94A3B8', lineHeight: 1.4 }}>
+                  {isBangla ? 'ইমেজ কম্প্রেশন, R2 আপলোড ও লাইভ পাবলিশিং সম্পন্ন হচ্ছে...' : 'Optimizing image, uploading to R2 and publishing project...'}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Realtime Publish Success Feedback Modal */}
+        <AnimatePresence>
+          {publishSuccessModalData && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPublishSuccessModalData(null)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(3, 7, 18, 0.82)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                padding: '16px'
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.85, y: 12 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85, y: 12 }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: '#0B1329',
+                  border: '1.5px solid rgba(16, 185, 129, 0.55)',
+                  borderRadius: '24px',
+                  padding: '32px 36px',
+                  textAlign: 'center',
+                  boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(16, 185, 129, 0.28)',
+                  maxWidth: '400px',
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '2px solid #10B981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#10B981',
+                  marginBottom: '16px',
+                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.35)'
+                }}>
+                  <CheckCircle size={36} />
+                </div>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '1.15rem', color: '#FFFFFF', fontWeight: 800 }}>
+                  {publishSuccessModalData.isUpdate 
+                    ? (isBangla ? 'প্রজেক্ট সফলভাবে আপডেট হয়েছে!' : 'Project updated successfully!')
+                    : (isBangla ? 'প্রজেক্ট সফলভাবে পাবলিশ হয়েছে!' : 'Project published successfully!')}
+                </h4>
+                <p style={{ margin: '0 0 20px 0', fontSize: '0.82rem', color: '#94A3B8', lineHeight: 1.4 }}>
+                  "{publishSuccessModalData.title}" {isBangla ? 'লাইভ শোকেস সেকশনে যুক্ত হয়েছে।' : 'is now published and live in the showcase.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPublishSuccessModalData(null)}
+                  style={{
+                    padding: '10px 28px',
+                    background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: 800,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)'
+                  }}
+                >
+                  {isBangla ? 'ঠিক আছে' : 'OK, Great'}
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </AnimatePresence>
   );

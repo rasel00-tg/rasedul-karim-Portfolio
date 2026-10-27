@@ -1,9 +1,11 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider, GithubAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyA6u-Gzn-MV0SiuL7bedvY69M5a7akiy_E",
+  apiKey: "AIzaSyA6u-Gzn-MV0SiuL7bedvY69M5a7aKiy_E",
   authDomain: "rasedul-karim-portfolio.firebaseapp.com",
+  databaseURL: "https://rasedul-karim-portfolio-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "rasedul-karim-portfolio",
   storageBucket: "rasedul-karim-portfolio.firebasestorage.app",
   messagingSenderId: "786553224229",
@@ -11,14 +13,17 @@ export const firebaseConfig = {
   measurementId: "G-G4QG91XY3R"
 };
 
-// Initialize Firebase App & Firestore Database
-export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Asynchronous initializer maintaining backward compatibility
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const googleProvider = new GoogleAuthProvider();
+export const githubProvider = new GithubAuthProvider();
+
+export { app };
+
 export const initFirebase = async () => {
-  return { app, db };
+  return { app, db, auth, googleProvider, githubProvider };
 };
 
-export default firebaseConfig;
-
+export default app;

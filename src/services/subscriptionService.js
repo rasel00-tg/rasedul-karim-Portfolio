@@ -81,6 +81,42 @@ export const sendSubscriptionOtp = async (rawEmail, otp) => {
 };
 
 /**
+ * Send Welcome / Thank You Email to new user after onboarding
+ */
+export const sendWelcomeEmail = async ({ email, name, age, referralSource }) => {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, message: 'ইমেইল ঠিকানা আবশ্যক।' };
+  }
+
+  try {
+    const targetUrl = API_BASE_URL 
+      ? `${API_BASE_URL}/api/send-welcome-email` 
+      : '/.netlify/functions/send-welcome-email';
+
+    let res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, name, age, referralSource })
+    });
+
+    if (res.status === 404 && !API_BASE_URL) {
+      res = await fetch('/api/send-welcome-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, name, age, referralSource })
+      });
+    }
+
+    const data = await res.json().catch(() => ({}));
+    return data;
+  } catch (error) {
+    console.warn('Welcome Email Dispatch Notice:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
  * Subscribe a new email directly with Cloud Firestore document verification & atomic counter increment
  */
 export const subscribeEmail = async (rawEmail, extraData = {}) => {

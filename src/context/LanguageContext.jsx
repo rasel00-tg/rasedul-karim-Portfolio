@@ -50,6 +50,7 @@ export const translations = {
       location: "Natun Pollan Para, Teknaf, Cox's Bazar, Bangladesh",
       chatInMail: 'Chat in Mail',
       subscribe: 'Subscribe',
+      connect: 'Connect',
       visitors: 'Visitors',
       subscribers: 'Subscribers',
       verified: 'Verified Profile'
@@ -67,6 +68,8 @@ export const translations = {
       dealsSub: 'Exclusive Offers',
       newsletterTitle: 'Join My Newsletter',
       newsletterSub: 'Stay updated',
+      connectTitle: 'Connect with Me',
+      connectSub: '1-Click Google & GitHub Auth',
       featuredTitle: 'Explore Portfolio Card & Bio',
       featuredSub: 'Download Full-HD Branded Digital Card & Bio',
       downloadBtn: 'Download Now / Explore'
@@ -143,6 +146,7 @@ export const translations = {
       location: 'নতুন পল্লান পাড়া, টেকনাফ, কক্সবাজার, বাংলাদেশ',
       chatInMail: 'মেইলে বার্তা পাঠান',
       subscribe: 'সাবস্ক্রাইব করুন',
+      connect: 'কানেক্ট করুন',
       visitors: 'ভিজিটর',
       subscribers: 'সাবস্ক্রাইবার',
       verified: 'ভেরিফায়েড প্রোফাইল'
@@ -160,6 +164,8 @@ export const translations = {
       dealsSub: 'বিশেষ অফার ও সুযোগ',
       newsletterTitle: 'Join My Newsletter',
       newsletterSub: 'সর্বশেষ আপডেটের সাথে থাকুন',
+      connectTitle: 'কানেক্ট করুন',
+      connectSub: 'গুগল বা গিটহাব দিয়ে ১-ক্লিক সংযোগ',
       featuredTitle: 'ডিজিটাল পোর্টফোলিও ও প্রোফাইল কার্ড',
       featuredSub: 'ফুল-এইচডি ডিজিটাল পরিচিতি কার্ড ও ডকুমেন্ট',
       downloadBtn: 'ডাউনলোড / বিস্তারিত দেখুন'

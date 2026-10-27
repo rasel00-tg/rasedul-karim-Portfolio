@@ -570,7 +570,18 @@ const BentoGridSection = ({
           {/* CARD 5: Deals & Discounts (Right - Emerald Neon Green #00695C) - Real-time Synced */}
           <FirestoreStreamBuilder collectionName={COLLECTIONS.DEALS_DISCOUNTS}>
             {({ data }) => {
-              const deals = data || [];
+              const allDeals = data || [];
+              const deals = allDeals.filter(deal => {
+                if (!deal) return false;
+                if (deal.isActive === false) return false;
+                if (deal.isLimited && deal.expiryDate) {
+                  const expTime = new Date(deal.expiryDate).getTime();
+                  if (!isNaN(expTime) && expTime < Date.now()) {
+                    return false; // Auto-expired!
+                  }
+                }
+                return true;
+              });
               const latestDeal = deals[0];
               const discountPill = latestDeal?.discountPercent || latestDeal?.discountCode || (isBangla ? 'অফার' : 'Deal');
 
@@ -682,7 +693,7 @@ const BentoGridSection = ({
         </div>
 
         {/* ========================================================================= */}
-        {/* CARD 6: FULL-WIDTH CRIMSON ROSE NEWSLETTER STRIP (#C2185B) */}
+        {/* CARD 6: FULL-WIDTH ELECTRIC BLUE CONNECT STRIP (#0284C7) */}
         {/* ========================================================================= */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -695,9 +706,9 @@ const BentoGridSection = ({
             width: '100%',
             height: '46px',
             borderRadius: '14px',
-            background: 'linear-gradient(135deg, #C2185B 0%, #D81B60 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.22)',
-            boxShadow: '0 4px 16px rgba(194, 24, 91, 0.3)',
+            background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)',
+            border: '1px solid rgba(255, 255, 255, 0.28)',
+            boxShadow: '0 4px 16px rgba(2, 132, 199, 0.35)',
             padding: '0 14px',
             boxSizing: 'border-box',
             display: 'flex',
@@ -723,19 +734,19 @@ const BentoGridSection = ({
               color: '#FFFFFF',
               lineHeight: 1.15
             }}>
-              {t('bento.newsletterTitle', 'Join My Newsletter')}
+              {t('bento.connectTitle', isBangla ? 'কানেক্ট করুন' : 'Connect with Me')}
             </h4>
             <p style={{
               margin: '2px 0 0 0',
               fontSize: '0.62rem',
-              color: 'rgba(255, 255, 255, 0.88)',
+              color: 'rgba(255, 255, 255, 0.92)',
               fontWeight: 500,
               lineHeight: 1.1,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis'
             }}>
-              {t('bento.newsletterSub', 'Stay updated')}
+              {t('bento.connectSub', isBangla ? 'গুগল বা গিটহাব দিয়ে ১-ক্লিক সংযোগ' : '1-Click Google & GitHub Auth')}
             </p>
           </div>
 
@@ -757,7 +768,7 @@ const BentoGridSection = ({
               justifyContent: 'center',
               color: '#FFFFFF'
             }}>
-              <Mail size={14} strokeWidth={2.4} />
+              <Sparkles size={14} strokeWidth={2.4} />
             </div>
             <ChevronRight size={15} strokeWidth={2.4} color="#FFFFFF" />
           </div>
