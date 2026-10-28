@@ -175,113 +175,181 @@ export const uploadToCloudflareR2 = async (compressedBlob, filename) => {
   return targetUrl;
 };
 
+export const R2_PUBLIC_DOMAIN = 'https://pub-646ef96285ab4ea585237b1060eb0116.r2.dev';
+
 /**
- * Comprehensive Pipeline: Compresses image with Canvas, uploads to Cloudflare R2 on form submit,
- * with reliable storage fallback.
+ * Universal Cloudflare R2 Image Upload with Client-Side Auto-Compression:
+ * - Applicable to ALL website sections (Sponsor Banners, Deals & Discounts, Projects, etc.)
+ * - Auto-compresses on client side to < 200-300 KB WebP via HTML5 Canvas
+ * - Deferred upload: only uploads on form submit
+ * - Puts binary directly to Cloudflare R2 bucket 'portfolio' via S3 SDK API endpoint
+ * - Constructs and returns the authentic public CDN URL:
+ *   https://pub-646ef96285ab4ea585237b1060eb0116.r2.dev/${folder}/${Date.now()}_cleanName.webp
+ * - Throws explicit errors if upload fails to prevent saving broken or local paths in Firestore
  */
-export const processAndUploadProjectMedia = async (file, options = {}) => {
-  if (!file) return '';
+export const uploadImageToCloudflareR2 = async (fileOrBlob, options = {}) => {
+  const {
+    folder = 'uploads',
+    filename = 'image.webp',
+    maxWidth = 1200,
+    maxHeight = 1200,
+    quality = 0.82
+  } = options;
 
-  // If already a valid remote URL (http/https) and not a blob preview, return as is
-  if (typeof file === 'string') {
-    if (file.startsWith('blob:')) {
-      throw new Error('Local blob URL cannot be saved directly without source file');
+  if (!fileOrBlob) throw new Error('কোনো ছবি পাওয়া যায়নি');
+
+  // If already an authentic remote HTTPS URL (and not a local /uploads/ or blob preview), return as is
+  if (typeof fileOrBlob === 'string') {
+    if (fileOrBlob.startsWith('https://') && !fileOrBlob.includes('/uploads/')) {
+      return fileOrBlob;
     }
-    return file;
+    if (fileOrBlob.startsWith('blob:') || fileOrBlob.startsWith('/uploads/') || fileOrBlob.startsWith('data:')) {
+      throw new Error('অবৈধ ইমেজ ফরম্যাট! ফাইলটি পুনরায় নির্বাচন করুন।');
+    }
   }
 
-  // 1. Client-Side Canvas Optimization (max 1200px, 85% WebP)
-  const compressed = await compressImageWithCanvas(file, {
-    maxWidth: 1200,
-    maxHeight: 1200,
-    quality: 0.85,
-    format: 'image/webp'
-  });
-
-  const uploadFilename = compressed.filename || `${Date.now()}_image.webp`;
-
-  // 2. Direct PUT to Cloudflare R2
-  try {
-    const r2Url = await uploadToCloudflareR2(compressed.blob, uploadFilename);
-    if (r2Url) {
-      console.log('✓ Uploaded to Cloudflare R2:', r2Url);
-      return r2Url;
-    }
-  } catch (r2Err) {
-    console.warn('Notice on Cloudflare R2 direct PUT (falling back to storage buffer):', r2Err.message);
-  }
-
-  // 3. Fallback: Firebase Storage
-  try {
-    const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-    const { app } = await initFirebase();
-
-    if (app) {
-      const storage = getStorage(app, firebaseConfig.storageBucket);
-      const storageRef = ref(storage, `portfolio/${Date.now()}_${uploadFilename}`);
-      const snapshot = await withTimeout(
-        uploadBytes(storageRef, compressed.blob, {
-          contentType: compressed.blob.type || 'image/webp'
-        }),
-        3500
-      );
-      const downloadUrl = await withTimeout(getDownloadURL(snapshot.ref), 2500);
-      if (downloadUrl) {
-        return downloadUrl;
+  // 1. Client-Side HTML5 Canvas Auto-Compression (< 200-300 KB, WebP)
+  let blobToUpload = fileOrBlob;
+  let fileDataUrl = '';
+  if (fileOrBlob instanceof File || fileOrBlob instanceof Blob) {
+    try {
+      const compressed = await compressImageWithCanvas(fileOrBlob, {
+        maxWidth,
+        maxHeight,
+        quality,
+        format: 'image/webp'
+      });
+      if (compressed?.blob) {
+        blobToUpload = compressed.blob;
+        fileDataUrl = compressed.dataUrl;
       }
+    } catch (e) {
+      console.warn('Canvas optimization notice:', e);
     }
-  } catch (storageErr) {
-    console.warn('Notice on storage fallback (using compressed canvas data URL):', storageErr.message);
   }
 
-  // 4. Fallback: High-efficiency compressed Canvas WebP Data URL
-  return compressed.dataUrl;
+  const safeFilename = filename || fileOrBlob.name || 'image.webp';
+  const cleanFilename = safeFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+  if (!fileDataUrl) {
+    fileDataUrl = await readFileAsBase64(blobToUpload);
+  }
+
+  // 2. Dedicated Backend API Endpoint (/api/upload-to-r2 / Firebase Function)
+  const endpoints = [
+    typeof window !== 'undefined' && window.location.port === '5173'
+      ? 'http://localhost:5000/api/upload-to-r2'
+      : '/api/upload-to-r2',
+    typeof window !== 'undefined' && window.location.port === '5173'
+      ? 'http://localhost:5000/api/r2-upload'
+      : '/api/r2-upload'
+  ];
+
+  let uploadSuccess = false;
+  let publicUrl = '';
+  let lastError = null;
+
+  for (const apiUrl of endpoints) {
+    try {
+      const res = await withTimeout(
+        fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: cleanFilename,
+            fileData: fileDataUrl,
+            contentType: blobToUpload.type || 'image/webp',
+            folder
+          })
+        }),
+        12000
+      );
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success && data?.url) {
+        // Strict Validation: Ensure url is a REAL HTTPS URL from Cloudflare R2
+        if (typeof data.url === 'string' && data.url.startsWith('https://') && !data.url.startsWith('/uploads/')) {
+          console.log(`✓ [Universal Cloudflare R2] Successfully uploaded to "${folder}":`, data.url);
+          publicUrl = data.url;
+          uploadSuccess = true;
+          break;
+        } else {
+          lastError = new Error('সার্ভার থেকে আসল Cloudflare R2 HTTPS লিংক পাওয়া যায়নি।');
+        }
+      } else {
+        lastError = new Error(data?.error || data?.message || `API returned status: ${res.status}`);
+      }
+    } catch (apiErr) {
+      lastError = apiErr;
+      console.warn(`Attempt at ${apiUrl} failed, trying next endpoint:`, apiErr.message);
+    }
+  }
+
+  // 3. Strict Validation: If R2 API fails, DO NOT save any document to Firestore and throw error for Admin alert
+  if (!uploadSuccess || !publicUrl || !publicUrl.startsWith('https://')) {
+    throw new Error(
+      lastError?.message 
+        ? `ক্লাউডফ্লেয়ার R2 আপলোড ব্যর্থ হয়েছে: ${lastError.message}` 
+        : 'ক্লাউডফ্লেয়ার R2 বাকেটে ছবি আপলোড করা যায়নি। অনুগ্রহ করে ব্যাকএন্ড API এবং R2 ক্রেডেনশিয়াল চেক করুন।'
+    );
+  }
+
+  return publicUrl;
 };
 
 /**
- * Upload a file to Firebase Storage (legacy compatibility)
+ * Purge image from Cloudflare R2 Bucket
  */
-export const uploadFileToStorage = async (file, folder = 'portfolio_assets', idToken = null) => {
+export const deleteImageFromCloudflareR2 = async (fileUrl) => {
+  if (!fileUrl) return;
+
+  try {
+    const apiUrl = typeof window !== 'undefined' && window.location.port === '5173'
+      ? 'http://localhost:5000/api/r2-delete'
+      : '/api/r2-delete';
+
+    await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileUrl })
+    });
+    console.log(`✓ Purged file from Cloudflare R2: ${fileUrl}`);
+  } catch (err) {
+    console.warn('Cloudflare R2 purge request notice:', err.message);
+  }
+};
+
+/**
+ * Dedicated helper for Sponsor Banners
+ */
+export const uploadSponsorBannerToR2 = async (fileOrBlob, filename = 'sponsor_banner.webp') => {
+  return uploadImageToCloudflareR2(fileOrBlob, {
+    folder: 'sponsors',
+    filename,
+    maxWidth: 1280,
+    maxHeight: 1280,
+    quality: 0.82
+  });
+};
+
+export const deleteSponsorBannerFromR2 = deleteImageFromCloudflareR2;
+
+/**
+ * Universal project/deals media upload pipeline via Cloudflare R2
+ */
+export const processAndUploadProjectMedia = async (file, options = {}) => {
+  if (!file) return '';
+  const folder = options.folder || 'projects';
+  const filename = file?.name || 'media.webp';
+  return uploadImageToCloudflareR2(file, { folder, filename });
+};
+
+/**
+ * Universal storage upload helper mapped to Cloudflare R2
+ */
+export const uploadFileToStorage = async (file, folder = 'portfolio_assets') => {
   if (!file) throw new Error('No image file selected');
-
-  const cleanFileName = `${Date.now()}_${(file.name || 'image').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  const storagePath = `${folder.replace(/^\/+|\/+$/g, '')}/${cleanFileName}`;
-
-  try {
-    const { getStorage, ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
-    const { app } = await initFirebase();
-
-    if (app) {
-      const storage = getStorage(app, firebaseConfig.storageBucket);
-      const storageRef = ref(storage, storagePath);
-
-      const metadata = {
-        contentType: file.type || 'image/jpeg',
-        customMetadata: {
-          uploadedAt: new Date().toISOString(),
-          originalName: file.name || 'image'
-        }
-      };
-
-      const snapshot = await withTimeout(uploadBytes(storageRef, file, metadata), 3500);
-      const downloadUrl = await withTimeout(getDownloadURL(snapshot.ref), 2500);
-      if (downloadUrl) {
-        return downloadUrl;
-      }
-    }
-  } catch (storageError) {
-    console.warn('Storage upload notice, testing fallback:', storageError.message);
-  }
-
-  try {
-    const cloudinaryRes = await withTimeout(uploadImageToCloudinary(file, idToken, folder), 3500);
-    if (cloudinaryRes && cloudinaryRes.imageUrl) {
-      return cloudinaryRes.imageUrl;
-    }
-  } catch (cloudinaryError) {
-    console.warn('Cloudinary upload notice, testing offline buffer:', cloudinaryError.message);
-  }
-
-  return readFileAsBase64(file);
+  return uploadImageToCloudflareR2(file, { folder, filename: file?.name || 'image.webp' });
 };
 

@@ -236,7 +236,7 @@ const AddDealModal = ({ isOpen, onClose, dealToEdit = null, idToken = null }) =>
 
           // B. Upload compressed file to Cloudflare R2 / Storage / Cloudinary
           try {
-            finalImagePath = await processAndUploadProjectMedia(compressed, { idToken });
+            finalImagePath = await processAndUploadProjectMedia(compressed, { idToken, folder: 'deals' });
           } catch (uploadErr) {
             console.warn('Primary upload notice, testing fallback:', uploadErr.message);
             finalImagePath = await uploadFileToStorage(compressed, 'deals', idToken);

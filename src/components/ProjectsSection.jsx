@@ -156,7 +156,8 @@ const ProjectCard = ({ project, type }) => {
               alt={project.title}
               onError={() => setImgError(true)}
               loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              decoding="async"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
             />
           ) : (
             type === 'apps' ? <Smartphone size={22} color="var(--primary-color)" /> : <Globe size={22} color="var(--accent-pink)" />

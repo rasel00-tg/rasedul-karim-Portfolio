@@ -32,9 +32,9 @@ import { subscribeEmail, sendSubscriptionOtp, isEmailSubscribed } from '../servi
 import BentoGridSection from './StackedLinkCapsules';
 import ConnectModal from './ConnectModal';
 
-const CleanAmbientBackdrop = ({ isDark }) => {
+const CleanAmbientBackdrop = React.memo(({ isDark }) => {
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', pointerEvents: 'none', zIndex: -1, overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', pointerEvents: 'none', zIndex: -1, overflow: 'hidden', transform: 'translateZ(0)' }}>
       {/* Top-Left Ambient Flare */}
       <motion.div
         animate={{ 
@@ -53,7 +53,9 @@ const CleanAmbientBackdrop = ({ isDark }) => {
           background: isDark 
             ? 'radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(147, 51, 234, 0.12) 50%, transparent 75%)' 
             : 'radial-gradient(circle, rgba(0, 180, 255, 0.32) 0%, rgba(56, 189, 248, 0.12) 50%, transparent 75%)',
-          filter: 'blur(55px)'
+          filter: 'blur(45px)',
+          transform: 'translateZ(0)',
+          willChange: 'transform'
         }}
       />
 
@@ -75,7 +77,9 @@ const CleanAmbientBackdrop = ({ isDark }) => {
           background: isDark 
             ? 'radial-gradient(circle, rgba(0, 240, 255, 0.22) 0%, rgba(14, 74, 89, 0.08) 55%, transparent 75%)' 
             : 'radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(186, 230, 253, 0.1) 55%, transparent 75%)',
-          filter: 'blur(50px)'
+          filter: 'blur(40px)',
+          transform: 'translateZ(0)',
+          willChange: 'transform'
         }}
       />
 
@@ -90,11 +94,13 @@ const CleanAmbientBackdrop = ({ isDark }) => {
         background: isDark 
           ? 'radial-gradient(ellipse at bottom, rgba(192, 132, 252, 0.38) 0%, rgba(168, 85, 247, 0.18) 45%, transparent 75%)' 
           : 'radial-gradient(ellipse at bottom, rgba(0, 180, 255, 0.38) 0%, rgba(125, 211, 252, 0.18) 45%, transparent 75%)',
-        filter: 'blur(60px)'
+        filter: 'blur(45px)',
+        transform: 'translateZ(0)'
       }} />
     </div>
   );
-};
+});
+CleanAmbientBackdrop.displayName = 'CleanAmbientBackdrop';
 
 const HeroSection = ({ 
   isDreamOpen, 
@@ -359,7 +365,7 @@ const HeroSection = ({
   return (
     <section 
       id="hero" 
-      className="h-screen overflow-hidden"
+      className="min-h-screen w-full"
       style={{ 
         width: '100%',
         margin: '0',
@@ -370,9 +376,7 @@ const HeroSection = ({
         alignItems: 'center',
         justifyContent: 'flex-start',
         zIndex: 2,
-        height: '100vh',
-        maxHeight: '100vh',
-        overflow: 'hidden',
+        minHeight: '100vh',
         boxSizing: 'border-box'
       }}
     >
@@ -461,7 +465,11 @@ const HeroSection = ({
                   src="/about.png" 
                   alt="Rasedul Karim" 
                   loading="eager"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  fetchPriority="high"
+                  decoding="async"
+                  width="150"
+                  height="150"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', aspectRatio: '1 / 1' }}
                   onError={(e) => {
                     if (e.target.src.includes('/about.png')) {
                       e.target.src = '/profile.jpeg';

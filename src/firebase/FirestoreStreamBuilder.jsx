@@ -27,7 +27,7 @@ export const FirestoreStreamBuilder = ({
     let unsubscribe = () => {};
 
     // Feature collection instant local baseline and broadcast listener
-    const isFeatureCollection = collectionName.startsWith('features_');
+    const isFeatureCollection = collectionName.startsWith('features_') || collectionName === 'sponsor_banners' || collectionName === 'sponsors';
     const isProjectsCollection = collectionName === 'projects';
 
     const handleLocalUpdate = (e) => {

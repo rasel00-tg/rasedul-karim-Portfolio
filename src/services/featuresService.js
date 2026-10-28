@@ -17,7 +17,9 @@ export const COLLECTIONS = {
   DEALS_DISCOUNTS: 'features_deals_discounts',
   DEALS: 'deals',
   DEAL_ORDERS: 'deal_orders',
-  COUPON_REDEMPTIONS: 'coupon_redemptions'
+  COUPON_REDEMPTIONS: 'coupon_redemptions',
+  SPONSORS: 'sponsors',
+  SPONSOR_BANNERS: 'sponsors'
 };
 
 // 0. Projects Collection: Real-time dynamic Firestore collection (Starts empty, no dummy data)
@@ -198,10 +200,60 @@ export const getBaselineForCollection = (collectionName) => {
       return BASELINE_FAVORITE_TOOLS;
     case COLLECTIONS.DEALS_DISCOUNTS:
       return BASELINE_DEALS_DISCOUNTS;
+    case COLLECTIONS.SPONSOR_BANNERS:
+    case 'sponsor_banners':
+    case 'sponsors':
+      return BASELINE_SPONSOR_BANNERS;
     default:
       return [];
   }
 };
+
+// 5. Baseline Seed Data for Sponsor Banners
+export const BASELINE_SPONSOR_BANNERS = [
+  {
+    id: 'sponsor-seed-1',
+    title: 'Brand Visual Identity & Strategy',
+    description: 'Modern digital branding, identity guidelines, typography systems, and futuristic marketing visuals.',
+    imageUrl: '/about.png',
+    createdAt: new Date(Date.now() - 60000 * 6).toISOString()
+  },
+  {
+    id: 'sponsor-seed-2',
+    title: 'FinTech Mobile Application',
+    description: 'Next-generation banking and wallet interface design with dark glassmorphism and responsive charts.',
+    imageUrl: '/add1.png',
+    createdAt: new Date(Date.now() - 60000 * 5).toISOString()
+  },
+  {
+    id: 'sponsor-seed-3',
+    title: 'Creative Marketing Campaign',
+    description: 'Dynamic visual design for conversion-focused brand advertisements and social community engagement.',
+    imageUrl: '/add2.png',
+    createdAt: new Date(Date.now() - 60000 * 4).toISOString()
+  },
+  {
+    id: 'sponsor-seed-4',
+    title: 'Minimalist E-Commerce Platform',
+    description: 'Ultra-fast checkout experience with seamless product visualization and micro-animations.',
+    imageUrl: '/app1.png',
+    createdAt: new Date(Date.now() - 60000 * 3).toISOString()
+  },
+  {
+    id: 'sponsor-seed-5',
+    title: 'Cloud Enterprise Platform',
+    description: 'Scalable multi-tenant web application dashboard with telemetry analytics and real-time monitoring.',
+    imageUrl: '/app2.png',
+    createdAt: new Date(Date.now() - 60000 * 2).toISOString()
+  },
+  {
+    id: 'sponsor-seed-6',
+    title: 'Rasedul Karim Portfolio',
+    description: 'Senior UI/UX Designer & Full-Stack Developer specializing in high-performance digital products.',
+    imageUrl: '/profile.jpeg',
+    createdAt: new Date(Date.now() - 60000 * 1).toISOString()
+  }
+];
 
 const getCacheKey = (collectionName) => `portfolio_cache_${collectionName}`;
 
@@ -521,5 +573,87 @@ export const recordCouponRedemption = async ({ dealId = '', email, couponCode, d
   await saveFeatureItem(COLLECTIONS.COUPON_REDEMPTIONS, redemptionData, idToken);
 
   return redemptionData;
+};
+
+/**
+ * Save Sponsor Banner with FIFO Auto-Rotation (Limit 7 items):
+ * - Newest banner is positioned at index 0 (#1).
+ * - Total collection length is restricted to maximum 7 items.
+ * - When an 8th banner is published, the 8th (oldest) item is automatically
+ *   deleted from Firestore and its cloud storage file is purged.
+ */
+export const saveSponsorBannerWithFIFO = async (bannerData, idToken = null) => {
+  // Strict Validation: Prevent fake local paths (/uploads/...) or relative URLs from entering Firestore
+  if (!bannerData.imageUrl || typeof bannerData.imageUrl !== 'string' || !bannerData.imageUrl.startsWith('https://') || bannerData.imageUrl.startsWith('/uploads/')) {
+    throw new Error('অবৈধ ইমেজ পাথ! ফায়ারস্টোরে শুধুমাত্র ক্লাউডফ্লেয়ার R2 এর আসল পাবলিক HTTPS লিঙ্ক সেভ করা যাবে। লোকাল পাথ সম্পূর্ণ নিষিদ্ধ।');
+  }
+
+  const collectionName = COLLECTIONS.SPONSOR_BANNERS;
+  const now = new Date().toISOString();
+  
+  // 1. Fetch all current items
+  let currentItems = [];
+  try {
+    const { db } = await initFirebase();
+    if (db) {
+      const { collection, getDocs } = await import('firebase/firestore');
+      const snap = await getDocs(collection(db, collectionName));
+      snap.forEach(doc => {
+        currentItems.push({ ...doc.data(), id: doc.id });
+      });
+    }
+  } catch (err) {
+    console.warn('SDK fetch notice for sponsor banners:', err.message);
+  }
+
+  // Fallback to cache if Firestore query returned 0 items but cache exists
+  if (currentItems.length === 0) {
+    const cached = getCachedItems(collectionName) || [];
+    currentItems = [...cached];
+  }
+
+  // 2. Prepare new banner object (Newest First)
+  const newId = bannerData.id || `sponsor_${Date.now()}`;
+  const newBanner = {
+    ...bannerData,
+    id: newId,
+    createdAt: bannerData.createdAt || now,
+    updatedAt: now
+  };
+
+  // 3. Save new banner to Firestore & cache
+  const savedItem = await saveFeatureItem(collectionName, newBanner, idToken);
+
+  // 4. Combine and sort all items newest first (by createdAt desc)
+  const combined = [savedItem, ...currentItems.filter(item => item.id !== newId)];
+  combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+  // 5. FIFO Rule: If more than 7 banners exist, delete oldest items (indices 7+)
+  if (combined.length > 7) {
+    const excessItems = combined.slice(7);
+    for (const oldItem of excessItems) {
+      console.log(`[FIFO Auto-Rotate] Removing oldest sponsor banner: ${oldItem.id} (${oldItem.title || 'Untitled'})`);
+      
+      // Delete document from Firestore & cache
+      try {
+        await deleteFeatureItem(collectionName, oldItem.id, idToken);
+      } catch (delErr) {
+        console.warn('Failed to delete old sponsor doc from Firestore:', delErr.message);
+      }
+
+      // Purge storage file from Cloudflare R2 / local public uploads buffer (Zero Firebase Storage interaction)
+      if (oldItem.imageUrl) {
+        try {
+          const { deleteSponsorBannerFromR2 } = await import('./storageService');
+          await deleteSponsorBannerFromR2(oldItem.imageUrl);
+          console.log(`[FIFO Auto-Rotate] Cloudflare R2 purge request triggered for: ${oldItem.id}`);
+        } catch (r2Err) {
+          console.warn('Storage purge notice for old sponsor:', r2Err.message);
+        }
+      }
+    }
+  }
+
+  return savedItem;
 };
 

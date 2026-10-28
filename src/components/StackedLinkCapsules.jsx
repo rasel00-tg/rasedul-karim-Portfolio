@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FolderGit2, 
@@ -16,12 +17,423 @@ import {
   BookOpen,
   ArrowRight,
   Zap,
-  Play
+  Play,
+  X,
+  ArrowLeft
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
-import { COLLECTIONS } from '../services/featuresService';
+import { COLLECTIONS, BASELINE_SPONSOR_BANNERS } from '../services/featuresService';
+
+const SponsorCarouselView = memo(({
+  banners,
+  currentItem,
+  safeIndex,
+  onSelectSlide,
+  onOpenDetail,
+  selectedBanner,
+  onCloseDetail,
+  isDark,
+  isBangla
+}) => {
+  const bannerCount = banners.length || 1;
+
+  // 3-Second Auto-Rotation Timer
+  useEffect(() => {
+    if (bannerCount <= 1) return;
+    const timer = setInterval(() => {
+      onSelectSlide((prev) => (prev + 1) % bannerCount);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [bannerCount, onSelectSlide]);
+
+  // Pre-caching Pipeline
+  useEffect(() => {
+    banners.forEach((b) => {
+      if (b?.imageUrl) {
+        const img = new Image();
+        img.src = b.imageUrl;
+      }
+    });
+  }, [banners]);
+
+  const handleDragEnd = useCallback((event, info) => {
+    if (info.offset.x < -30) {
+      onSelectSlide((prev) => (prev + 1) % bannerCount);
+    } else if (info.offset.x > 30) {
+      onSelectSlide((prev) => (prev - 1 + bannerCount) % bannerCount);
+    }
+  }, [bannerCount, onSelectSlide]);
+
+  return (
+    <>
+      <div style={{
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        alignItems: 'center',
+        marginTop: '4px',
+        paddingBottom: 'calc(45px + env(safe-area-inset-bottom, 20px))'
+      }}>
+        {/* PURE VISUAL CARD: Strictly NO hints, NO labels, NO click text */}
+        <motion.div
+          className="bento-carousel-box"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.22 }}
+          onClick={() => onOpenDetail(currentItem)}
+          style={{
+            width: '100%',
+            borderRadius: '18px',
+            overflow: 'hidden',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+            border: '1.5px solid rgba(0, 0, 0, 0.08)',
+            background: '#0D1117',
+            position: 'relative',
+            cursor: 'pointer',
+            touchAction: 'pan-y',
+            transform: 'translate3d(0, 0, 0)',
+            willChange: 'transform, opacity'
+          }}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentItem?.id || safeIndex}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.2}
+              onDragEnd={handleDragEnd}
+              initial={{ opacity: 0, scale: 0.98, x: 20 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.98, x: -20 }}
+              transition={{ duration: 0.5, ease: 'easeInOut' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                transform: 'translate3d(0, 0, 0)',
+                willChange: 'transform, opacity'
+              }}
+            >
+              <img 
+                src={currentItem?.imageUrl || '/about.png'} 
+                alt="Showcase Banner"
+                loading="lazy"
+                decoding="async"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                  pointerEvents: 'none',
+                  aspectRatio: '16 / 9'
+                }}
+                onError={(e) => {
+                  e.target.src = '/about.png';
+                }}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Minimal Sleek Pagination Dot Indicators (Up to 7 dots) */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px',
+          width: '100%',
+          padding: '2px 0'
+        }}>
+          {banners.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={() => onSelectSlide(idx)}
+              style={{
+                height: '5px',
+                width: safeIndex === idx ? '24px' : '6px',
+                borderRadius: '3px',
+                background: safeIndex === idx 
+                  ? 'linear-gradient(90deg, #FF6B35 0%, #F97316 100%)' 
+                  : isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.25)',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: safeIndex === idx ? '0 0 8px rgba(255, 107, 53, 0.8)' : 'none'
+              }}
+              title={`Slide ${idx + 1}`}
+              aria-label={`Slide ${idx + 1}`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* DEDICATED SPONSOR HIDDEN CAPTION & DETAIL VIEW MODAL */}
+      {typeof document !== 'undefined' && selectedBanner && createPortal(
+        <AnimatePresence>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 999999,
+              background: 'rgba(3, 7, 18, 0.88)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+              boxSizing: 'border-box'
+            }}
+            onClick={onCloseDetail}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '100%',
+                maxWidth: '600px',
+                maxHeight: '90vh',
+                background: isDark 
+                  ? 'linear-gradient(145deg, #0F172A 0%, #030712 100%)' 
+                  : '#FFFFFF',
+                borderRadius: '24px',
+                border: `1.5px solid ${isDark ? 'rgba(255, 107, 0, 0.35)' : 'rgba(255, 107, 0, 0.25)'}`,
+                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), 0 0 35px rgba(255, 107, 0, 0.2)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                position: 'relative'
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                padding: '14px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+                background: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(248, 250, 252, 0.95)',
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={onCloseDetail}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                      border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)'}`,
+                      color: isDark ? '#FFFFFF' : '#0F172A',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                    title={isBangla ? 'ফিরে যান' : 'Back'}
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <div>
+                    <h4 style={{
+                      margin: 0,
+                      fontSize: '0.96rem',
+                      fontWeight: 800,
+                      color: isDark ? '#FFFFFF' : '#0F172A',
+                      fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                    }}>
+                      {isBangla ? 'স্পন্সর পোস্ট ও বিস্তারিত' : 'Sponsor Showcase & Details'}
+                    </h4>
+                    <span style={{ fontSize: '0.68rem', color: '#FF6B00', fontWeight: 700 }}>
+                      {isBangla ? 'ভেরিফাইড স্পন্সর পার্টনার' : 'Verified Sponsor Partner'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onCloseDetail}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                    border: 'none',
+                    color: isDark ? '#FFFFFF' : '#0F172A',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div style={{
+                padding: '20px',
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                {/* Large Display Image */}
+                <div style={{
+                  width: '100%',
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  background: '#0B0F19',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
+                  maxHeight: '46vh',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <img 
+                    src={selectedBanner.imageUrl} 
+                    alt={selectedBanner.title || 'Sponsor Banner'}
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      width: '100%',
+                      maxHeight: '46vh',
+                      objectFit: 'contain',
+                      display: 'block',
+                      aspectRatio: '16 / 9'
+                    }}
+                  />
+                </div>
+
+                {/* Title & Caption */}
+                {selectedBanner.title && (
+                  <div>
+                    <h3 style={{
+                      margin: '0 0 6px 0',
+                      fontSize: '1.25rem',
+                      fontWeight: 900,
+                      color: isDark ? '#FFFFFF' : '#0F172A',
+                      fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif",
+                      lineHeight: 1.3
+                    }}>
+                      {selectedBanner.title}
+                    </h3>
+                    {selectedBanner.createdAt && (
+                      <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>
+                        {new Date(selectedBanner.createdAt).toLocaleDateString(isBangla ? 'bn-BD' : 'en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Detailed Description */}
+                <div style={{
+                  padding: '16px',
+                  borderRadius: '14px',
+                  background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)'}`
+                }}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: '0.92rem',
+                    lineHeight: 1.7,
+                    color: isDark ? '#E2E8F0' : '#334155',
+                    whiteSpace: 'pre-line',
+                    fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                  }}>
+                    {selectedBanner.description || (isBangla ? 'কোনো বিস্তারিত বিবরণ প্রদান করা হয়নি।' : 'No description provided.')}
+                  </p>
+                </div>
+
+                {/* Bottom Return Action */}
+                <button
+                  type="button"
+                  onClick={onCloseDetail}
+                  style={{
+                    marginTop: '6px',
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #FF6B00 0%, #F57F17 100%)',
+                    border: 'none',
+                    color: '#FFFFFF',
+                    fontSize: '0.90rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 15px rgba(255, 107, 0, 0.35)',
+                    fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                  }}
+                >
+                  <ArrowLeft size={16} />
+                  <span>{isBangla ? 'মূল ওয়েবসাইটে ফিরে যান' : 'Back to Home'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
+  );
+};
+
+const SponsorBannerCarousel = ({ isDark, isBangla }) => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [selectedBanner, setSelectedBanner] = useState(null);
+
+  return (
+    <FirestoreStreamBuilder collectionName={COLLECTIONS.SPONSOR_BANNERS}>
+      {({ data }) => {
+        const rawList = data && data.length > 0 ? data : BASELINE_SPONSOR_BANNERS;
+        const banners = [...rawList]
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+          .slice(0, 7);
+        const bannerCount = banners.length || 1;
+        const safeIndex = currentSlide % bannerCount;
+        const currentItem = banners[safeIndex] || banners[0];
+
+        return (
+          <SponsorCarouselView
+            banners={banners}
+            currentItem={currentItem}
+            safeIndex={safeIndex}
+            onSelectSlide={setCurrentSlide}
+            onOpenDetail={setSelectedBanner}
+            selectedBanner={selectedBanner}
+            onCloseDetail={() => setSelectedBanner(null)}
+            isDark={isDark}
+            isBangla={isBangla}
+          />
+        );
+      }}
+    </FirestoreStreamBuilder>
+  );
+};
 
 const BentoGridSection = ({ 
   onOpenProjects,
@@ -38,17 +450,6 @@ const BentoGridSection = ({
   const { isBangla, t } = useLanguage();
   const { isDark } = useTheme();
 
-  // 6 Pure Visual Slides (Rotating 100% Full-Cover Showcase Banners)
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const showcaseImages = [
-    '/about.png',
-    '/add1.png',
-    '/add2.png',
-    '/app1.png',
-    '/app2.png',
-    '/profile.jpeg'
-  ];
-
   const featureIcons = [
     '/see project.png',
     '/design project.png',
@@ -57,29 +458,13 @@ const BentoGridSection = ({
     '/deal and discount.png'
   ];
 
-  // Pre-caching Pipeline for Zero-Lag Instant Image Transitions & Icon Rendering
+  // Pre-caching Pipeline for Icons
   useEffect(() => {
-    [...showcaseImages, ...featureIcons].forEach((src) => {
+    featureIcons.forEach((src) => {
       const img = new Image();
       img.src = src;
     });
   }, []);
-
-  // 2-Second Auto-Rotation Timer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % showcaseImages.length);
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [showcaseImages.length]);
-
-  const handleDragEnd = (event, info) => {
-    if (info.offset.x < -30) {
-      setCurrentSlide((prev) => (prev + 1) % showcaseImages.length);
-    } else if (info.offset.x > 30) {
-      setCurrentSlide((prev) => (prev - 1 + showcaseImages.length) % showcaseImages.length);
-    }
-  };
 
   return (
     <section 
@@ -96,7 +481,7 @@ const BentoGridSection = ({
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '9px',
         width: '100%'
       }}>
         {/* ========================================================================= */}
@@ -186,15 +571,18 @@ const BentoGridSection = ({
               <img 
                 src="/see project.png" 
                 alt="See Project" 
-                loading="eager"
+                loading="lazy"
                 decoding="async"
+                width="48"
+                height="48"
                 style={{ 
                   width: '100%', 
                   height: '100%', 
                   objectFit: 'cover',
                   borderRadius: '50%',
                   display: 'block',
-                  transform: 'translateZ(0)' 
+                  transform: 'translateZ(0)',
+                  aspectRatio: '1 / 1'
                 }} 
               />
             </div>
@@ -311,15 +699,18 @@ const BentoGridSection = ({
                     <img 
                       src="/design project.png" 
                       alt="Design Project" 
-                      loading="eager"
+                      loading="lazy"
                       decoding="async"
+                      width="48"
+                      height="48"
                       style={{ 
                         width: '100%', 
                         height: '100%', 
                         objectFit: 'cover',
                         borderRadius: '50%',
                         display: 'block',
-                        transform: 'translateZ(0)' 
+                        transform: 'translateZ(0)',
+                        aspectRatio: '1 / 1'
                       }} 
                     />
                   </div>
@@ -424,15 +815,18 @@ const BentoGridSection = ({
                     <img 
                       src="/upcoming project.png" 
                       alt="Upcoming Project" 
-                      loading="eager"
+                      loading="lazy"
                       decoding="async"
+                      width="48"
+                      height="48"
                       style={{ 
                         width: '100%', 
                         height: '100%', 
                         objectFit: 'cover',
                         borderRadius: '50%',
                         display: 'block',
-                        transform: 'translateZ(0)' 
+                        transform: 'translateZ(0)',
+                        aspectRatio: '1 / 1'
                       }} 
                     />
                   </div>
@@ -550,15 +944,18 @@ const BentoGridSection = ({
                     <img 
                       src="/favorite.png" 
                       alt="Favorite" 
-                      loading="eager"
+                      loading="lazy"
                       decoding="async"
+                      width="48"
+                      height="48"
                       style={{ 
                         width: '100%', 
                         height: '100%', 
                         objectFit: 'cover',
                         borderRadius: '50%',
                         display: 'block',
-                        transform: 'translateZ(0)' 
+                        transform: 'translateZ(0)',
+                        aspectRatio: '1 / 1'
                       }} 
                     />
                   </div>
@@ -674,15 +1071,18 @@ const BentoGridSection = ({
                     <img 
                       src="/deal and discount.png" 
                       alt="Deals & Discounts" 
-                      loading="eager"
+                      loading="lazy"
                       decoding="async"
+                      width="48"
+                      height="48"
                       style={{ 
                         width: '100%', 
                         height: '100%', 
                         objectFit: 'cover',
                         borderRadius: '50%',
                         display: 'block',
-                        transform: 'translateZ(0)' 
+                        transform: 'translateZ(0)',
+                        aspectRatio: '1 / 1'
                       }} 
                     />
                   </div>
@@ -775,112 +1175,9 @@ const BentoGridSection = ({
         </motion.div>
 
         {/* ========================================================================= */}
-        {/* CARD 7: ENLARGED 100% PURE FULL-COVER 6-IMAGE AUTO-CAROUSEL BANNER (172px) */}
+        {/* CARD 7: ENLARGED 100% PURE FULL-COVER 7-BANNER AUTO-CAROUSEL (FIFO) */}
         {/* ========================================================================= */}
-        <div style={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          alignItems: 'center',
-          marginTop: '2px'
-        }}>
-          <motion.div
-            className="bento-carousel-box"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.22 }}
-            onClick={onOpenAbout}
-            style={{
-              width: '100%',
-              borderRadius: '18px',
-              overflow: 'hidden',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-              border: '1.5px solid rgba(0, 0, 0, 0.08)',
-              background: '#0D1117',
-              position: 'relative',
-              cursor: 'pointer',
-              touchAction: 'pan-y',
-              transform: 'translate3d(0, 0, 0)',
-              willChange: 'transform, opacity'
-            }}
-          >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentSlide}
-                drag="x"
-                dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.2}
-                onDragEnd={handleDragEnd}
-                initial={{ opacity: 0, scale: 0.98, x: 20 }}
-                animate={{ opacity: 1, scale: 1, x: 0 }}
-                exit={{ opacity: 0, scale: 0.98, x: -20 }}
-                transition={{ duration: 0.5, ease: 'easeInOut' }}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  transform: 'translate3d(0, 0, 0)',
-                  willChange: 'transform, opacity'
-                }}
-              >
-                <img 
-                  src={showcaseImages[currentSlide]} 
-                  alt="Showcase Banner"
-                  loading="eager"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    display: 'block',
-                    pointerEvents: 'none'
-                  }}
-                  onError={(e) => {
-                    if (e.target.src.includes('/add1.png') || e.target.src.includes('/add2.png') || e.target.src.includes('/app1.png') || e.target.src.includes('/app2.png')) {
-                      e.target.src = '/about.png';
-                    } else {
-                      e.target.src = '/profile.jpeg';
-                    }
-                  }}
-                />
-              </motion.div>
-            </AnimatePresence>
-          </motion.div>
-
-          {/* Minimal Sleek Pagination Dot Indicators (No numbers, no text) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            width: '100%',
-            padding: '2px 0'
-          }}>
-            {showcaseImages.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentSlide(idx)}
-                style={{
-                  height: '5px',
-                  width: currentSlide === idx ? '24px' : '6px',
-                  borderRadius: '3px',
-                  background: currentSlide === idx 
-                    ? 'linear-gradient(90deg, #FF6B35 0%, #F97316 100%)' 
-                    : isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.25)',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: currentSlide === idx ? '0 0 8px rgba(255, 107, 53, 0.8)' : 'none'
-                }}
-                title={`Slide ${idx + 1}`}
-                aria-label={`Slide ${idx + 1}`}
-              />
-            ))}
-          </div>
-        </div>
+        <SponsorBannerCarousel isDark={isDark} isBangla={isBangla} />
       </div>
     </section>
   );

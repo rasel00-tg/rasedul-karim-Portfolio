@@ -443,12 +443,17 @@ function AppCard({ app, isDark }) {
               <img
                 src={iconUrl}
                 alt={title}
+                loading="lazy"
+                decoding="async"
+                width="64"
+                height="64"
                 style={{
                   width: '100%',
                   height: '100%',
                   borderRadius: '50%',
                   objectFit: 'cover',
-                  display: 'block'
+                  display: 'block',
+                  aspectRatio: '1 / 1'
                 }}
                 onError={(e) => { e.target.src = '/app1.png'; }}
               />
@@ -611,13 +616,16 @@ function WebsiteCard({ site, isDark }) {
           <img
             src={bannerUrl}
             alt={title}
+            loading="lazy"
+            decoding="async"
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'cover',
               transform: hovered ? 'scale(1.05)' : 'scale(1)',
               transition: 'transform 0.4s ease',
-              display: 'block'
+              display: 'block',
+              aspectRatio: '16 / 9'
             }}
             onError={(e) => { e.target.src = '/add1.png'; }}
           />

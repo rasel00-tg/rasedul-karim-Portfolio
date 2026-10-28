@@ -12,7 +12,9 @@ import {
   ArrowRight,
   ExternalLink,
   Layers,
-  Sparkle
+  Sparkle,
+  Copy,
+  Check
 } from 'lucide-react';
 import {
   signInWithPopup,
@@ -36,6 +38,8 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
   const [viewMode, setViewMode] = useState('auth'); // 'auth' | 'onboarding' | 'profile'
   const [loadingProvider, setLoadingProvider] = useState(null); // 'google' | 'github' | 'signout' | 'onboarding' | null
   const [errorMessage, setErrorMessage] = useState(null);
+  const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState(null);
+  const [domainCopied, setDomainCopied] = useState(false);
   const [successToast, setSuccessToast] = useState(null);
   const [profileData, setProfileData] = useState(null);
 
@@ -120,6 +124,8 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
   useEffect(() => {
     if (isOpen) {
       setErrorMessage(null);
+      setUnauthorizedDomainInfo(null);
+      setDomainCopied(false);
       setOnboardingErrors({});
       if (auth.currentUser) {
         checkUserStatus(auth.currentUser);
@@ -140,10 +146,70 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Auth Error Interpreter with Dedicated Unauthorized Domain Diagnostics
+  const getAuthErrorDetails = (err, provider = 'Google') => {
+    const code = err?.code || '';
+    const rawMsg = err?.message || '';
+    const currentDomain = typeof window !== 'undefined' ? (window.location.hostname || 'localhost') : 'localhost';
+
+    if (
+      code === 'auth/unauthorized-domain' ||
+      rawMsg.toLowerCase().includes('unauthorized domain') ||
+      rawMsg.toLowerCase().includes('unauthorized-domain')
+    ) {
+      return {
+        isUnauthorizedDomain: true,
+        domain: currentDomain,
+        message: isBangla
+          ? `বর্তমান ডোমেইনটি (${currentDomain}) ফায়ারবেসে অনুমোদিত (Authorized) নয়। সাইন-ইন সচল করতে এই ডোমেইনটি ফায়ারবেসে যুক্ত করা প্রয়োজন।`
+          : `This domain (${currentDomain}) is not authorized for OAuth operations. It must be added to Firebase Authorized Domains.`,
+        developerHint: isBangla
+          ? `Firebase Console > Authentication > Settings > Authorized Domains-এ '${currentDomain}' যুক্ত করুন।`
+          : `Go to Firebase Console > Authentication > Settings > Authorized Domains and add '${currentDomain}'.`
+      };
+    }
+
+    if (code === 'auth/popup-blocked') {
+      return {
+        isUnauthorizedDomain: false,
+        message: isBangla
+          ? 'ব্রাউজারে সাইন-ইন পপ-আপ ব্লক করা রয়েছে। অনুগ্রহ করে পপ-আপ অনুমোদন (Allow) করুন।'
+          : 'Sign-in pop-up was blocked by your browser. Please allow pop-ups for this site.'
+      };
+    }
+
+    if (code === 'auth/network-request-failed') {
+      return {
+        isUnauthorizedDomain: false,
+        message: isBangla
+          ? 'নেটওয়ার্ক সংযোগ ত্রুটি। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন।'
+          : 'Network request failed. Please check your internet connection.'
+      };
+    }
+
+    if (code === 'auth/operation-not-allowed') {
+      return {
+        isUnauthorizedDomain: false,
+        message: isBangla
+          ? `${provider} সাইন-ইন মেথডটি ফায়ারবেস কনসোলে সক্রিয় (Enabled) করা নেই।`
+          : `${provider} sign-in provider is not enabled in Firebase Console.`
+      };
+    }
+
+    return {
+      isUnauthorizedDomain: false,
+      message: isBangla
+        ? `${provider} সাইন-ইন সম্পন্ন করা যায়নি (${code || 'ত্রুটি'})। অনুগ্রহ করে আবার চেষ্টা করুন।`
+        : (rawMsg || `${provider} sign-in failed. Please try again.`)
+    };
+  };
+
   // 1. Handle Google Sign-in
   const handleGoogleSignIn = async () => {
     setLoadingProvider('google');
     setErrorMessage(null);
+    setUnauthorizedDomainInfo(null);
+    setDomainCopied(false);
     try {
       googleProvider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, googleProvider);
@@ -154,11 +220,13 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
         console.error('Auth Error [Google]:', err);
-        setErrorMessage(
-          isBangla
-            ? 'গুগল সাইন-ইন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
-            : (err.message || 'Google sign-in failed. Please try again.')
-        );
+        const errorDetails = getAuthErrorDetails(err, 'Google');
+        if (errorDetails.isUnauthorizedDomain) {
+          setUnauthorizedDomainInfo(errorDetails);
+          setErrorMessage(null);
+        } else {
+          setErrorMessage(errorDetails.message);
+        }
       }
     } finally {
       setLoadingProvider(null);
@@ -169,6 +237,8 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
   const handleGithubSignIn = async () => {
     setLoadingProvider('github');
     setErrorMessage(null);
+    setUnauthorizedDomainInfo(null);
+    setDomainCopied(false);
     try {
       const result = await signInWithPopup(auth, githubProvider);
       const user = result.user;
@@ -178,11 +248,13 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
         console.error('Auth Error [GitHub]:', err);
-        setErrorMessage(
-          isBangla
-            ? 'গিটহাব সাইন-ইন ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।'
-            : (err.message || 'GitHub sign-in failed. Please try again.')
-        );
+        const errorDetails = getAuthErrorDetails(err, 'GitHub');
+        if (errorDetails.isUnauthorizedDomain) {
+          setUnauthorizedDomainInfo(errorDetails);
+          setErrorMessage(null);
+        } else {
+          setErrorMessage(errorDetails.message);
+        }
       }
     } finally {
       setLoadingProvider(null);
@@ -399,6 +471,104 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
             >
               <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
               <span>{successToast}</span>
+            </motion.div>
+          )}
+
+          {/* Dedicated Unauthorized Domain Developer Guidance Alert */}
+          {unauthorizedDomainInfo && (
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              style={{
+                padding: '14px 16px',
+                borderRadius: '14px',
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1.5px solid rgba(245, 158, 11, 0.45)',
+                color: '#FBBF24',
+                fontSize: '0.82rem',
+                marginBottom: '16px',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <AlertCircle size={18} style={{ color: '#F59E0B', flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ flex: 1 }}>
+                  <strong style={{ display: 'block', color: '#FCD34D', fontSize: '0.86rem', marginBottom: '3px', fontWeight: 800 }}>
+                    {isBangla ? '⚠️ ডোমেন অনুমোদন প্রয়োজন (Unauthorized Domain)' : '⚠️ Unauthorized Domain Configuration Required'}
+                  </strong>
+                  <p style={{ margin: 0, color: '#FDE68A', lineHeight: 1.45 }}>
+                    {unauthorizedDomainInfo.message}
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Host Badge & 1-Click Copy */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                background: isDark ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)',
+                border: '1px dashed rgba(245, 158, 11, 0.35)',
+                flexWrap: 'wrap'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: isDark ? '#94A3B8' : '#64748B' }}>
+                    {isBangla ? 'বর্তমান ডোমেন:' : 'Current Domain:'}
+                  </span>
+                  <code style={{ fontFamily: 'monospace', fontWeight: 800, color: '#00F0FF', fontSize: '0.80rem' }}>
+                    {unauthorizedDomainInfo.domain}
+                  </code>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(unauthorizedDomainInfo.domain);
+                      setDomainCopied(true);
+                      setTimeout(() => setDomainCopied(false), 2000);
+                    }
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    background: domainCopied ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                    border: `1px solid ${domainCopied ? '#10B981' : '#F59E0B'}`,
+                    color: domainCopied ? '#10B981' : '#FBBF24',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {domainCopied ? (
+                    <>
+                      <Check size={12} />
+                      <span>{isBangla ? 'কপি হয়েছে!' : 'Copied!'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={12} />
+                      <span>{isBangla ? 'ডোমেইন কপি করুন' : 'Copy Domain'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Developer Action Guidance */}
+              <div style={{ fontSize: '0.74rem', color: isDark ? '#CBD5E1' : '#475569', borderTop: '1px solid rgba(245, 158, 11, 0.2)', paddingTop: '8px', lineHeight: 1.4 }}>
+                💡 <span style={{ color: '#FCD34D', fontWeight: 700 }}>{isBangla ? 'ডেভেলপার গাইড:' : 'Developer Guide:'}</span>{' '}
+                <span>{unauthorizedDomainInfo.developerHint}</span>
+              </div>
             </motion.div>
           )}
 

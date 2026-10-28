@@ -208,8 +208,14 @@ const DealsDiscountsModal = ({ onClose }) => {
     setTimeout(() => setCopiedCode(null), 2500);
   };
 
-  // Native Social Media Web Share API with Clipboard Fallback
-  const handleShareDeal = async (deal) => {
+  // Native Social Media Web Share API with Safe Manual User-Gesture Validation & Clipboard Fallback
+  const handleShareDeal = async (e, deal) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    if (!deal) return;
+
     const rawRate = deal?.discountPercentage || deal?.discountPercent || '75%';
     const match = String(rawRate).match(/(\d+)/);
     const discountText = match ? match[1] : '75';
@@ -220,15 +226,21 @@ const DealsDiscountsModal = ({ onClose }) => {
       text: isBangla 
         ? `🔥 ${dealTitle} - পাচ্ছেন ${discountText}% ছাড়! অফারটি দ্রুত ক্লেইম করুন:` 
         : `🔥 ${dealTitle} - Get ${discountText}% OFF! Claim this exclusive deal now:`,
-      url: window.location.href,
+      url: typeof window !== 'undefined' ? window.location.href : '',
     };
 
     try {
-      if (navigator.share) {
+      // Only invoke native share if explicitly supported, canShare returns true, and from direct user tap
+      if (
+        typeof navigator !== 'undefined' && 
+        typeof navigator.share === 'function' && 
+        typeof navigator.canShare === 'function' && 
+        navigator.canShare(shareData)
+      ) {
         await navigator.share(shareData);
         setSharedDealId(deal.id);
         setTimeout(() => setSharedDealId(null), 2500);
-      } else {
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
         setSharedDealId(deal.id);
         setShareToastMsg(isBangla ? '✓ লিংক ও অফারের তথ্য ক্লিপবোর্ডে কপি করা হয়েছে!' : '✓ Deal link and offer copied to clipboard!');
@@ -238,8 +250,19 @@ const DealsDiscountsModal = ({ onClose }) => {
         }, 3000);
       }
     } catch (error) {
-      if (error.name !== "AbortError") {
-        console.error("Error sharing deal:", error);
+      if (error && error.name !== 'AbortError' && error.name !== 'NotAllowedError') {
+        console.warn('Share intent notice:', error.message);
+        try {
+          if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+            setSharedDealId(deal.id);
+            setShareToastMsg(isBangla ? '✓ লিংক ক্লিপবোর্ডে কপি করা হয়েছে!' : '✓ Deal link copied to clipboard!');
+            setTimeout(() => {
+              setSharedDealId(null);
+              setShareToastMsg(null);
+            }, 3000);
+          }
+        } catch (_) {}
       }
     }
   };
@@ -1315,8 +1338,10 @@ const DealsDiscountsModal = ({ onClose }) => {
             <img
               src={thumbUrl}
               alt={dealTitle}
+              loading="lazy"
+              decoding="async"
               onError={(e) => { e.target.src = '/add1.png'; }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
             />
           </div>
         </div>
@@ -1387,8 +1412,9 @@ const DealsDiscountsModal = ({ onClose }) => {
           bottom: 0,
           width: '100%',
           maxWidth: '100%',
-          minHeight: '100vh',
-          overflowX: 'hidden',
+          height: '100vh',
+          maxHeight: '100vh',
+          overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           background: isDark 
@@ -1401,6 +1427,9 @@ const DealsDiscountsModal = ({ onClose }) => {
       >
         {/* 1. TOP HEADER BAR: Back Arrow (Left), Exclusive Deals & Discounts (Center/Left), Close X (Right) */}
         <div style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
           padding: '12px 20px',
           borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
           display: 'flex',
@@ -1593,9 +1622,10 @@ const DealsDiscountsModal = ({ onClose }) => {
           flex: 1,
           overflowY: 'auto',
           overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
           width: '100%',
           maxWidth: '100%',
-          padding: '16px',
+          padding: '16px 16px calc(100px + env(safe-area-inset-bottom, 24px)) 16px',
           boxSizing: 'border-box'
         }}>
           <FirestoreStreamBuilder collectionName={COLLECTIONS.DEALS_DISCOUNTS}>
@@ -1628,6 +1658,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                   width: '100%',
                   maxWidth: '1400px',
                   margin: '0 auto',
+                  paddingBottom: '24px',
                   boxSizing: 'border-box'
                 }}>
                   {deals.map((item) => {
@@ -1698,8 +1729,10 @@ const DealsDiscountsModal = ({ onClose }) => {
                           <img 
                             src={item.bannerUrl || (item.imagePath ? (item.imagePath.startsWith('/') ? item.imagePath : '/' + item.imagePath) : '/add1.png')} 
                             alt={item.title}
+                            loading="lazy"
+                            decoding="async"
                             onError={(e) => { e.target.src = '/add1.png'; }}
-                            style={{ width: '100%', maxWidth: '100%', height: '100%', objectFit: 'cover' }}
+                            style={{ width: '100%', maxWidth: '100%', height: '100%', objectFit: 'cover', aspectRatio: '16 / 9' }}
                           />
                         </div>
 
@@ -1828,7 +1861,7 @@ const DealsDiscountsModal = ({ onClose }) => {
                             <motion.button
                               whileHover={{ scale: 1.05 }}
                               whileTap={{ scale: 0.95 }}
-                              onClick={() => handleShareDeal(item)}
+                              onClick={(e) => handleShareDeal(e, item)}
                               style={{
                                 padding: '13px 16px',
                                 borderRadius: '14px',
@@ -2221,7 +2254,9 @@ const DealsDiscountsModal = ({ onClose }) => {
                               <img
                                 src={selectedDealForClaim.bannerUrl || '/add1.png'}
                                 alt="Product banner"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                loading="lazy"
+                                decoding="async"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', aspectRatio: '1 / 1' }}
                               />
                             </div>
 

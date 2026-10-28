@@ -169,12 +169,12 @@
   }
 }
 
-/* Wide Responsive Dashboard Card Container - Zero Side Gaps, Full-Width Viewport */
+/* Wide Responsive Dashboard Card Container - Zero Side Gaps, Full-Width Viewport & Generous Bottom Safe Space */
 .hero-responsive-container {
   width: 100%;
   max-width: 580px;
   margin: 0 auto;
-  padding: 24px 12px 14px 12px;
+  padding: 24px 12px calc(110px + env(safe-area-inset-bottom, 24px)) 12px;
   position: relative;
   z-index: 4;
   box-sizing: border-box;
@@ -183,7 +183,7 @@
 @media (min-width: 1024px) {
   .hero-responsive-container {
     max-width: 1260px !important;
-    padding: 88px 36px 20px 36px !important;
+    padding: 88px 36px 40px 36px !important;
   }
 }
 
@@ -818,6 +818,73 @@ h1, h2, h3, h4, h5, h6 {
 .admin-tab-bar-container button {
   flex-shrink: 0 !important;
   white-space: nowrap !important;
+}
+
+/* ========================================================
+   Mobile 60FPS Performance, GPU Compositing & Hardware Acceleration
+   ======================================================== */
+
+/* 1. Global Touch & Scroll Compositing */
+html, body {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  text-rendering: optimizeSpeed;
+}
+
+/* 2. Hardware Acceleration for Scrollable Containers, Modals & Banners */
+.gpu-accelerated,
+.bento-carousel-box,
+.stacked-capsules-container,
+.modal-scroll-container,
+.admin-tab-bar-container,
+.custom-scrollbar {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: scroll-position, transform;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* 3. Contain Paint Layout Style (Zero Unnecessary Repaints & Reflows) */
+.contain-paint,
+.bento-carousel-box,
+.hero-profile-avatar-wrapper,
+.card-capsule,
+.admin-compact-card {
+  contain: paint layout style;
+}
+
+/* 4. Mobile Backdrop-Filter Optimization (Prevents GPU Fill-Rate Lag) */
+@media (max-width: 768px) {
+  * {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tone down heavy desktop blurs to super-efficient 6-8px on mobile phones */
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-lg,
+  [style*="backdropFilter: 'blur(16px)'"],
+  [style*="backdrop-filter: blur(16px)"],
+  [style*="backdrop-filter: blur(20px)"],
+  [style*="backdrop-filter: blur(24px)"] {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  /* Prevent overscroll bounce stutter on mobile modals */
+  .modal-overlay,
+  .fixed.inset-0 {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 5. Image CLS (Cumulative Layout Shift) Prevention */
+img {
+  content-visibility: auto;
 }
 
 

@@ -73,19 +73,19 @@ function App() {
             )}
           </Suspense>
           
-          {/* Main Mobile-First Digital Business Card Layout - Clean & Scroll Locked */}
+          {/* Main Mobile-First Digital Business Card Layout - Clean, Fluid & Naturally Scrollable */}
           <div 
             id="main-homepage-container"
-            className="h-screen overflow-hidden" 
+            className="min-h-screen w-full overflow-y-auto" 
             style={{ 
               position: 'relative', 
               zIndex: 1, 
-              height: '100vh', 
-              maxHeight: '100vh', 
+              minHeight: '100vh', 
               width: '100%', 
               display: 'flex', 
               flexDirection: 'column', 
-              overflow: 'hidden' 
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch'
             }}
           >
             {/* Digital Profile, Metrics, Social Icons & Bento Cards */}

@@ -2,12 +2,24 @@ import express from 'express';
 import nodemailer from 'nodemailer';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
+app.use('/uploads', express.static(uploadsDir));
 
 // Google SMTP ট্রান্সপোর্টার কনফিগারেশন (পোর্ট ৪৬৫ - ডেডিকেটেড SSL, নো MX লুকআপ)
 const senderEmail = (process.env.GMAIL_USER || 'rasedul.karim00@gmail.com').trim();
@@ -188,6 +200,146 @@ const handleSendWelcomeEmailRoute = async (req, res) => {
 
 app.post('/api/send-welcome-email', handleSendWelcomeEmailRoute);
 app.post('/.netlify/functions/send-welcome-email', handleSendWelcomeEmailRoute);
+
+// Cloudflare R2 Storage Configuration (AWS S3 SDK Client)
+const r2AccountId = (process.env.R2_ACCOUNT_ID || '8640d86f82b73afcaa0fd1e4c5229d10').trim();
+const r2AccessKeyId = (process.env.R2_ACCESS_KEY_ID || '21933dc73905f37bf57d4f47a0437527').trim();
+const r2SecretAccessKey = (process.env.R2_SECRET_ACCESS_KEY || 'a54d14821a6f7efe4185bd3932d836b44c9399d4e1efa532105c7aad57f1a951').trim();
+const r2BucketName = (process.env.R2_BUCKET_NAME || 'portfolio').trim();
+const r2PublicDomain = (process.env.R2_PUBLIC_DOMAIN || 'https://pub-646ef96285ab4ea585237b1060eb0116.r2.dev').trim().replace(/\/+$/, '');
+
+let s3Client = null;
+if (r2AccessKeyId && r2SecretAccessKey) {
+  try {
+    s3Client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: r2AccessKeyId,
+        secretAccessKey: r2SecretAccessKey,
+      },
+    });
+    console.log(`✅ Cloudflare R2 S3 Client configured for bucket: ${r2BucketName} (Public: ${r2PublicDomain})`);
+  } catch (err) {
+    console.warn('⚠️ Cloudflare R2 S3 Client initialization warning:', err.message);
+  }
+} else {
+  console.log('ℹ️ Cloudflare R2 credentials (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) not set in .env.');
+}
+
+// ৪. Universal Cloudflare R2 / S3-Compatible Upload Endpoint for All Website Sections
+const handleR2UploadRoute = async (req, res) => {
+  try {
+    const { filename, fileData, image, contentType, folder } = req.body;
+    const rawData = fileData || image;
+    if (!filename || !rawData) {
+      return res.status(400).json({ success: false, message: 'Filename and fileData are required.' });
+    }
+
+    // 1. Strict Validation: Cloudflare R2 Credentials MUST be present
+    if (!r2AccessKeyId || !r2SecretAccessKey || !s3Client) {
+      console.error('❌ Cloudflare R2 credentials missing');
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cloudflare R2 ক্রেডেনশিয়াল পাওয়া যায়নি! বাকেটে আসল ফাইল আপলোড করতে অনুগ্রহ করে .env ফাইলে R2_ACCESS_KEY_ID এবং R2_SECRET_ACCESS_KEY কনফিগার করুন।' 
+      });
+    }
+
+    // Folder categorization (e.g., sponsors, deals, projects, etc.)
+    const folderName = (folder || req.query?.folder || 'uploads').toString().trim().replace(/^\/+|\/+$/g, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'uploads';
+    const safeExt = contentType === 'image/jpeg' ? '.jpg' : '.webp';
+    const cleanBase = filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${Date.now()}_${cleanBase}${safeExt}`;
+    const filePath = `${folderName}/${fileName}`;
+    const base64Data = rawData.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const mimeType = contentType || 'image/webp';
+
+    // 2. Direct Cloudflare R2 Upload via AWS S3 SDK PutObjectCommand
+    const putCommand = new PutObjectCommand({
+      Bucket: r2BucketName,
+      Key: filePath,
+      Body: buffer,
+      ContentType: mimeType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    });
+    await s3Client.send(putCommand);
+
+    // 3. Construct Authentic Cloudflare R2 Public HTTPS URL
+    const publicDomain = r2PublicDomain || 'https://pub-646ef96285ab4ea585237b1060eb0116.r2.dev';
+    const publicUrl = `${publicDomain}/${filePath}`;
+
+    console.log(`✅ [Cloudflare R2 PutObjectCommand] Successfully written to R2 bucket "${r2BucketName}/${filePath}": ${publicUrl} (${buffer.length} bytes)`);
+
+    return res.json({ 
+      success: true, 
+      url: publicUrl, 
+      filePath,
+      key: filePath,
+      filename: fileName,
+      bucket: r2BucketName,
+      size: buffer.length,
+      storage: 'cloudflare-r2' 
+    });
+  } catch (err) {
+    console.error('❌ Cloudflare R2 PutObjectCommand error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Cloudflare R2 বাকেটে ফাইল আপলোড ব্যর্থ হয়েছে: ${err.message || 'Unknown R2 error'}` 
+    });
+  }
+};
+
+app.post('/api/upload-to-r2', handleR2UploadRoute);
+app.post('/api/r2-upload', handleR2UploadRoute);
+app.post('/.netlify/functions/upload-to-r2', handleR2UploadRoute);
+app.post('/.netlify/functions/r2-upload', handleR2UploadRoute);
+
+// ৫. Cloudflare R2 Storage Purge Delete Endpoint
+const handleR2DeleteRoute = async (req, res) => {
+  try {
+    const { fileUrl, key: directKey } = req.body;
+    if (!fileUrl && !directKey) {
+      return res.status(400).json({ success: false, message: 'fileUrl or key is required.' });
+    }
+
+    let key = directKey || '';
+    if (!key && fileUrl) {
+      try {
+        if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+          const parsed = new URL(fileUrl);
+          key = parsed.pathname.replace(/^\/+/, '');
+        } else {
+          key = fileUrl.replace(/^\/+/, '');
+        }
+      } catch {
+        key = fileUrl.replace(/^\/+/, '');
+      }
+    }
+
+    if (s3Client && key) {
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: r2BucketName,
+          Key: key
+        }));
+        console.log(`🗑️ [Cloudflare R2 DeleteObjectCommand] Purged: ${key}`);
+      } catch (s3DelErr) {
+        console.warn('R2 DeleteObjectCommand notice:', s3DelErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'File purged successfully', key });
+  } catch (err) {
+    console.error('R2 delete error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+app.post('/api/r2-delete', handleR2DeleteRoute);
+app.post('/api/delete-from-r2', handleR2DeleteRoute);
+app.post('/.netlify/functions/r2-delete', handleR2DeleteRoute);
+app.post('/.netlify/functions/delete-from-r2', handleR2DeleteRoute);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

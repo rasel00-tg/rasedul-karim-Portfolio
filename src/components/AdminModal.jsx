@@ -48,12 +48,14 @@ import {
   createLocalImagePreview,
   readFileAsBase64,
   processAndUploadProjectMedia,
-  compressImageWithCanvas
+  compressImageWithCanvas,
+  uploadSponsorBannerToR2,
+  deleteSponsorBannerFromR2
 } from '../services/storageService';
 import { createProject, updateProject, deleteProject } from '../services/adminService';
 import { usePortfolioStream } from '../firebase/usePortfolioStream';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
-import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem } from '../services/featuresService';
+import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem, saveSponsorBannerWithFIFO, BASELINE_SPONSOR_BANNERS } from '../services/featuresService';
 import { firebaseConfig, initFirebase } from '../firebase/config';
 import { useLanguage } from '../context/LanguageContext';
 import AddDealModal, { compressImageClientSide } from './AddDealModal';
@@ -156,6 +158,156 @@ const AdminModal = ({ onClose }) => {
   const [isPublishingModalOpen, setIsPublishingModalOpen] = useState(false);
   const [publishSuccessModalData, setPublishSuccessModalData] = useState(null);
 
+  // --- DEDICATED TAB: SPONSOR BANNERS (7-IMAGE FIFO ROTATION) STATE ---
+  const [sponsorTitle, setSponsorTitle] = useState('');
+  const [sponsorDescription, setSponsorDescription] = useState('');
+  const [sponsorSelectedFile, setSponsorSelectedFile] = useState(null);
+  const [sponsorLocalPreview, setSponsorLocalPreview] = useState('');
+  const [sponsorCompressedBlob, setSponsorCompressedBlob] = useState(null);
+  const [sponsorOriginalSize, setSponsorOriginalSize] = useState(0);
+  const [sponsorCompressedSize, setSponsorCompressedSize] = useState(0);
+  const [sponsorIsCompressing, setSponsorIsCompressing] = useState(false);
+  const [sponsorUploading, setSponsorUploading] = useState(false);
+  const [sponsorFormErrors, setSponsorFormErrors] = useState({});
+  const sponsorFileInputRef = useRef(null);
+
+  // File Selection & Client-Side HTML5 Canvas Compression (< 250-300 KB)
+  const handleSponsorFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setSponsorFormErrors((prev) => ({
+        ...prev,
+        image: isBangla ? 'অনুগ্রহ করে শুধুমাত্র ছবি ফাইল নির্বাচন করুন' : 'Please select an image file'
+      }));
+      return;
+    }
+
+    setSponsorFormErrors((prev) => ({ ...prev, image: null }));
+    setSponsorSelectedFile(file);
+
+    // Instant local preview without network upload (Deferred Upload)
+    const localUrl = URL.createObjectURL(file);
+    setSponsorLocalPreview(localUrl);
+
+    // Client-side HTML5 Canvas Auto-Compression & Resolution Balancing
+    setSponsorIsCompressing(true);
+    try {
+      const compressed = await compressImageWithCanvas(file, {
+        maxWidth: 1280,
+        maxHeight: 1280,
+        quality: 0.82,
+        format: 'image/webp'
+      });
+      if (compressed?.blob) {
+        setSponsorCompressedBlob(compressed.blob);
+        setSponsorOriginalSize(file.size);
+        setSponsorCompressedSize(compressed.blob.size || compressed.size);
+      } else {
+        setSponsorCompressedBlob(file);
+        setSponsorOriginalSize(file.size);
+        setSponsorCompressedSize(file.size);
+      }
+    } catch (err) {
+      console.warn('Canvas auto-compression notice:', err);
+      setSponsorCompressedBlob(file);
+      setSponsorOriginalSize(file.size);
+      setSponsorCompressedSize(file.size);
+    } finally {
+      setSponsorIsCompressing(false);
+    }
+  };
+
+  const handleResetSponsorImage = () => {
+    if (sponsorLocalPreview && sponsorLocalPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(sponsorLocalPreview);
+    }
+    setSponsorSelectedFile(null);
+    setSponsorLocalPreview('');
+    setSponsorCompressedBlob(null);
+    setSponsorOriginalSize(0);
+    setSponsorCompressedSize(0);
+    if (sponsorFileInputRef.current) sponsorFileInputRef.current.value = '';
+  };
+
+  // Form Submit: Validates -> Uploads to Cloud Storage -> FIFO Auto-Rotates (Max 7)
+  const handlePublishSponsorBanner = async (e) => {
+    e.preventDefault();
+    const errors = {};
+    if (!sponsorTitle.trim()) {
+      errors.title = isBangla ? 'ছবির শিরোনাম বা ক্যাপশন আবশ্যক' : 'Title or caption is required';
+    }
+    if (!sponsorDescription.trim()) {
+      errors.description = isBangla ? 'বিস্তারিত বিবরণ লেখা আবশ্যক' : 'Detailed description is required';
+    }
+    if (!sponsorCompressedBlob && !sponsorSelectedFile) {
+      errors.image = isBangla ? 'একটি ব্যানার ছবি নির্বাচন করুন' : 'Please select a banner image';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setSponsorFormErrors(errors);
+      return;
+    }
+
+    setSponsorUploading(true);
+    try {
+      // 1. Deferred Cloudflare R2 Upload happens ONLY NOW upon form submit (Zero Firebase Storage usage)
+      const uploadFile = sponsorCompressedBlob || sponsorSelectedFile;
+      const uploadedUrl = await uploadSponsorBannerToR2(uploadFile, uploadFile.name || 'sponsor_banner.webp');
+
+      // 2. Strict Validation: Absolute requirement that uploadedUrl is an authentic Cloudflare R2 HTTPS link
+      if (!uploadedUrl || !uploadedUrl.startsWith('https://') || uploadedUrl.startsWith('/uploads/')) {
+        throw new Error(
+          isBangla 
+            ? 'ক্লাউডফ্লেয়ার R2 বাকেটে ফাইল জমা হয়নি (পাবলিক HTTPS লিংক মিসিং)। ফায়ারস্টোরে কোনো ডেটা সেভ করা হয়নি।' 
+            : 'File was not saved in Cloudflare R2 bucket. No Firestore document created.'
+        );
+      }
+
+      // 3. Save with FIFO Auto-Rotation (Limit 7 items, Newest First)
+      await saveSponsorBannerWithFIFO({
+        title: sponsorTitle.trim(),
+        description: sponsorDescription.trim(),
+        imageUrl: uploadedUrl,
+        createdAt: new Date().toISOString()
+      }, idToken);
+
+      showFeatureToast(
+        isBangla 
+          ? '📢 ক্লাউডফ্লেয়ার R2-তে ব্যানার সফলভাবে সংরক্ষিত ও ৭টি ছবির FIFO রোটেশন সিঙ্ক হয়েছে!' 
+          : '📢 Sponsor Banner uploaded to Cloudflare R2 and 7-image FIFO rotation synchronized!',
+        'success'
+      );
+
+      // Clean up local preview & reset form
+      handleResetSponsorImage();
+      setSponsorTitle('');
+      setSponsorDescription('');
+      setSponsorFormErrors({});
+    } catch (err) {
+      console.error('Error publishing sponsor banner:', err);
+      showFeatureToast(err.message || (isBangla ? 'ব্যানার প্রকাশে সমস্যা হয়েছে' : 'Failed to publish banner'), 'error');
+    } finally {
+      setSponsorUploading(false);
+    }
+  };
+
+  const handleDeleteSponsorBanner = async (bannerId, bannerTitle, imageUrl) => {
+    if (!window.confirm(isBangla ? `আপনি কি নিশ্চিত "${bannerTitle || 'এই ব্যানার'}" ডিলিট করতে চান?` : `Are you sure you want to delete "${bannerTitle || 'this banner'}"?`)) {
+      return;
+    }
+    try {
+      await deleteFeatureItem(COLLECTIONS.SPONSORS, bannerId, idToken);
+      if (imageUrl) {
+        await deleteSponsorBannerFromR2(imageUrl);
+      }
+      showFeatureToast(isBangla ? 'ব্যানার ডিলিট সফল হয়েছে' : 'Banner deleted successfully', 'success');
+    } catch (err) {
+      showFeatureToast(err.message || (isBangla ? 'ডিলিট ব্যর্থ হয়েছে' : 'Failed to delete banner'), 'error');
+    }
+  };
+
   // Auto-dismiss success feedback modal
   useEffect(() => {
     if (publishSuccessModalData) {
@@ -238,7 +390,7 @@ const AdminModal = ({ onClose }) => {
 
       // 2. Client-Side Canvas Optimization & Delayed Upload to Cloudflare R2 on Form Submit
       if (selectedProjectFile) {
-        finalMediaUrl = await processAndUploadProjectMedia(selectedProjectFile, { idToken });
+        finalMediaUrl = await processAndUploadProjectMedia(selectedProjectFile, { idToken, folder: 'projects' });
       }
 
       const payload = {
@@ -726,7 +878,7 @@ const AdminModal = ({ onClose }) => {
         try {
           const compressed = await compressImageClientSide(selectedDealFile, 300);
           try {
-            finalBanner = await processAndUploadProjectMedia(compressed, { idToken });
+            finalBanner = await processAndUploadProjectMedia(compressed, { idToken, folder: 'deals' });
           } catch (e) {
             finalBanner = await uploadFileToStorage(compressed, 'deals', idToken);
           }
@@ -2089,7 +2241,8 @@ const AdminModal = ({ onClose }) => {
                 { id: 'upcoming', labelBn: 'আপকামিং প্রজেক্ট', labelEn: 'Upcoming Projects', icon: Rocket, color: '#C084FC' },
                 { id: 'favorite', labelBn: 'ফেভারিট টুলস', labelEn: 'Favorite Tools', icon: Star, color: '#FFB300' },
                 { id: 'deals', labelBn: 'Deals & Discounts Post', labelEn: 'Deals & Discounts Post', icon: Percent, color: '#10B981' },
-                { id: 'deal_orders', labelBn: 'Pending Deals & Orders', labelEn: 'Pending Deals & Orders', icon: Clock, color: '#F59E0B' }
+                { id: 'deal_orders', labelBn: 'Pending Deals & Orders', labelEn: 'Pending Deals & Orders', icon: Clock, color: '#F59E0B' },
+                { id: 'sponsors', labelBn: '📢 Sponsor Banners', labelEn: '📢 Sponsor Banners', icon: Sparkles, color: '#FF6B00' }
               ].map((tab) => {
                 const IconComp = tab.icon;
                 const isActive = activeAdminTab === tab.id;
@@ -2680,6 +2833,81 @@ const AdminModal = ({ onClose }) => {
                               {pendingCount}
                             </span>
                             <ChevronRight size={14} color="#F59E0B" opacity={0.8} />
+                          </div>
+                        </motion.div>
+                      );
+                    }}
+                  </FirestoreStreamBuilder>
+
+                  {/* CARD 7: SPONSOR BANNERS (7-IMAGE FIFO ROTATION) */}
+                  <FirestoreStreamBuilder collectionName={COLLECTIONS.SPONSOR_BANNERS}>
+                    {({ data }) => {
+                      const count = (data && data.length > 0) ? data.length : 6;
+                      return (
+                        <motion.div
+                          whileHover={{ y: -2, scale: 1.01 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleSelectAdminTab('sponsors')}
+                          className="admin-compact-card"
+                          style={{
+                            background: 'radial-gradient(circle at top left, rgba(255, 107, 0, 0.16), rgba(15, 23, 42, 0.92))',
+                            border: '1.2px solid rgba(255, 107, 0, 0.35)',
+                            boxShadow: '0 4px 16px rgba(255, 107, 0, 0.12)'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', minWidth: 0 }}>
+                            <div style={{
+                              width: '34px',
+                              height: '34px',
+                              borderRadius: '10px',
+                              background: 'rgba(255, 107, 0, 0.2)',
+                              border: '1px solid rgba(255, 107, 0, 0.4)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#FF6B00',
+                              flexShrink: 0
+                            }}>
+                              <Sparkles size={17} />
+                            </div>
+
+                            <div style={{ minWidth: 0 }}>
+                              <h4 style={{
+                                margin: 0,
+                                fontSize: '0.85rem',
+                                fontWeight: 800,
+                                color: '#FFFFFF',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {isBangla ? '📢 Sponsor Banners' : '📢 Sponsor Banners'}
+                              </h4>
+                              <span style={{
+                                fontSize: '0.66rem',
+                                color: '#94A3B8',
+                                display: 'block',
+                                marginTop: '2px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {isBangla ? '৭টি ছবির FIFO রোটেশন' : '7-Image FIFO Rotation'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+                            <span style={{
+                              fontSize: '17px',
+                              fontWeight: 900,
+                              color: '#FFFFFF',
+                              fontFamily: "'Space Grotesk', monospace",
+                              lineHeight: 1
+                            }}>
+                              {count}
+                            </span>
+                            <ChevronRight size={14} color="#FF6B00" opacity={0.8} />
                           </div>
                         </motion.div>
                       );
@@ -5642,6 +5870,508 @@ const AdminModal = ({ onClose }) => {
                   </FirestoreStreamBuilder>
                 </>
               )}
+            </div>
+          )}
+
+          {/* TAB: SPONSOR BANNERS (7-IMAGE FIFO ROTATION & HIDDEN CAPTION POSTS) */}
+          {activeAdminTab === 'sponsors' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Back to Overview Header */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '8px 14px',
+                borderRadius: '12px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveAdminTab('overview')}
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    cursor: 'pointer',
+                    color: '#FF6B00',
+                    flexShrink: 0,
+                    transition: 'all 0.2s ease'
+                  }}
+                  title={isBangla ? 'ওভারভিউ ড্যাশবোর্ডে ফিরুন' : 'Back to Overview'}
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <div>
+                  <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#FFFFFF' }}>
+                    {isBangla ? '← ড্যাশবোর্ড ওভারভিউতে ফিরুন' : '← Back to Overview Dashboard'}
+                  </span>
+                  <span style={{ display: 'block', fontSize: '0.7rem', color: '#94A3B8' }}>
+                    {isBangla ? '📢 স্পন্সর ব্যানার ও ৭টি ছবির FIFO রোটেশন ম্যানেজমেন্ট' : '📢 Sponsor Banners & 7-Image FIFO Rotation Management'}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+                {/* LEFT COLUMN: COMPACT ADD SPONSOR BANNER FORM */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  padding: '22px',
+                  borderRadius: '18px',
+                  border: '1.5px solid rgba(255, 107, 0, 0.25)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '10px',
+                      background: 'rgba(255, 107, 0, 0.15)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FF6B00'
+                    }}>
+                      <Sparkles size={18} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#FF6B00', fontWeight: 800 }}>
+                        {isBangla ? 'নতুন স্পন্সর ব্যানার যুক্ত করুন' : 'Add New Sponsor Banner'}
+                      </h3>
+                      <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                        {isBangla ? 'সাবমিট-পরবর্তী অটো-কম্প্রেশন ও স্টোরেজ আপলোড' : 'Auto-compress & deferred upload on submit'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handlePublishSponsorBanner} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* 1. Title / Caption */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.80rem', color: '#94A3B8', fontWeight: 700, marginBottom: '6px' }}>
+                        {isBangla ? 'ছবির শিরোনাম বা ক্যাপশন *' : 'Image Title / Caption *'}
+                      </label>
+                      <input
+                        type="text"
+                        value={sponsorTitle}
+                        onChange={(e) => setSponsorTitle(e.target.value)}
+                        placeholder={isBangla ? 'যেমন: Brand Visual Identity' : 'e.g., Brand Visual Identity'}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: `1px solid ${sponsorFormErrors.title ? '#EF4444' : 'rgba(255, 255, 255, 0.12)'}`,
+                          color: '#FFFFFF',
+                          fontSize: '0.88rem',
+                          outline: 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                      {sponsorFormErrors.title && (
+                        <span style={{ display: 'block', color: '#EF4444', fontSize: '0.72rem', marginTop: '4px' }}>
+                          {sponsorFormErrors.title}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 2. Detailed Description Textarea */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.80rem', color: '#94A3B8', fontWeight: 700, marginBottom: '6px' }}>
+                        {isBangla ? 'বিস্তারিত বিবরণ (Description) *' : 'Detailed Description *'}
+                      </label>
+                      <textarea
+                        rows={4}
+                        value={sponsorDescription}
+                        onChange={(e) => setSponsorDescription(e.target.value)}
+                        placeholder={isBangla ? 'স্পন্সর বা পোস্ট সংক্রান্ত বিস্তারিত বিবরণ লিখুন (ক্লিক করার পর এটি প্রদর্শিত হবে)...' : 'Write detailed sponsor description (shown when banner is clicked)...'}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: `1px solid ${sponsorFormErrors.description ? '#EF4444' : 'rgba(255, 255, 255, 0.12)'}`,
+                          color: '#FFFFFF',
+                          fontSize: '0.88rem',
+                          outline: 'none',
+                          resize: 'vertical',
+                          boxSizing: 'border-box',
+                          fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                        }}
+                      />
+                      {sponsorFormErrors.description && (
+                        <span style={{ display: 'block', color: '#EF4444', fontSize: '0.72rem', marginTop: '4px' }}>
+                          {sponsorFormErrors.description}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 3. Deferred Upload & Auto-Compress Dropzone */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.80rem', color: '#94A3B8', fontWeight: 700, marginBottom: '6px' }}>
+                        {isBangla ? 'ব্যানার ছবি ড্রপজোন (Deferred Upload & Auto-Compress) *' : 'Banner Image Dropzone (Deferred Upload & Auto-Compress) *'}
+                      </label>
+
+                      <input
+                        ref={sponsorFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleSponsorFileSelect}
+                        style={{ display: 'none' }}
+                      />
+
+                      {sponsorLocalPreview ? (
+                        <div style={{
+                          padding: '12px',
+                          borderRadius: '14px',
+                          background: 'rgba(255, 255, 255, 0.04)',
+                          border: '1.5px solid rgba(255, 107, 0, 0.35)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px'
+                        }}>
+                          <div style={{
+                            width: '100%',
+                            height: '140px',
+                            borderRadius: '10px',
+                            overflow: 'hidden',
+                            background: '#0B0F19',
+                            position: 'relative'
+                          }}>
+                            <img
+                              src={sponsorLocalPreview}
+                              alt="Local Preview"
+                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={handleResetSponsorImage}
+                              style={{
+                                position: 'absolute',
+                                top: '8px',
+                                right: '8px',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '50%',
+                                background: 'rgba(239, 68, 68, 0.85)',
+                                border: 'none',
+                                color: '#FFFFFF',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              title="Remove image"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+
+                          {/* Compression Stats Badge */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            fontSize: '0.74rem',
+                            color: '#94A3B8',
+                            padding: '6px 10px',
+                            borderRadius: '8px',
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.25)'
+                          }}>
+                            <span style={{ color: '#10B981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <CheckCircle size={13} />
+                              {sponsorIsCompressing 
+                                ? (isBangla ? 'কম্প্রেস হচ্ছে...' : 'Compressing...') 
+                                : (isBangla ? 'ক্লায়েন্ট সাইড অপ্টিমাইজড' : 'Client-Side Optimized')}
+                            </span>
+                            <span>
+                              {sponsorOriginalSize > 0 && (
+                                <>
+                                  {(sponsorOriginalSize / 1024).toFixed(0)} KB → <strong style={{ color: '#10B981' }}>{(sponsorCompressedSize / 1024).toFixed(0)} KB</strong>
+                                  {sponsorOriginalSize > sponsorCompressedSize && (
+                                    <span style={{ color: '#38BDF8', marginLeft: '4px' }}>
+                                      (-{Math.round((1 - sponsorCompressedSize / sponsorOriginalSize) * 100)}%)
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => sponsorFileInputRef.current?.click()}
+                          style={{
+                            padding: '28px 16px',
+                            borderRadius: '14px',
+                            border: `2px dashed ${sponsorFormErrors.image ? '#EF4444' : 'rgba(255, 107, 0, 0.4)'}`,
+                            background: 'rgba(255, 107, 0, 0.03)',
+                            textAlign: 'center',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '8px',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div style={{
+                            width: '42px',
+                            height: '42px',
+                            borderRadius: '50%',
+                            background: 'rgba(255, 107, 0, 0.15)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#FF6B00'
+                          }}>
+                            <Upload size={20} />
+                          </div>
+                          <span style={{ fontSize: '0.84rem', fontWeight: 700, color: '#FFFFFF' }}>
+                            {isBangla ? 'ছবি সিলেক্ট করতে ক্লিক করুন' : 'Click to select banner image'}
+                          </span>
+                          <span style={{ fontSize: '0.70rem', color: '#94A3B8' }}>
+                            {isBangla ? 'PNG, JPG, WebP (সিলেক্টে আপলোড হবে না, সাবমিটে কম্প্রেস হয়ে আপলোড হবে)' : 'Deferred upload on submit with auto-compression'}
+                          </span>
+                        </div>
+                      )}
+                      {sponsorFormErrors.image && (
+                        <span style={{ display: 'block', color: '#EF4444', fontSize: '0.72rem', marginTop: '4px' }}>
+                          {sponsorFormErrors.image}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={sponsorUploading || sponsorIsCompressing}
+                      style={{
+                        marginTop: '6px',
+                        padding: '12px 18px',
+                        borderRadius: '12px',
+                        background: sponsorUploading 
+                          ? 'rgba(255, 107, 0, 0.5)' 
+                          : 'linear-gradient(135deg, #FF6B00 0%, #F57F17 100%)',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        fontSize: '0.90rem',
+                        fontWeight: 800,
+                        cursor: sponsorUploading ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 16px rgba(255, 107, 0, 0.35)',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      {sponsorUploading ? (
+                        <>
+                          <RefreshCw size={16} className="animate-spin" />
+                          <span>{isBangla ? 'কম্প্রেস ও আপলোড হচ্ছে...' : 'Compressing & Publishing...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} />
+                          <span>{isBangla ? 'ব্যানার প্রকাশ করুন' : 'Publish Sponsor Banner'}</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+
+                {/* RIGHT COLUMN: 7-IMAGE FIFO ROTATION MONITOR & LIVE LIST */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  padding: '22px',
+                  borderRadius: '18px',
+                  border: '1.5px solid rgba(255, 255, 255, 0.1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px'
+                }}>
+                  {/* FIFO Rules Notice */}
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '14px',
+                    background: 'rgba(255, 107, 0, 0.08)',
+                    border: '1px solid rgba(255, 107, 0, 0.25)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px'
+                  }}>
+                    <AlertCircle size={18} color="#FF6B00" style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <div style={{ fontSize: '0.76rem', color: '#E2E8F0', lineHeight: 1.5 }}>
+                      <strong style={{ color: '#FF6B00', display: 'block', marginBottom: '2px' }}>
+                        {isBangla ? '৭টি ছবির অটো-রোটেশন (FIFO নিয়ম):' : '7-Image FIFO Auto-Rotation:'}
+                      </strong>
+                      {isBangla 
+                        ? 'নতুন ব্যানার যুক্ত হলে সেটি তালিকার ১ নম্বরে বসবে। কালেকশনে সর্বোচ্চ ৭টি ব্যানার থাকবে। নতুন ৮ নম্বর ব্যানার প্রকাশ হলে সবার পুরোনো ব্যানার ও স্টোরেজ ফাইল স্বয়ংক্রিয়ভাবে মুছে যাবে।'
+                        : 'Newest banner is placed at #1. A maximum of 7 banners are kept in rotation. When an 8th banner is published, the oldest banner and its storage file are purged automatically.'}
+                    </div>
+                  </div>
+
+                  <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 800, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{isBangla ? 'বর্তমান লাইভ ব্যানার তালিকা (১ - ৭)' : 'Active Rotating Banners (1 - 7)'}</span>
+                  </h4>
+
+                  {/* Stream of Banners */}
+                  <FirestoreStreamBuilder collectionName={COLLECTIONS.SPONSOR_BANNERS}>
+                    {({ data }) => {
+                      const rawList = data && data.length > 0 ? data : BASELINE_SPONSOR_BANNERS;
+                      const banners = [...rawList]
+                        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+                        .slice(0, 7);
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {banners.map((item, idx) => {
+                            const isNewest = idx === 0;
+                            const isOldest = idx === banners.length - 1 && banners.length >= 7;
+
+                            return (
+                              <div
+                                key={item.id || idx}
+                                style={{
+                                  padding: '12px 14px',
+                                  borderRadius: '14px',
+                                  background: isNewest 
+                                    ? 'rgba(255, 107, 0, 0.08)' 
+                                    : 'rgba(255, 255, 255, 0.03)',
+                                  border: `1px solid ${isNewest ? 'rgba(255, 107, 0, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '12px'
+                                }}
+                              >
+                                {/* Left: Position Badge & Thumbnail */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                                  <div style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '8px',
+                                    background: isNewest ? '#FF6B00' : (isOldest ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)'),
+                                    color: isNewest ? '#FFFFFF' : (isOldest ? '#EF4444' : '#94A3B8'),
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.76rem',
+                                    fontWeight: 900,
+                                    flexShrink: 0
+                                  }}>
+                                    #{idx + 1}
+                                  </div>
+
+                                  <div style={{
+                                    width: '54px',
+                                    height: '38px',
+                                    borderRadius: '8px',
+                                    overflow: 'hidden',
+                                    background: '#0B0F19',
+                                    flexShrink: 0,
+                                    border: '1px solid rgba(255, 255, 255, 0.1)'
+                                  }}>
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={item.title || 'Banner'}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => { e.target.src = '/about.png'; }}
+                                    />
+                                  </div>
+
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <h5 style={{
+                                        margin: 0,
+                                        fontSize: '0.84rem',
+                                        fontWeight: 800,
+                                        color: '#FFFFFF',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis'
+                                      }}>
+                                        {item.title || 'Untitled Banner'}
+                                      </h5>
+                                      {isNewest && (
+                                        <span style={{
+                                          padding: '1px 6px',
+                                          borderRadius: '6px',
+                                          background: '#FF6B00',
+                                          color: '#FFFFFF',
+                                          fontSize: '0.58rem',
+                                          fontWeight: 900
+                                        }}>
+                                          NEWEST
+                                        </span>
+                                      )}
+                                      {isOldest && (
+                                        <span style={{
+                                          padding: '1px 6px',
+                                          borderRadius: '6px',
+                                          background: 'rgba(239, 68, 68, 0.2)',
+                                          color: '#EF4444',
+                                          fontSize: '0.58rem',
+                                          fontWeight: 900
+                                        }}>
+                                          NEXT TO ROTATE OUT
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p style={{
+                                      margin: '2px 0 0 0',
+                                      fontSize: '0.70rem',
+                                      color: '#94A3B8',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis'
+                                    }}>
+                                      {item.description || 'No description'}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Right: Delete Action Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSponsorBanner(item.id, item.title, item.imageUrl)}
+                                  style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                                    color: '#EF4444',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                  title={isBangla ? 'ব্যানার ডিলিট করুন' : 'Delete banner'}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    }}
+                  </FirestoreStreamBuilder>
+                </div>
+              </div>
             </div>
           )}
           </motion.div>
