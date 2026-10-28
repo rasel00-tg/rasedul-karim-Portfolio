@@ -400,7 +400,8 @@ const SponsorCarouselView = memo(({
       )}
     </>
   );
-};
+});
+SponsorCarouselView.displayName = 'SponsorCarouselView';
 
 const SponsorBannerCarousel = ({ isDark, isBangla }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -1183,4 +1184,4 @@ const BentoGridSection = ({
   );
 };
 
-export default BentoGridSection;
+export default memo(BentoGridSection);
