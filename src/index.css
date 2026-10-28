@@ -174,10 +174,11 @@
   width: 100%;
   max-width: 580px;
   margin: 0 auto;
-  padding: 24px 12px calc(110px + env(safe-area-inset-bottom, 24px)) 12px;
+  padding: 24px 12px max(8rem, calc(100px + env(safe-area-inset-bottom, 24px))) 12px;
   position: relative;
   z-index: 4;
   box-sizing: border-box;
+  touch-action: pan-y;
 }
 
 @media (min-width: 1024px) {
@@ -554,13 +555,15 @@
   overflow: hidden !important;
 }
 
-/* Global Scrollbar Elimination */
+/* Global Scrollbar Elimination & Fluid Scrolling */
 html, body {
-  overflow: hidden;
-  height: 100%;
-  max-height: 100vh;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 html::-webkit-scrollbar,
@@ -582,9 +585,9 @@ body {
   background-repeat: no-repeat, no-repeat !important;
   background-attachment: fixed !important;
   color: var(--text-primary);
-  overflow: hidden;
-  height: 100vh;
-  max-height: 100vh;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 [data-theme="light"] body,
@@ -829,6 +832,11 @@ html, body {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   text-rendering: optimizeSpeed;
+  touch-action: pan-y;
+}
+
+.-webkit-overflow-scrolling-touch {
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 2. Hardware Acceleration for Scrollable Containers, Modals & Banners */
@@ -845,6 +853,7 @@ html, body {
   will-change: scroll-position, transform;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 
 /* 3. Contain Paint Layout Style (Zero Unnecessary Repaints & Reflows) */
@@ -886,5 +895,139 @@ html, body {
 img {
   content-visibility: auto;
 }
+
+/* ========================================================
+   Standard Viewport, Flex & Modal Utility Classes Fallbacks
+   ======================================================== */
+.fixed {
+  position: fixed !important;
+}
+
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+
+.z-\[999999\],
+.z-\[99999\] {
+  z-index: 999999 !important;
+}
+
+.z-\[1000000\] {
+  z-index: 1000000 !important;
+}
+
+.h-screen {
+  height: 100vh !important;
+}
+
+.h-\[100dvh\] {
+  height: 100dvh !important;
+}
+
+.w-screen {
+  width: 100vw !important;
+}
+
+.w-full {
+  width: 100% !important;
+}
+
+.flex {
+  display: flex !important;
+}
+
+.flex-col {
+  flex-direction: column !important;
+}
+
+.flex-1 {
+  flex: 1 1 0% !important;
+}
+
+.flex-shrink-0 {
+  flex-shrink: 0 !important;
+}
+
+.overflow-hidden {
+  overflow: hidden !important;
+}
+
+.overflow-y-auto {
+  overflow-y: auto !important;
+}
+
+.pointer-events-auto {
+  pointer-events: auto !important;
+}
+
+.sticky {
+  position: sticky !important;
+}
+
+.top-0 {
+  top: 0 !important;
+}
+
+/* Modal and layout utilities */
+.items-center {
+  align-items: center !important;
+}
+
+.justify-between {
+  justify-content: space-between !important;
+}
+
+.gap-3 {
+  gap: 12px !important;
+}
+
+.gap-4 {
+  gap: 16px !important;
+}
+
+.w-full {
+  width: 100% !important;
+}
+
+.h-full {
+  height: 100% !important;
+}
+
+.h-screen {
+  height: 100vh !important;
+  height: 100dvh !important;
+}
+
+.fixed {
+  position: fixed !important;
+}
+
+.inset-0 {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+
+.backdrop-blur {
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+.rounded-xl {
+  border-radius: 12px !important;
+}
+
+.rounded-2xl {
+  border-radius: 16px !important;
+}
+
+.p-4 {
+  padding: 16px !important;
+}
+
 
 

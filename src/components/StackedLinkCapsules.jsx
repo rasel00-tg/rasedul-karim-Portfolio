@@ -75,7 +75,7 @@ const SponsorCarouselView = memo(({
         gap: '8px',
         alignItems: 'center',
         marginTop: '4px',
-        paddingBottom: 'calc(45px + env(safe-area-inset-bottom, 20px))'
+        paddingBottom: 'max(7rem, env(safe-area-inset-bottom, 28px))'
       }}>
         {/* PURE VISUAL CARD: Strictly NO hints, NO labels, NO click text */}
         <motion.div
@@ -102,6 +102,7 @@ const SponsorCarouselView = memo(({
             <motion.div
               key={currentItem?.id || safeIndex}
               drag="x"
+              dragDirectionLock={true}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.2}
               onDragEnd={handleDragEnd}
@@ -470,10 +471,11 @@ const BentoGridSection = ({
   return (
     <section 
       id="bento-grid"
+      className="pb-32"
       style={{
         width: '100%',
         margin: '0',
-        padding: '0',
+        padding: '0 0 max(7rem, env(safe-area-inset-bottom, 28px)) 0',
         boxSizing: 'border-box',
         position: 'relative',
         zIndex: 2
@@ -1179,6 +1181,18 @@ const BentoGridSection = ({
         {/* CARD 7: ENLARGED 100% PURE FULL-COVER 7-BANNER AUTO-CAROUSEL (FIFO) */}
         {/* ========================================================================= */}
         <SponsorBannerCarousel isDark={isDark} isBangla={isBangla} />
+
+        {/* Bottom Safety Spacer for mobile gesture bar / home button */}
+        <div 
+          className="pb-32 w-full shrink-0"
+          style={{ 
+            height: 'max(7rem, env(safe-area-inset-bottom, 28px))',
+            minHeight: '112px',
+            paddingBottom: 'max(7rem, env(safe-area-inset-bottom, 28px))',
+            pointerEvents: 'none' 
+          }} 
+          aria-hidden="true" 
+        />
       </div>
     </section>
   );

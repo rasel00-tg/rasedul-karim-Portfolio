@@ -365,7 +365,7 @@ const HeroSection = ({
   return (
     <section 
       id="hero" 
-      className="min-h-screen w-full"
+      className="min-h-screen w-full flex flex-col"
       style={{ 
         width: '100%',
         margin: '0',

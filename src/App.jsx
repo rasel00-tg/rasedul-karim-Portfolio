@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
 
 import ConnectModal from './components/ConnectModal';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy loading modals for maximum performance
 const DreamModal = lazy(() => import('./components/DreamModal'));
@@ -51,32 +52,34 @@ function App() {
           />
           
           {/* Full-Screen Lazy Modals */}
-          <Suspense fallback={null}>
-            {showProjects && <ProjectsModal onClose={() => setShowProjects(false)} />}
-            {showDream && <DreamModal onClose={() => setShowDream(false)} />}
-            {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
-            {showSkill && <SkillModal onClose={() => setShowSkill(false)} />}
-            {showAdmin && <AdminModal onClose={() => setShowAdmin(false)} />}
-            {showQR && <QRCodeModal onClose={() => setShowQR(false)} />}
-            {showReview && <ReviewModal onClose={() => setShowReview(false)} />}
-            {showDesign && <DesignProjectsModal onClose={() => setShowDesign(false)} />}
-            {showUpcoming && <UpcomingProjectsModal onClose={() => setShowUpcoming(false)} />}
-            {showFavorite && <FavoriteToolsModal onClose={() => setShowFavorite(false)} />}
-            {showDeals && <DealsDiscountsModal onClose={() => setShowDeals(false)} />}
-            {showSubscribe && (
-              <ConnectModal
-                isOpen={showSubscribe}
-                onClose={() => setShowSubscribe(false)}
-                onOpenProjects={() => setShowProjects(true)}
-                onOpenDeals={() => setShowDeals(true)}
-              />
-            )}
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={null}>
+              {showProjects && <ProjectsModal onClose={() => setShowProjects(false)} />}
+              {showDream && <DreamModal onClose={() => setShowDream(false)} />}
+              {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
+              {showSkill && <SkillModal onClose={() => setShowSkill(false)} />}
+              {showAdmin && <AdminModal onClose={() => setShowAdmin(false)} />}
+              {showQR && <QRCodeModal onClose={() => setShowQR(false)} />}
+              {showReview && <ReviewModal onClose={() => setShowReview(false)} />}
+              {showDesign && <DesignProjectsModal onClose={() => setShowDesign(false)} />}
+              {showUpcoming && <UpcomingProjectsModal onClose={() => setShowUpcoming(false)} />}
+              {showFavorite && <FavoriteToolsModal onClose={() => setShowFavorite(false)} />}
+              {showDeals && <DealsDiscountsModal onClose={() => setShowDeals(false)} />}
+              {showSubscribe && (
+                <ConnectModal
+                  isOpen={showSubscribe}
+                  onClose={() => setShowSubscribe(false)}
+                  onOpenProjects={() => setShowProjects(true)}
+                  onOpenDeals={() => setShowDeals(true)}
+                />
+              )}
+            </Suspense>
+          </ErrorBoundary>
           
           {/* Main Mobile-First Digital Business Card Layout - Clean, Fluid & Naturally Scrollable */}
           <div 
             id="main-homepage-container"
-            className="min-h-screen w-full overflow-y-auto" 
+            className="min-h-screen w-full overflow-y-auto flex flex-col" 
             style={{ 
               position: 'relative', 
               zIndex: 1, 
@@ -85,7 +88,8 @@ function App() {
               display: 'flex', 
               flexDirection: 'column', 
               overflowY: 'auto',
-              WebkitOverflowScrolling: 'touch'
+              WebkitOverflowScrolling: 'touch',
+              touchAction: 'pan-y'
             }}
           >
             {/* Digital Profile, Metrics, Social Icons & Bento Cards */}
