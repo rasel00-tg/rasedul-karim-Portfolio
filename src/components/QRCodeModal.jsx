@@ -118,6 +118,8 @@ END:VCARD`;
             <img 
               src={qrCodeUrl} 
               alt="Rasedul Karim Contact QR Code" 
+              loading="lazy"
+              decoding="async"
               style={{ width: '100%', height: '100%', objectFit: 'contain' }}
             />
           </div>

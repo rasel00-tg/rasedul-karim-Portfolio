@@ -123,6 +123,8 @@ const UpcomingProjectsModal = ({ onClose }) => {
                 <img 
                   src="/upcoming project.png" 
                   alt="Upcoming Project" 
+                  loading="lazy"
+                  decoding="async"
                   style={{ width: '28px', height: '28px', objectFit: 'contain' }}
                 />
               </div>

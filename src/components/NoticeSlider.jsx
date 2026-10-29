@@ -117,6 +117,7 @@ const NoticeSlider = () => {
                 src={src} 
                 alt={`Notice banner ${index + 1}`}
                 loading={index === 0 ? "eager" : "lazy"}
+                decoding="async"
                 style={{
                   width: '100%',
                   height: '100%',

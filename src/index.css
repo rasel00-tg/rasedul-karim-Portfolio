@@ -556,6 +556,10 @@
 }
 
 /* Global Scrollbar Elimination & Fluid Scrolling */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 html, body {
   min-height: 100%;
   overflow-x: hidden;
@@ -563,7 +567,10 @@ html, body {
   scrollbar-width: none;
   -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 html::-webkit-scrollbar,
@@ -831,8 +838,10 @@ h1, h2, h3, h4, h5, h6 {
 html, body {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
-  text-rendering: optimizeSpeed;
-  touch-action: pan-y;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+  overscroll-behavior-y: none;
 }
 
 .-webkit-overflow-scrolling-touch {
@@ -840,6 +849,16 @@ html, body {
 }
 
 /* 2. Hardware Acceleration for Scrollable Containers, Modals & Banners */
+.smooth-scroll, [data-scroll-container] {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+}
+
 .gpu-accelerated,
 .bento-carousel-box,
 .stacked-capsules-container,
@@ -850,6 +869,7 @@ html, body {
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  perspective: 1000px;
   will-change: scroll-position, transform;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;

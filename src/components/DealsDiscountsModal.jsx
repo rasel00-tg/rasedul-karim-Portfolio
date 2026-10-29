@@ -3460,6 +3460,8 @@ const DealsDiscountsModal = ({ onClose }) => {
                           <img
                             src={orderConfirmationAlert.dealThumbnail}
                             alt={orderConfirmationAlert.dealTitle}
+                            loading="lazy"
+                            decoding="async"
                             className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0"
                             onError={(e) => { e.currentTarget.src = '/add1.png'; }}
                           />

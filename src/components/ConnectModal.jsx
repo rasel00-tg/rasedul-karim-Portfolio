@@ -261,6 +261,29 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
     }
   };
 
+  // Safe Fallback for Unauthorized Domain or Offline / Local Dev
+  const handleGuestFallback = () => {
+    const randomGuestId = 'guest_' + Math.random().toString(36).substring(2, 10);
+    const fallbackUser = {
+      uid: randomGuestId,
+      displayName: isBangla ? 'অতিথি মেম্বার' : 'Guest Member',
+      email: '',
+      photoURL: '',
+      isGuest: true,
+      providerData: [{ providerId: 'guest' }]
+    };
+    setCurrentUser(fallbackUser);
+    setOnboardingData({
+      name: fallbackUser.displayName,
+      age: '24',
+      referralSource: 'Direct Visit',
+      customReferral: ''
+    });
+    setUnauthorizedDomainInfo(null);
+    setErrorMessage(null);
+    setViewMode('onboarding');
+  };
+
   // 3. Handle Onboarding Form Submit
   const handleOnboardingSubmit = async (e) => {
     e.preventDefault();
@@ -343,7 +366,9 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
   const handleSignOut = async () => {
     setLoadingProvider('signout');
     try {
-      await signOut(auth);
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
       setCurrentUser(null);
       setProfileData(null);
       setViewMode('auth');
@@ -474,100 +499,134 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
             </motion.div>
           )}
 
-          {/* Dedicated Unauthorized Domain Developer Guidance Alert */}
+          {/* Dedicated Unauthorized Domain Developer Guidance Alert (Compact & Non-Blocking) */}
           {unauthorizedDomainInfo && (
             <motion.div
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               style={{
-                padding: '14px 16px',
-                borderRadius: '14px',
-                background: 'rgba(245, 158, 11, 0.12)',
-                border: '1.5px solid rgba(245, 158, 11, 0.45)',
+                padding: '12px 14px',
+                borderRadius: '12px',
+                background: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
+                border: '1.5px solid rgba(245, 158, 11, 0.35)',
                 color: '#FBBF24',
-                fontSize: '0.82rem',
-                marginBottom: '16px',
+                fontSize: '0.80rem',
+                marginBottom: '14px',
                 textAlign: 'left',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '10px'
+                gap: '8px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <AlertCircle size={18} style={{ color: '#F59E0B', flexShrink: 0, marginTop: '2px' }} />
-                <div style={{ flex: 1 }}>
-                  <strong style={{ display: 'block', color: '#FCD34D', fontSize: '0.86rem', marginBottom: '3px', fontWeight: 800 }}>
-                    {isBangla ? '⚠️ ডোমেন অনুমোদন প্রয়োজন (Unauthorized Domain)' : '⚠️ Unauthorized Domain Configuration Required'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertCircle size={16} style={{ color: '#F59E0B', flexShrink: 0 }} />
+                  <strong style={{ color: '#FCD34D', fontSize: '0.82rem', fontWeight: 800 }}>
+                    {isBangla ? 'ডোমেন অনুমোদন সংক্রান্ত নোটিশ' : 'Domain Authorization Notice'}
                   </strong>
-                  <p style={{ margin: 0, color: '#FDE68A', lineHeight: 1.45 }}>
-                    {unauthorizedDomainInfo.message}
-                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setUnauthorizedDomainInfo(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isDark ? '#94A3B8' : '#64748B',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                  title={isBangla ? 'বন্ধ করুন' : 'Dismiss'}
+                >
+                  <X size={15} />
+                </button>
               </div>
 
-              {/* Current Host Badge & 1-Click Copy */}
+              <p style={{ margin: 0, color: isDark ? '#FDE68A' : '#92400E', fontSize: '0.78rem', lineHeight: 1.45 }}>
+                {unauthorizedDomainInfo.message}
+              </p>
+
+              {/* Host Tag, Copy Button & Guest Fallback Action */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: '8px',
-                padding: '8px 12px',
-                borderRadius: '10px',
-                background: isDark ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.65)',
-                border: '1px dashed rgba(245, 158, 11, 0.35)',
+                paddingTop: '4px',
                 flexWrap: 'wrap'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '0.72rem', color: isDark ? '#94A3B8' : '#64748B' }}>
-                    {isBangla ? 'বর্তমান ডোমেন:' : 'Current Domain:'}
-                  </span>
-                  <code style={{ fontFamily: 'monospace', fontWeight: 800, color: '#00F0FF', fontSize: '0.80rem' }}>
+                  <code style={{
+                    fontFamily: 'monospace',
+                    fontWeight: 700,
+                    color: '#00F0FF',
+                    fontSize: '0.75rem',
+                    background: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.7)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(0, 240, 255, 0.25)'
+                  }}>
                     {unauthorizedDomainInfo.domain}
                   </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.clipboard) {
+                        navigator.clipboard.writeText(unauthorizedDomainInfo.domain);
+                        setDomainCopied(true);
+                        setTimeout(() => setDomainCopied(false), 2000);
+                      }
+                    }}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '5px',
+                      background: domainCopied ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                      border: `1px solid ${domainCopied ? '#10B981' : '#F59E0B'}`,
+                      color: domainCopied ? '#10B981' : '#FBBF24',
+                      fontSize: '0.70rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    {domainCopied ? (
+                      <>
+                        <Check size={11} />
+                        <span>{isBangla ? 'কপি হয়েছে' : 'Copied'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={11} />
+                        <span>{isBangla ? 'কপি' : 'Copy'}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (navigator.clipboard) {
-                      navigator.clipboard.writeText(unauthorizedDomainInfo.domain);
-                      setDomainCopied(true);
-                      setTimeout(() => setDomainCopied(false), 2000);
-                    }
-                  }}
+                  onClick={handleGuestFallback}
                   style={{
                     padding: '4px 10px',
-                    borderRadius: '6px',
-                    background: domainCopied ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                    border: `1px solid ${domainCopied ? '#10B981' : '#F59E0B'}`,
-                    color: domainCopied ? '#10B981' : '#FBBF24',
-                    fontSize: '0.72rem',
+                    borderRadius: '7px',
+                    background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.18) 0%, rgba(16, 185, 129, 0.2) 100%)',
+                    border: '1px solid rgba(0, 240, 255, 0.4)',
+                    color: '#00F0FF',
+                    fontSize: '0.75rem',
                     fontWeight: 700,
                     cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '4px',
+                    gap: '5px',
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  {domainCopied ? (
-                    <>
-                      <Check size={12} />
-                      <span>{isBangla ? 'কপি হয়েছে!' : 'Copied!'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={12} />
-                      <span>{isBangla ? 'ডোমেইন কপি করুন' : 'Copy Domain'}</span>
-                    </>
-                  )}
+                  <Sparkles size={12} />
+                  <span>{isBangla ? 'গেস্ট হিসেবে সরাসরি প্রবেশ' : 'Continue as Guest'}</span>
                 </button>
-              </div>
-
-              {/* Developer Action Guidance */}
-              <div style={{ fontSize: '0.74rem', color: isDark ? '#CBD5E1' : '#475569', borderTop: '1px solid rgba(245, 158, 11, 0.2)', paddingTop: '8px', lineHeight: 1.4 }}>
-                💡 <span style={{ color: '#FCD34D', fontWeight: 700 }}>{isBangla ? 'ডেভেলপার গাইড:' : 'Developer Guide:'}</span>{' '}
-                <span>{unauthorizedDomainInfo.developerHint}</span>
               </div>
             </motion.div>
           )}
@@ -746,6 +805,42 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                     </>
                   )}
                 </motion.button>
+
+                {/* 3. Safe Direct Guest Connect Option */}
+                <button
+                  type="button"
+                  onClick={handleGuestFallback}
+                  disabled={!!loadingProvider}
+                  style={{
+                    marginTop: '4px',
+                    width: '100%',
+                    padding: '11px 16px',
+                    borderRadius: '14px',
+                    background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
+                    color: isDark ? '#94A3B8' : '#475569',
+                    border: isDark ? '1px dashed rgba(255, 255, 255, 0.16)' : '1px dashed rgba(0, 0, 0, 0.16)',
+                    fontWeight: 700,
+                    fontSize: '0.84rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease',
+                    fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#00F0FF';
+                    e.currentTarget.style.color = '#00F0FF';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.16)';
+                    e.currentTarget.style.color = isDark ? '#94A3B8' : '#475569';
+                  }}
+                >
+                  <Sparkles size={15} />
+                  <span>{isBangla ? 'অথবা সরাসরি গেস্ট (Guest) হিসেবে প্রবেশ করুন' : 'Or Continue Directly as Guest'}</span>
+                </button>
               </div>
 
               {/* Privacy Footnote */}

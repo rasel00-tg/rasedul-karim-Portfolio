@@ -123,6 +123,8 @@ const DesignProjectsModal = ({ onClose }) => {
                 <img 
                   src="/design project.png" 
                   alt="Design Project" 
+                  loading="lazy"
+                  decoding="async"
                   style={{ width: '28px', height: '28px', objectFit: 'contain' }}
                 />
               </div>
@@ -266,6 +268,8 @@ const DesignProjectsModal = ({ onClose }) => {
                             <img 
                               src={item.imageUrl || '/app1.png'} 
                               alt={item.title}
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => { e.target.src = '/app1.png'; }}
                               style={{
                                 width: '100%',

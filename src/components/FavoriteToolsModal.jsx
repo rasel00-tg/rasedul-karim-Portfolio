@@ -129,6 +129,8 @@ const FavoriteToolsModal = ({ onClose }) => {
                 <img 
                   src="/favorite.png" 
                   alt="Favorite" 
+                  loading="lazy"
+                  decoding="async"
                   style={{ width: '28px', height: '28px', objectFit: 'contain' }}
                 />
               </div>
@@ -294,6 +296,8 @@ const FavoriteToolsModal = ({ onClose }) => {
                                 <img 
                                   src={item.thumbnailUrl || '/favorite.png'} 
                                   alt={item.name}
+                                  loading="lazy"
+                                  decoding="async"
                                   onError={(e) => { e.target.src = '/favorite.png'; }}
                                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                 />

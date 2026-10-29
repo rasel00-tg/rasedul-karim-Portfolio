@@ -302,6 +302,8 @@ const AboutModal = ({ onClose }) => {
                     <img 
                       src="/about.png" 
                       alt="Rasedul Karim" 
+                      loading="lazy"
+                      decoding="async"
                       style={{
                         width: '100%',
                         height: '100%',
