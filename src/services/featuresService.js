@@ -203,57 +203,14 @@ export const getBaselineForCollection = (collectionName) => {
     case COLLECTIONS.SPONSOR_BANNERS:
     case 'sponsor_banners':
     case 'sponsors':
-      return BASELINE_SPONSOR_BANNERS;
+      return [];
     default:
       return [];
   }
 };
 
-// 5. Baseline Seed Data for Sponsor Banners
-export const BASELINE_SPONSOR_BANNERS = [
-  {
-    id: 'sponsor-seed-1',
-    title: 'Brand Visual Identity & Strategy',
-    description: 'Modern digital branding, identity guidelines, typography systems, and futuristic marketing visuals.',
-    imageUrl: '/about.png',
-    createdAt: new Date(Date.now() - 60000 * 6).toISOString()
-  },
-  {
-    id: 'sponsor-seed-2',
-    title: 'FinTech Mobile Application',
-    description: 'Next-generation banking and wallet interface design with dark glassmorphism and responsive charts.',
-    imageUrl: '/add1.png',
-    createdAt: new Date(Date.now() - 60000 * 5).toISOString()
-  },
-  {
-    id: 'sponsor-seed-3',
-    title: 'Creative Marketing Campaign',
-    description: 'Dynamic visual design for conversion-focused brand advertisements and social community engagement.',
-    imageUrl: '/add2.png',
-    createdAt: new Date(Date.now() - 60000 * 4).toISOString()
-  },
-  {
-    id: 'sponsor-seed-4',
-    title: 'Minimalist E-Commerce Platform',
-    description: 'Ultra-fast checkout experience with seamless product visualization and micro-animations.',
-    imageUrl: '/app1.png',
-    createdAt: new Date(Date.now() - 60000 * 3).toISOString()
-  },
-  {
-    id: 'sponsor-seed-5',
-    title: 'Cloud Enterprise Platform',
-    description: 'Scalable multi-tenant web application dashboard with telemetry analytics and real-time monitoring.',
-    imageUrl: '/app2.png',
-    createdAt: new Date(Date.now() - 60000 * 2).toISOString()
-  },
-  {
-    id: 'sponsor-seed-6',
-    title: 'Rasedul Karim Portfolio',
-    description: 'Senior UI/UX Designer & Full-Stack Developer specializing in high-performance digital products.',
-    imageUrl: '/profile.jpeg',
-    createdAt: new Date(Date.now() - 60000 * 1).toISOString()
-  }
-];
+// 5. Baseline Seed Data for Sponsor Banners: 100% Real-time dynamic Firestore collection (Starts empty, zero dummy data)
+export const BASELINE_SPONSOR_BANNERS = [];
 
 const getCacheKey = (collectionName) => `portfolio_cache_${collectionName}`;
 

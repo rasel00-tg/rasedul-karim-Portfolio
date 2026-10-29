@@ -24,7 +24,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
-import { COLLECTIONS, BASELINE_SPONSOR_BANNERS } from '../services/featuresService';
+import { COLLECTIONS } from '../services/featuresService';
 
 const SponsorCarouselView = memo(({
   banners,
@@ -411,11 +411,16 @@ const SponsorBannerCarousel = ({ isDark, isBangla }) => {
   return (
     <FirestoreStreamBuilder collectionName={COLLECTIONS.SPONSOR_BANNERS}>
       {({ data }) => {
-        const rawList = data && data.length > 0 ? data : BASELINE_SPONSOR_BANNERS;
-        const banners = [...rawList]
+        const banners = (data || [])
           .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
           .slice(0, 7);
-        const bannerCount = banners.length || 1;
+
+        // When no active sponsor posters exist in Firestore, do not render any dummy banners
+        if (banners.length === 0) {
+          return null;
+        }
+
+        const bannerCount = banners.length;
         const safeIndex = currentSlide % bannerCount;
         const currentItem = banners[safeIndex] || banners[0];
 

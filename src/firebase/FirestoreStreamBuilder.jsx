@@ -27,7 +27,8 @@ export const FirestoreStreamBuilder = ({
     let unsubscribe = () => {};
 
     // Feature collection instant local baseline and broadcast listener
-    const isFeatureCollection = collectionName.startsWith('features_') || collectionName === 'sponsor_banners' || collectionName === 'sponsors';
+    const isFeatureCollection = collectionName.startsWith('features_');
+    const isSponsorsCollection = collectionName === 'sponsor_banners' || collectionName === 'sponsors';
     const isProjectsCollection = collectionName === 'projects';
 
     const handleLocalUpdate = (e) => {
@@ -95,7 +96,7 @@ export const FirestoreStreamBuilder = ({
                 docsMap[doc.id] = docData;
               });
 
-              if (isProjectsCollection) {
+              if (isProjectsCollection || isSponsorsCollection) {
                 // Direct Firestore data: empty [] remains empty with zero dummy data
                 setStreamState({
                   data: items,
@@ -127,7 +128,7 @@ export const FirestoreStreamBuilder = ({
             (error) => {
               if (!isMounted) return;
               console.warn(`Firestore StreamBuilder listener notice for [${collectionName}]:`, error.message);
-              if (isProjectsCollection) {
+              if (isProjectsCollection || isSponsorsCollection) {
                 setStreamState((prev) => ({
                   ...prev,
                   loading: false,

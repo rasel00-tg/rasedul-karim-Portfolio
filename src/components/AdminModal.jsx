@@ -55,7 +55,7 @@ import {
 import { createProject, updateProject, deleteProject } from '../services/adminService';
 import { usePortfolioStream } from '../firebase/usePortfolioStream';
 import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
-import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem, saveSponsorBannerWithFIFO, BASELINE_SPONSOR_BANNERS } from '../services/featuresService';
+import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem, saveSponsorBannerWithFIFO } from '../services/featuresService';
 import { firebaseConfig, initFirebase } from '../firebase/config';
 import { useLanguage } from '../context/LanguageContext';
 import AddDealModal, { compressImageClientSide } from './AddDealModal';
@@ -298,10 +298,30 @@ const AdminModal = ({ onClose }) => {
       return;
     }
     try {
-      await deleteFeatureItem(COLLECTIONS.SPONSORS, bannerId, idToken);
-      if (imageUrl) {
-        await deleteSponsorBannerFromR2(imageUrl);
+      // 1. Direct Firestore SDK deleteDoc execution for 100% persistent deletion
+      try {
+        const { db } = await initFirebase();
+        if (db) {
+          const { doc, deleteDoc } = await import('firebase/firestore');
+          await deleteDoc(doc(db, COLLECTIONS.SPONSORS, bannerId));
+          console.log(`✓ [Firestore deleteDoc] Successfully deleted sponsor banner: ${bannerId}`);
+        }
+      } catch (sdkErr) {
+        console.warn('Direct Firestore deleteDoc notice:', sdkErr.message);
       }
+
+      // 2. REST fallback & cache synchronization
+      await deleteFeatureItem(COLLECTIONS.SPONSORS, bannerId, idToken);
+
+      // 3. Purge storage from Cloudflare R2
+      if (imageUrl) {
+        try {
+          await deleteSponsorBannerFromR2(imageUrl);
+        } catch (r2Err) {
+          console.warn('R2 storage purge notice:', r2Err.message);
+        }
+      }
+
       showFeatureToast(isBangla ? 'ব্যানার ডিলিট সফল হয়েছে' : 'Banner deleted successfully', 'success');
     } catch (err) {
       showFeatureToast(err.message || (isBangla ? 'ডিলিট ব্যর্থ হয়েছে' : 'Failed to delete banner'), 'error');
@@ -6221,151 +6241,189 @@ const AdminModal = ({ onClose }) => {
                     </div>
                   </div>
 
-                  <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 800, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>{isBangla ? 'বর্তমান লাইভ ব্যানার তালিকা (১ - ৭)' : 'Active Rotating Banners (1 - 7)'}</span>
-                  </h4>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                    <h4 style={{ margin: 0, fontSize: '0.94rem', fontWeight: 800, color: '#FFFFFF' }}>
+                      {isBangla ? 'বর্তমান লাইভ ব্যানার তালিকা' : 'Active Rotating Banners'}
+                    </h4>
+                  </div>
 
-                  {/* Stream of Banners */}
+                  {/* Real-time Stream of Banners directly from Firestore (Zero Dummy Data) */}
                   <FirestoreStreamBuilder collectionName={COLLECTIONS.SPONSOR_BANNERS}>
-                    {({ data }) => {
-                      const rawList = data && data.length > 0 ? data : BASELINE_SPONSOR_BANNERS;
-                      const banners = [...rawList]
+                    {({ data, loading }) => {
+                      const banners = (data || [])
                         .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
                         .slice(0, 7);
 
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                          {banners.map((item, idx) => {
-                            const isNewest = idx === 0;
-                            const isOldest = idx === banners.length - 1 && banners.length >= 7;
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '2px' }}>
+                            <span style={{
+                              fontSize: '0.74rem',
+                              fontWeight: 800,
+                              fontFamily: 'monospace',
+                              padding: '2px 9px',
+                              borderRadius: '20px',
+                              background: banners.length > 0 ? 'rgba(255, 107, 0, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                              color: banners.length > 0 ? '#FF6B00' : '#94A3B8',
+                              border: `1px solid ${banners.length > 0 ? 'rgba(255, 107, 0, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`
+                            }}>
+                              {banners.length} / 7 {isBangla ? 'সক্রিয়' : 'Active'}
+                            </span>
+                          </div>
 
-                            return (
-                              <div
-                                key={item.id || idx}
-                                style={{
-                                  padding: '12px 14px',
-                                  borderRadius: '14px',
-                                  background: isNewest 
-                                    ? 'rgba(255, 107, 0, 0.08)' 
-                                    : 'rgba(255, 255, 255, 0.03)',
-                                  border: `1px solid ${isNewest ? 'rgba(255, 107, 0, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  gap: '12px'
-                                }}
-                              >
-                                {/* Left: Position Badge & Thumbnail */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
-                                  <div style={{
-                                    width: '28px',
-                                    height: '28px',
-                                    borderRadius: '8px',
-                                    background: isNewest ? '#FF6B00' : (isOldest ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)'),
-                                    color: isNewest ? '#FFFFFF' : (isOldest ? '#EF4444' : '#94A3B8'),
+                          {banners.length === 0 ? (
+                            <div style={{
+                              padding: '36px 16px',
+                              textAlign: 'center',
+                              borderRadius: '16px',
+                              background: 'rgba(255, 255, 255, 0.02)',
+                              border: '1.5px dashed rgba(255, 255, 255, 0.1)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}>
+                              <ImageIcon size={28} color="#64748B" style={{ marginBottom: '4px' }} />
+                              <p style={{ margin: 0, fontSize: '0.88rem', color: '#94A3B8', fontWeight: 700 }}>
+                                {isBangla ? 'কোনো সক্রিয় স্পন্সর পোস্টার নেই' : 'No active sponsor posters'}
+                              </p>
+                              <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                                {isBangla ? 'বামে নতুন ব্যানার আপলোড করে লাইভ পোস্ট করুন' : 'Upload a banner on the left to publish live'}
+                              </span>
+                            </div>
+                          ) : (
+                            banners.map((item, idx) => {
+                              const isNewest = idx === 0;
+                              const isOldest = idx === banners.length - 1 && banners.length >= 7;
+
+                              return (
+                                <div
+                                  key={item.id || idx}
+                                  style={{
+                                    padding: '12px 14px',
+                                    borderRadius: '14px',
+                                    background: isNewest 
+                                      ? 'rgba(255, 107, 0, 0.08)' 
+                                      : 'rgba(255, 255, 255, 0.03)',
+                                    border: `1px solid ${isNewest ? 'rgba(255, 107, 0, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '0.76rem',
-                                    fontWeight: 900,
-                                    flexShrink: 0
-                                  }}>
-                                    #{idx + 1}
-                                  </div>
+                                    justifyContent: 'space-between',
+                                    gap: '12px'
+                                  }}
+                                >
+                                  {/* Left: Position Badge & Thumbnail */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, flex: 1 }}>
+                                    <div style={{
+                                      width: '28px',
+                                      height: '28px',
+                                      borderRadius: '8px',
+                                      background: isNewest ? '#FF6B00' : (isOldest ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 255, 255, 0.1)'),
+                                      color: isNewest ? '#FFFFFF' : (isOldest ? '#EF4444' : '#94A3B8'),
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '0.76rem',
+                                      fontWeight: 900,
+                                      flexShrink: 0
+                                    }}>
+                                      #{idx + 1}
+                                    </div>
 
-                                  <div style={{
-                                    width: '54px',
-                                    height: '38px',
-                                    borderRadius: '8px',
-                                    overflow: 'hidden',
-                                    background: '#0B0F19',
-                                    flexShrink: 0,
-                                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                                  }}>
-                                    <img
-                                      src={item.imageUrl}
-                                      alt={item.title || 'Banner'}
-                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                      onError={(e) => { e.target.src = '/about.png'; }}
-                                    />
-                                  </div>
+                                    <div style={{
+                                      width: '54px',
+                                      height: '38px',
+                                      borderRadius: '8px',
+                                      overflow: 'hidden',
+                                      background: '#0B0F19',
+                                      flexShrink: 0,
+                                      border: '1px solid rgba(255, 255, 255, 0.1)'
+                                    }}>
+                                      <img
+                                        src={item.imageUrl}
+                                        alt={item.title || 'Banner'}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => { e.target.src = '/about.png'; }}
+                                      />
+                                    </div>
 
-                                  <div style={{ minWidth: 0, flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <h5 style={{
-                                        margin: 0,
-                                        fontSize: '0.84rem',
-                                        fontWeight: 800,
-                                        color: '#FFFFFF',
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <h5 style={{
+                                          margin: 0,
+                                          fontSize: '0.84rem',
+                                          fontWeight: 800,
+                                          color: '#FFFFFF',
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis'
+                                        }}>
+                                          {item.title || 'Untitled Banner'}
+                                        </h5>
+                                        {isNewest && (
+                                          <span style={{
+                                            padding: '1px 6px',
+                                            borderRadius: '6px',
+                                            background: '#FF6B00',
+                                            color: '#FFFFFF',
+                                            fontSize: '0.58rem',
+                                            fontWeight: 900
+                                          }}>
+                                            NEWEST
+                                          </span>
+                                        )}
+                                        {isOldest && (
+                                          <span style={{
+                                            padding: '1px 6px',
+                                            borderRadius: '6px',
+                                            background: 'rgba(239, 68, 68, 0.2)',
+                                            color: '#EF4444',
+                                            fontSize: '0.58rem',
+                                            fontWeight: 900
+                                          }}>
+                                            NEXT TO ROTATE OUT
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p style={{
+                                        margin: '2px 0 0 0',
+                                        fontSize: '0.70rem',
+                                        color: '#94A3B8',
                                         whiteSpace: 'nowrap',
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis'
                                       }}>
-                                        {item.title || 'Untitled Banner'}
-                                      </h5>
-                                      {isNewest && (
-                                        <span style={{
-                                          padding: '1px 6px',
-                                          borderRadius: '6px',
-                                          background: '#FF6B00',
-                                          color: '#FFFFFF',
-                                          fontSize: '0.58rem',
-                                          fontWeight: 900
-                                        }}>
-                                          NEWEST
-                                        </span>
-                                      )}
-                                      {isOldest && (
-                                        <span style={{
-                                          padding: '1px 6px',
-                                          borderRadius: '6px',
-                                          background: 'rgba(239, 68, 68, 0.2)',
-                                          color: '#EF4444',
-                                          fontSize: '0.58rem',
-                                          fontWeight: 900
-                                        }}>
-                                          NEXT TO ROTATE OUT
-                                        </span>
-                                      )}
+                                        {item.description || 'No description'}
+                                      </p>
                                     </div>
-                                    <p style={{
-                                      margin: '2px 0 0 0',
-                                      fontSize: '0.70rem',
-                                      color: '#94A3B8',
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis'
-                                    }}>
-                                      {item.description || 'No description'}
-                                    </p>
                                   </div>
-                                </div>
 
-                                {/* Right: Delete Action Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSponsorBanner(item.id, item.title, item.imageUrl)}
-                                  style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    borderRadius: '8px',
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                                    color: '#EF4444',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    flexShrink: 0,
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  title={isBangla ? 'ব্যানার ডিলিট করুন' : 'Delete banner'}
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            );
-                          })}
+                                  {/* Right: Delete Action Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSponsorBanner(item.id, item.title, item.imageUrl)}
+                                    style={{
+                                      width: '32px',
+                                      height: '32px',
+                                      borderRadius: '8px',
+                                      background: 'rgba(239, 68, 68, 0.1)',
+                                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                                      color: '#EF4444',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      flexShrink: 0,
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    title={isBangla ? 'ব্যানার ডিলিট করুন' : 'Delete banner'}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              );
+                            })
+                          )}
                         </div>
                       );
                     }}
