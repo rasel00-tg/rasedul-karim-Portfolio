@@ -3,6 +3,10 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  BUN_VERSION = "1.4.2"
+  NODE_VERSION = "22"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
