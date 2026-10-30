@@ -79,37 +79,40 @@ function App() {
           {/* Main Mobile-First Digital Business Card Layout - Clean, Fluid & Naturally Scrollable */}
           <div 
             id="main-homepage-container"
-            className="min-h-screen w-full overflow-y-auto flex flex-col" 
-            style={{ 
-              position: 'relative', 
-              zIndex: 1, 
-              minHeight: '100vh', 
-              width: '100%', 
-              display: 'flex', 
-              flexDirection: 'column', 
+            className="w-full min-h-screen overflow-y-auto overflow-x-hidden relative flex flex-col"
+            style={{
+              position: 'relative',
+              zIndex: 1,
+              minHeight: '100vh',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
               overflowY: 'auto',
+              overflowX: 'hidden',
               WebkitOverflowScrolling: 'touch',
               touchAction: 'pan-y'
             }}
           >
-            {/* Digital Profile, Metrics, Social Icons & Bento Cards */}
-            <HeroSection 
-              isDreamOpen={showProjects || showDream || showAbout || showSkill || showAdmin || showQR || showReview || showDesign || showUpcoming || showFavorite || showDeals} 
-              onOpenProjects={() => setShowProjects(true)}
-              onOpenAbout={() => setShowAbout(true)}
-              onOpenDream={() => setShowDream(true)}
-              onOpenSkill={() => setShowSkill(true)}
-              onOpenAdmin={() => setShowAdmin(true)}
-              onOpenReview={() => setShowReview(true)}
-              onOpenQR={() => setShowQR(true)}
-              onOpenDrawer={() => setIsDrawerOpen(true)}
-              onOpenDesign={() => setShowDesign(true)}
-              onOpenUpcoming={() => setShowUpcoming(true)}
-              onOpenFavorite={() => setShowFavorite(true)}
-              onOpenDeals={() => setShowDeals(true)}
-              isSubscribeOpen={showSubscribe}
-              setIsSubscribeOpen={setShowSubscribe}
-            />
+            <main className="w-full max-w-md lg:max-w-6xl mx-auto px-4 pb-28 pt-2 flex flex-col flex-1">
+              {/* Digital Profile, Metrics, Social Icons & Bento Cards */}
+              <HeroSection 
+                isDreamOpen={showProjects || showDream || showAbout || showSkill || showAdmin || showQR || showReview || showDesign || showUpcoming || showFavorite || showDeals} 
+                onOpenProjects={() => setShowProjects(true)}
+                onOpenAbout={() => setShowAbout(true)}
+                onOpenDream={() => setShowDream(true)}
+                onOpenSkill={() => setShowSkill(true)}
+                onOpenAdmin={() => setShowAdmin(true)}
+                onOpenReview={() => setShowReview(true)}
+                onOpenQR={() => setShowQR(true)}
+                onOpenDrawer={() => setIsDrawerOpen(true)}
+                onOpenDesign={() => setShowDesign(true)}
+                onOpenUpcoming={() => setShowUpcoming(true)}
+                onOpenFavorite={() => setShowFavorite(true)}
+                onOpenDeals={() => setShowDeals(true)}
+                isSubscribeOpen={showSubscribe}
+                setIsSubscribeOpen={setShowSubscribe}
+              />
+            </main>
           </div>
         </>
       )}
@@ -118,4 +121,3 @@ function App() {
 }
 
 export default App;
-

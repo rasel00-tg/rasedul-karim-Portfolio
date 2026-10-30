@@ -40,7 +40,8 @@ import {
   FileText,
   CheckCircle2,
   MessageSquare,
-  User
+  User,
+  Fingerprint
 } from 'lucide-react';
 import { uploadImageToCloudinary } from '../services/cloudinaryService';
 import {
@@ -58,6 +59,7 @@ import { FirestoreStreamBuilder } from '../firebase/FirestoreStreamBuilder';
 import { COLLECTIONS, saveFeatureItem, updateFeatureItem, deleteFeatureItem, saveSponsorBannerWithFIFO } from '../services/featuresService';
 import { firebaseConfig, initFirebase } from '../firebase/config';
 import { useLanguage } from '../context/LanguageContext';
+import { isBiometricAvailable, isBiometricEnrolled, registerBiometric, verifyBiometricLogin, disableBiometric } from '../utils/biometricAuth';
 import AddDealModal, { compressImageClientSide } from './AddDealModal';
 import {
   getDeviceLockoutStatus,
@@ -111,6 +113,11 @@ const AdminModal = ({ onClose }) => {
 
   // Session conflict alert
   const [sessionConflictNotice, setSessionConflictNotice] = useState(null);
+
+  // Biometric Auth States
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricEnrolled, setBiometricEnrolled] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
 
   // Project Form State
   const [isEditing, setIsEditing] = useState(false);
@@ -1366,6 +1373,70 @@ const AdminModal = ({ onClose }) => {
     }
   };
 
+  useEffect(() => {
+    isBiometricAvailable().then((supported) => {
+      setBiometricSupported(supported);
+      if (supported) {
+        setBiometricEnrolled(isBiometricEnrolled());
+      }
+    });
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    if (lockoutState.isLocked) return;
+    setBiometricLoading(true);
+    setPinError('');
+    try {
+      const success = await verifyBiometricLogin();
+      if (success) {
+        resetFailedAttempts();
+        await registerActiveSession('admin_biometric');
+        setIdToken('biometric_verified_token');
+        setIsAuthenticated(true);
+        setStatusMessage({
+          type: 'success',
+          text: isBangla 
+            ? 'বায়োমেট্রিক ফিঙ্গারপ্রিন্ট দিয়ে সফলভাবে প্রবেশ করা হয়েছে।' 
+            : 'Biometric fingerprint login verified successfully.'
+        });
+      }
+    } catch (err) {
+      setPinError(err.message || (isBangla ? 'বায়োমেট্রিক অথেন্টিকেশন ব্যর্থ হয়েছে।' : 'Biometric authentication failed.'));
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  const handleToggleBiometric = async () => {
+    setBiometricLoading(true);
+    try {
+      if (biometricEnrolled) {
+        disableBiometric();
+        setBiometricEnrolled(false);
+        setStatusMessage({
+          type: 'success',
+          text: isBangla ? 'বায়োমেট্রিক ফিঙ্গারপ্রিন্ট নিষ্ক্রিয় করা হয়েছে।' : 'Biometric fingerprint disabled.'
+        });
+      } else {
+        const success = await registerBiometric('admin_master');
+        if (success) {
+          setBiometricEnrolled(true);
+          setStatusMessage({
+            type: 'success',
+            text: isBangla ? 'বায়োমেট্রিক ফিঙ্গারপ্রিন্ট সফলভাবে যুক্ত করা হয়েছে!' : 'Biometric fingerprint registered successfully!'
+          });
+        }
+      }
+    } catch (err) {
+      setStatusMessage({
+        type: 'error',
+        text: err.message || (isBangla ? 'বায়োমেট্রিক রেজিস্ট্রেশন ব্যর্থ হয়েছে।' : 'Biometric registration failed.')
+      });
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     setIsAuthenticated(false);
     setIdToken(null);
@@ -1899,6 +1970,47 @@ const AdminModal = ({ onClose }) => {
                 </motion.button>
               </div>
             )}
+
+            {/* Quick Biometric Fingerprint Button */}
+            {biometricSupported && (
+              <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleBiometricLogin}
+                  disabled={biometricLoading || lockoutState.isLocked}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '10px 20px',
+                    borderRadius: '24px',
+                    background: 'rgba(255, 255, 255, 0.9)',
+                    border: '1.5px solid rgba(255, 107, 53, 0.3)',
+                    boxShadow: '0 4px 15px rgba(255, 107, 53, 0.15)',
+                    color: '#E05322',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    cursor: lockoutState.isLocked ? 'not-allowed' : 'pointer',
+                    backdropFilter: 'blur(10px)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <Fingerprint size={20} className={biometricLoading ? 'animate-pulse' : ''} />
+                  <span>
+                    {biometricLoading
+                      ? (isBangla ? 'যাচাই করা হচ্ছে...' : 'Verifying...')
+                      : (isBangla ? 'বায়োমেট্রিক ফিঙ্গারপ্রিন্ট' : 'Touch ID / Fingerprint')}
+                  </span>
+                </motion.button>
+                {!biometricEnrolled && (
+                  <span style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '6px' }}>
+                    {isBangla ? '(ড্যাশবোর্ড থেকে আগে একবার এনাবল করুন)' : '(Enable once inside Dashboard)'}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -2198,6 +2310,34 @@ const AdminModal = ({ onClose }) => {
               </div>
 
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                {biometricSupported && (
+                  <button
+                    onClick={handleToggleBiometric}
+                    disabled={biometricLoading}
+                    style={{
+                      background: biometricEnrolled ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.08)',
+                      border: `1px solid ${biometricEnrolled ? 'rgba(16, 185, 129, 0.35)' : 'rgba(255, 255, 255, 0.15)'}`,
+                      color: biometricEnrolled ? '#10B981' : '#E2E8F0',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      transition: 'all 0.2s ease'
+                    }}
+                    title={biometricEnrolled ? 'Biometric enabled' : 'Enable biometric'}
+                  >
+                    <Fingerprint size={14} className={biometricLoading ? 'animate-pulse' : ''} />
+                    <span>
+                      {biometricEnrolled 
+                        ? (isBangla ? 'বায়োমেট্রিক অন' : 'Biometric ON') 
+                        : (isBangla ? 'বায়োমেট্রিক সেটআপ' : 'Enable Biometric')}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={handleLogout}
                   style={{

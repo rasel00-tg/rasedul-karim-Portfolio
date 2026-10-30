@@ -238,8 +238,16 @@
 
 @media (min-width: 1024px) {
   .hero-profile-avatar-wrapper {
-    width: 150px !important;
-    height: 150px !important;
+    width: 156px !important;
+    height: 156px !important;
+    padding: 4px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .hero-profile-avatar-wrapper {
+    width: 168px !important;
+    height: 168px !important;
     padding: 4px !important;
   }
 }
@@ -396,7 +404,15 @@
 
 @media (min-width: 1024px) {
   .bento-carousel-box {
-    height: 146px !important;
+    height: 196px !important;
+    min-height: 190px !important;
+  }
+}
+
+@media (min-width: 1280px) {
+  .bento-carousel-box {
+    height: 224px !important;
+    min-height: 220px !important;
   }
 }
 
@@ -561,14 +577,16 @@
 }
 
 html, body {
-  min-height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  height: auto !important;
+  min-height: 100% !important;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-  touch-action: manipulation;
-  overscroll-behavior-y: none;
+  touch-action: pan-y;
+  overscroll-behavior-y: auto;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }

@@ -79,7 +79,7 @@ const SponsorCarouselView = memo(({
       }}>
         {/* PURE VISUAL CARD: Strictly NO hints, NO labels, NO click text */}
         <motion.div
-          className="bento-carousel-box"
+          className="bento-carousel-box w-full overflow-hidden rounded-2xl shadow-lg border border-white/20 dark:border-slate-800 bg-slate-900/10 relative"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.22 }}
@@ -125,10 +125,12 @@ const SponsorCarouselView = memo(({
                 alt="Showcase Banner"
                 loading="lazy"
                 decoding="async"
+                className="w-full h-auto object-cover object-top lg:min-h-[190px] xl:min-h-[220px] block transition-transform duration-300"
                 style={{
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
+                  objectPosition: 'top center',
                   display: 'block',
                   pointerEvents: 'none',
                   aspectRatio: '16 / 9'
