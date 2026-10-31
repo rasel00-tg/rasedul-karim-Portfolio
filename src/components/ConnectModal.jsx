@@ -14,7 +14,10 @@ import {
   Layers,
   Sparkle,
   Copy,
-  Check
+  Check,
+  Handshake,
+  Network,
+  ArrowLeft
 } from 'lucide-react';
 import {
   signInWithPopup,
@@ -397,51 +400,166 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
   return (
     <AnimatePresence>
       <div
+        className="w-full min-h-screen bg-gradient-to-br from-[#F5F8FF] via-[#EEF3FD] to-[#E6EEFC] dark:from-[#0B101B] dark:via-[#0F172A] dark:to-[#0B1324] flex items-center justify-center p-4 relative overflow-hidden"
         style={{
           position: 'fixed',
           top: 0,
           left: 0,
           width: '100vw',
           height: '100vh',
-          background: 'rgba(3, 7, 18, 0.82)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
+          minHeight: '100vh',
+          background: isDark
+            ? 'linear-gradient(135deg, #0B101B 0%, #0F172A 50%, #0B1324 100%)'
+            : 'linear-gradient(135deg, #F5F8FF 0%, #EEF3FD 50%, #E6EEFC 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 999999,
           padding: '16px',
-          boxSizing: 'border-box'
+          boxSizing: 'border-box',
+          overflow: 'hidden'
         }}
         onClick={onClose}
       >
+        {/* Ambient Background Vivid Blue Orbs & Translucent Glass Bubbles */}
+        {/* 1. Glowing Blue Sphere (Top-Right) */}
+        <div
+          className="w-44 h-44 sm:w-56 sm:h-56 bg-gradient-to-tr from-[#1D68FF] to-[#4F95FF] rounded-full blur-xs opacity-90 shadow-[0_10px_35px_rgba(29,104,255,0.4)] pointer-events-none"
+          style={{
+            position: 'absolute',
+            top: '10%',
+            right: '12%',
+            width: '224px',
+            height: '224px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #1D68FF 0%, #4F95FF 100%)',
+            opacity: isDark ? 0.8 : 0.9,
+            boxShadow: '0 10px 45px rgba(29, 104, 255, 0.45), 0 0 70px rgba(79, 149, 255, 0.35)',
+            pointerEvents: 'none',
+            filter: 'blur(3px)'
+          }}
+        />
+
+        {/* 2. Accent Blue Ball (Bottom-Left) */}
+        <div
+          className="w-28 h-28 sm:w-36 sm:h-36 bg-[#2563EB] rounded-full blur-xs opacity-85 shadow-[0_8px_30px_rgba(37,99,235,0.35)] pointer-events-none"
+          style={{
+            position: 'absolute',
+            bottom: '12%',
+            left: '10%',
+            width: '144px',
+            height: '144px',
+            borderRadius: '50%',
+            background: '#2563EB',
+            opacity: isDark ? 0.75 : 0.85,
+            boxShadow: '0 8px 35px rgba(37, 99, 235, 0.4), 0 0 50px rgba(37, 99, 235, 0.3)',
+            pointerEvents: 'none',
+            filter: 'blur(2px)'
+          }}
+        />
+
+        {/* 3. Overlapping Translucent Frosted Glass Bubble (Top-Right) */}
+        <div
+          className="backdrop-blur-2xl border border-white/60 bg-white/20 rounded-full pointer-events-none"
+          style={{
+            position: 'absolute',
+            top: '4%',
+            right: '7%',
+            width: '290px',
+            height: '290px',
+            borderRadius: '50%',
+            background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.22)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.65)',
+            pointerEvents: 'none'
+          }}
+        />
+
+        {/* 4. Overlapping Translucent Frosted Glass Bubble (Bottom-Left) */}
+        <div
+          className="backdrop-blur-2xl border border-white/60 bg-white/20 rounded-full pointer-events-none"
+          style={{
+            position: 'absolute',
+            bottom: '6%',
+            left: '7%',
+            width: '220px',
+            height: '220px',
+            borderRadius: '50%',
+            background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.22)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.65)',
+            pointerEvents: 'none'
+          }}
+        />
+
+        {/* Central Premium Glass Card */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.92, y: 18 }}
+          initial={{ opacity: 0, scale: 0.94, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.92, y: 18 }}
+          exit={{ opacity: 0, scale: 0.94, y: 16 }}
           transition={{ type: 'spring', damping: 26, stiffness: 320 }}
           onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-md bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/90 dark:border-white/10 rounded-[32px] p-6 sm:p-8 shadow-2xl text-center relative z-10"
           style={{
             width: '100%',
-            maxWidth: '440px',
-            background: isDark
-              ? 'linear-gradient(160deg, #0F172A 0%, #090D16 100%)'
-              : 'linear-gradient(160deg, #FFFFFF 0%, #F8FAFC 100%)',
-            border: isDark
-              ? '1.2px solid rgba(0, 240, 255, 0.3)'
-              : '1.5px solid rgba(0, 160, 255, 0.25)',
-            borderRadius: '26px',
-            padding: '28px 24px 22px 24px',
+            maxWidth: '448px',
+            background: isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255, 255, 255, 0.85)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1.5px solid rgba(255, 255, 255, 0.9)',
+            borderRadius: '32px',
+            padding: '36px 26px 28px 26px',
             textAlign: 'center',
             boxShadow: isDark
-              ? '0 25px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 240, 255, 0.15)'
-              : '0 20px 50px rgba(0, 50, 100, 0.15)',
+              ? '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(29, 104, 255, 0.2)'
+              : '0 25px 60px rgba(29, 104, 255, 0.15), 0 10px 30px rgba(0, 0, 0, 0.06)',
             position: 'relative',
+            zIndex: 10,
             maxHeight: '92vh',
             overflowY: 'auto',
             boxSizing: 'border-box'
           }}
         >
+          {/* Top Navigation Back to Home Button */}
+          <button
+            onClick={onClose}
+            aria-label={isBangla ? 'হোমপেজে ফিরুন' : 'Back to Homepage'}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              padding: '6px 12px',
+              borderRadius: '16px',
+              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(0, 0, 0, 0.08)',
+              color: isDark ? '#E2E8F0' : '#334155',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+              fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#1D68FF';
+              e.currentTarget.style.borderColor = '#1D68FF';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = isDark ? '#E2E8F0' : '#334155';
+              e.currentTarget.style.borderColor = isDark ? 'rgba(255, 255, 255, 0.15)' : '1px solid rgba(0, 0, 0, 0.08)';
+            }}
+          >
+            <ArrowLeft size={14} />
+            <span>{isBangla ? 'হোম' : 'Home'}</span>
+          </button>
+
           {/* Close Button */}
           <button
             onClick={onClose}
@@ -453,8 +571,8 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-              border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.1)',
+              background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.08)',
               color: isDark ? '#94A3B8' : '#64748B',
               display: 'flex',
               alignItems: 'center',
@@ -468,7 +586,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = isDark ? '#94A3B8' : '#64748B';
-              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
             }}
           >
             <X size={16} />
@@ -490,6 +608,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                 color: '#10B981',
                 fontSize: '0.82rem',
                 fontWeight: 600,
+                marginTop: '16px',
                 marginBottom: '16px',
                 textAlign: 'left'
               }}
@@ -505,6 +624,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               style={{
+                marginTop: '16px',
                 padding: '12px 14px',
                 borderRadius: '12px',
                 background: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.08)',
@@ -647,6 +767,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                 color: '#EF4444',
                 fontSize: '0.82rem',
                 fontWeight: 600,
+                marginTop: '16px',
                 marginBottom: '16px',
                 textAlign: 'left'
               }}
@@ -659,7 +780,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
           {/* Checking Auth State Loader */}
           {checkingAuth && (
             <div style={{ padding: '40px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-              <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#00F0FF' }} />
+              <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: '#1D68FF' }} />
               <span style={{ fontSize: '0.84rem', color: '#94A3B8' }}>
                 {isBangla ? 'কানেকশন চেক করা হচ্ছে...' : 'Verifying connection state...'}
               </span>
@@ -671,24 +792,45 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
           {/* ========================================================= */}
           {!checkingAuth && viewMode === 'auth' && (
             <div>
-              {/* Top Decorative Sparkle Icon */}
+              {/* Realistic Animated Gradient Network / Handshake Vector Icon with Soft Breathing Pulse */}
               <div
                 style={{
-                  width: '56px',
-                  height: '56px',
-                  borderRadius: '18px',
-                  background: isDark
-                    ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%)'
-                    : 'linear-gradient(135deg, rgba(0, 160, 255, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)',
-                  border: isDark ? '1px solid rgba(0, 240, 255, 0.4)' : '1.5px solid rgba(0, 160, 255, 0.35)',
+                  position: 'relative',
+                  width: '76px',
+                  height: '76px',
+                  margin: '6px auto 16px auto',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 14px auto',
-                  boxShadow: '0 8px 24px rgba(0, 240, 255, 0.2)'
+                  justifyContent: 'center'
                 }}
               >
-                <Sparkles size={28} color={isDark ? '#00F0FF' : '#0284C7'} />
+                <div
+                  className="animate-pulse"
+                  style={{
+                    position: 'absolute',
+                    inset: '-8px',
+                    borderRadius: '28px',
+                    background: 'radial-gradient(circle, rgba(0, 240, 255, 0.45) 0%, rgba(29, 104, 255, 0.25) 55%, transparent 75%)',
+                    pointerEvents: 'none'
+                  }}
+                />
+                <div
+                  style={{
+                    width: '70px',
+                    height: '70px',
+                    borderRadius: '22px',
+                    background: 'linear-gradient(135deg, #1D68FF 0%, #0284C7 50%, #00F0FF 100%)',
+                    border: '2px solid rgba(255, 255, 255, 0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 12px 28px rgba(29, 104, 255, 0.42), inset 0 2px 4px rgba(255, 255, 255, 0.45)',
+                    position: 'relative',
+                    zIndex: 1
+                  }}
+                >
+                  <Handshake size={36} color="#FFFFFF" strokeWidth={2.2} />
+                </div>
               </div>
 
               {/* Title & Subtitle */}
@@ -730,7 +872,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                   style={{
                     width: '100%',
                     padding: '13px 18px',
-                    borderRadius: '14px',
+                    borderRadius: '16px',
                     background: '#FFFFFF',
                     color: '#1F2937',
                     border: '1.5px solid rgba(0, 0, 0, 0.12)',
@@ -775,7 +917,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                   style={{
                     width: '100%',
                     padding: '13px 18px',
-                    borderRadius: '14px',
+                    borderRadius: '16px',
                     background: isDark ? '#161B22' : '#24292F',
                     color: '#FFFFFF',
                     border: isDark ? '1px solid rgba(255, 255, 255, 0.18)' : '1px solid #1B1F23',
@@ -815,7 +957,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                     marginTop: '4px',
                     width: '100%',
                     padding: '11px 16px',
-                    borderRadius: '14px',
+                    borderRadius: '16px',
                     background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.03)',
                     color: isDark ? '#94A3B8' : '#475569',
                     border: isDark ? '1px dashed rgba(255, 255, 255, 0.16)' : '1px dashed rgba(0, 0, 0, 0.16)',
@@ -830,8 +972,8 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                     fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#00F0FF';
-                    e.currentTarget.style.color = '#00F0FF';
+                    e.currentTarget.style.borderColor = '#1D68FF';
+                    e.currentTarget.style.color = '#1D68FF';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.borderColor = isDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.16)';
@@ -865,23 +1007,45 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
           {/* ========================================================= */}
           {!checkingAuth && viewMode === 'onboarding' && (
             <div>
-              {/* Header Icon */}
+              {/* Realistic Animated Gradient Network / Handshake Vector Icon */}
               <div
                 style={{
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(0, 240, 255, 0.2) 100%)',
-                  border: '1.5px solid rgba(16, 185, 129, 0.4)',
+                  position: 'relative',
+                  width: '72px',
+                  height: '72px',
+                  margin: '4px auto 14px auto',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 12px auto',
-                  color: '#10B981',
-                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.2)'
+                  justifyContent: 'center'
                 }}
               >
-                <Sparkle size={26} />
+                <div
+                  className="animate-pulse"
+                  style={{
+                    position: 'absolute',
+                    inset: '-6px',
+                    borderRadius: '26px',
+                    background: 'radial-gradient(circle, rgba(16, 185, 129, 0.45) 0%, rgba(0, 240, 255, 0.25) 55%, transparent 75%)',
+                    pointerEvents: 'none'
+                  }}
+                />
+                <div
+                  style={{
+                    width: '66px',
+                    height: '66px',
+                    borderRadius: '20px',
+                    background: 'linear-gradient(135deg, #10B981 0%, #00F0FF 100%)',
+                    border: '2px solid rgba(255, 255, 255, 0.8)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 10px 24px rgba(16, 185, 129, 0.35)',
+                    position: 'relative',
+                    zIndex: 1
+                  }}
+                >
+                  <Handshake size={32} color="#FFFFFF" strokeWidth={2.2} />
+                </div>
               </div>
 
               <h3
@@ -925,7 +1089,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
                       border: onboardingErrors.name ? '1.5px solid #EF4444' : (isDark ? '1px solid rgba(255, 255, 255, 0.14)' : '1px solid rgba(0, 0, 0, 0.12)'),
                       color: isDark ? '#FFFFFF' : '#0F172A',
@@ -958,7 +1122,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                     style={{
                       width: '100%',
                       padding: '10px 14px',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
                       border: onboardingErrors.age ? '1.5px solid #EF4444' : (isDark ? '1px solid rgba(255, 255, 255, 0.14)' : '1px solid rgba(0, 0, 0, 0.12)'),
                       color: isDark ? '#FFFFFF' : '#0F172A',
@@ -987,12 +1151,12 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                           onClick={() => setOnboardingData((prev) => ({ ...prev, referralSource: opt.id }))}
                           style={{
                             padding: '8px 10px',
-                            borderRadius: '8px',
+                            borderRadius: '10px',
                             background: isSelected
-                              ? (isDark ? 'rgba(0, 240, 255, 0.18)' : 'rgba(2, 132, 199, 0.12)')
+                              ? (isDark ? 'rgba(29, 104, 255, 0.2)' : 'rgba(29, 104, 255, 0.12)')
                               : (isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)'),
                             border: isSelected
-                              ? (isDark ? '1.5px solid #00F0FF' : '1.5px solid #0284C7')
+                              ? (isDark ? '1.5px solid #1D68FF' : '1.5px solid #1D68FF')
                               : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)'),
                             display: 'flex',
                             alignItems: 'center',
@@ -1006,9 +1170,9 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                             name="referralSource"
                             checked={isSelected}
                             onChange={() => setOnboardingData((prev) => ({ ...prev, referralSource: opt.id }))}
-                            style={{ accentColor: '#00F0FF', cursor: 'pointer' }}
+                            style={{ accentColor: '#1D68FF', cursor: 'pointer' }}
                           />
-                          <span style={{ fontSize: '0.78rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? (isDark ? '#FFFFFF' : '#0284C7') : (isDark ? '#94A3B8' : '#64748B') }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: isSelected ? 700 : 500, color: isSelected ? (isDark ? '#FFFFFF' : '#1D68FF') : (isDark ? '#94A3B8' : '#64748B') }}>
                             {opt.label}
                           </span>
                         </div>
@@ -1027,7 +1191,7 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                         width: '100%',
                         marginTop: '8px',
                         padding: '8px 12px',
-                        borderRadius: '8px',
+                        borderRadius: '10px',
                         background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
                         border: isDark ? '1px solid rgba(255, 255, 255, 0.14)' : '1px solid rgba(0, 0, 0, 0.12)',
                         color: isDark ? '#FFFFFF' : '#0F172A',
@@ -1047,13 +1211,13 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                   style={{
                     width: '100%',
                     marginTop: '8px',
-                    padding: '12px 18px',
-                    borderRadius: '12px',
+                    padding: '13px 18px',
+                    borderRadius: '16px',
                     background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
                     color: '#FFFFFF',
                     border: 'none',
                     fontWeight: 800,
-                    fontSize: '0.90rem',
+                    fontSize: '0.92rem',
                     cursor: loadingProvider === 'onboarding' ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -1092,23 +1256,45 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
 
                 return (
                   <div>
-                    {/* 1. Header with Sparkles / Welcome Icon */}
+                    {/* 1. Realistic Animated Gradient Network / Handshake Vector Icon with Soft Breathing Pulse */}
                     <div
                       style={{
-                        width: '58px',
-                        height: '58px',
-                        borderRadius: '20px',
-                        background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%)',
-                        border: '1.5px solid rgba(0, 240, 255, 0.45)',
+                        position: 'relative',
+                        width: '76px',
+                        height: '76px',
+                        margin: '6px auto 14px auto',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 12px auto',
-                        color: '#00F0FF',
-                        boxShadow: '0 8px 24px rgba(0, 240, 255, 0.25)'
+                        justifyContent: 'center'
                       }}
                     >
-                      <Sparkles size={28} />
+                      <div
+                        className="animate-pulse"
+                        style={{
+                          position: 'absolute',
+                          inset: '-8px',
+                          borderRadius: '28px',
+                          background: 'radial-gradient(circle, rgba(0, 240, 255, 0.45) 0%, rgba(29, 104, 255, 0.25) 55%, transparent 75%)',
+                          pointerEvents: 'none'
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: '70px',
+                          height: '70px',
+                          borderRadius: '22px',
+                          background: 'linear-gradient(135deg, #1D68FF 0%, #0284C7 50%, #00F0FF 100%)',
+                          border: '2px solid rgba(255, 255, 255, 0.8)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 12px 28px rgba(29, 104, 255, 0.42), inset 0 2px 4px rgba(255, 255, 255, 0.45)',
+                          position: 'relative',
+                          zIndex: 1
+                        }}
+                      >
+                        <Handshake size={36} color="#FFFFFF" strokeWidth={2.2} />
+                      </div>
                     </div>
 
                     <h2
@@ -1125,123 +1311,129 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                     </h2>
                     <p
                       style={{
-                        fontSize: '0.80rem',
+                        fontSize: '0.82rem',
                         color: isDark ? '#94A3B8' : '#64748B',
-                        margin: '0 0 18px 0'
+                        margin: '0 0 18px 0',
+                        fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                       }}
                     >
                       {isBangla ? 'আপনি সফলভাবে আমার প্রফেশনাল নেটওয়ার্কে সংযুক্ত আছেন।' : 'You are officially connected to my professional network.'}
                     </p>
 
-                    {/* 2. User Card with Photo, Name & Clean Badges */}
+                    {/* 2. Large & Clear User Avatar & Centered Profile Details */}
                     <div
                       style={{
                         background: isDark
-                          ? 'radial-gradient(circle at top left, rgba(0, 240, 255, 0.08), rgba(255, 255, 255, 0.03))'
-                          : 'radial-gradient(circle at top left, rgba(2, 132, 199, 0.08), rgba(0, 0, 0, 0.02))',
-                        border: isDark ? '1px solid rgba(0, 240, 255, 0.25)' : '1px solid rgba(2, 132, 199, 0.2)',
-                        borderRadius: '20px',
-                        padding: '16px',
-                        marginBottom: '16px',
-                        textAlign: 'left'
+                          ? 'radial-gradient(circle at top, rgba(29, 104, 255, 0.12), rgba(255, 255, 255, 0.03))'
+                          : 'radial-gradient(circle at top, rgba(29, 104, 255, 0.08), rgba(0, 0, 0, 0.02))',
+                        border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(29, 104, 255, 0.18)',
+                        borderRadius: '24px',
+                        padding: '20px 18px 16px 18px',
+                        marginBottom: '18px',
+                        textAlign: 'center'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                        {photoURL ? (
-                          <img
-                            src={photoURL}
-                            alt={displayName}
-                            style={{
-                              width: '50px',
-                              height: '50px',
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                              border: '2px solid #00F0FF',
-                              boxShadow: '0 0 14px rgba(0, 240, 255, 0.35)',
-                              flexShrink: 0
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: '50px',
-                              height: '50px',
-                              borderRadius: '50%',
-                              background: 'linear-gradient(135deg, #00F0FF 0%, #3B82F6 100%)',
-                              color: '#FFFFFF',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontWeight: 800,
-                              fontSize: '1.3rem',
-                              flexShrink: 0,
-                              boxShadow: '0 0 14px rgba(0, 240, 255, 0.35)'
-                            }}
-                          >
-                            {(displayName || 'U')[0].toUpperCase()}
-                          </div>
-                        )}
-
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span
-                              style={{
-                                fontWeight: 800,
-                                fontSize: '0.98rem',
-                                color: isDark ? '#FFFFFF' : '#0F172A',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              }}
-                            >
-                              {displayName}
-                            </span>
-                            <ShieldCheck size={16} color="#10B981" />
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '0.78rem',
-                              color: isDark ? '#94A3B8' : '#64748B',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              marginTop: '2px'
-                            }}
-                          >
-                            {email}
-                          </div>
+                      {/* Large User Profile Avatar */}
+                      {photoURL ? (
+                        <img
+                          src={photoURL}
+                          alt={displayName}
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-full mx-auto border-4 border-sky-400/80 shadow-lg object-cover mb-3 block"
+                          style={{
+                            width: '88px',
+                            height: '88px',
+                            borderRadius: '50%',
+                            margin: '0 auto 12px auto',
+                            border: '4px solid rgba(56, 189, 248, 0.85)',
+                            boxShadow: '0 8px 24px rgba(56, 189, 248, 0.35)',
+                            objectFit: 'cover',
+                            display: 'block'
+                          }}
+                        />
+                      ) : (
+                        <div
+                          className="w-20 h-20 sm:w-24 sm:h-24 rounded-full mx-auto border-4 border-sky-400/80 shadow-lg object-cover mb-3 flex items-center justify-center"
+                          style={{
+                            width: '88px',
+                            height: '88px',
+                            borderRadius: '50%',
+                            margin: '0 auto 12px auto',
+                            border: '4px solid rgba(56, 189, 248, 0.85)',
+                            background: 'linear-gradient(135deg, #1D68FF 0%, #00F0FF 100%)',
+                            color: '#FFFFFF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 800,
+                            fontSize: '2.2rem',
+                            boxShadow: '0 8px 24px rgba(56, 189, 248, 0.35)'
+                          }}
+                        >
+                          {(displayName || 'U')[0].toUpperCase()}
                         </div>
+                      )}
+
+                      {/* Centered Name with Verification Badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <h3
+                          style={{
+                            margin: 0,
+                            fontSize: '1.25rem',
+                            fontWeight: 800,
+                            color: isDark ? '#FFFFFF' : '#0F172A',
+                            lineHeight: 1.2,
+                            maxWidth: '280px',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
+                          {displayName}
+                        </h3>
+                        <ShieldCheck size={20} color="#10B981" style={{ flexShrink: 0 }} />
                       </div>
 
-                      {/* Live Status Indicators */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                      {/* Centered Email */}
+                      <div
+                        style={{
+                          fontSize: '0.84rem',
+                          color: isDark ? '#94A3B8' : '#64748B',
+                          marginBottom: '10px',
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {email}
+                      </div>
+
+                      {/* Centered Live Status Badges */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span
                           style={{
-                            padding: '4px 10px',
-                            borderRadius: '16px',
+                            padding: '4px 12px',
+                            borderRadius: '20px',
                             background: 'rgba(16, 185, 129, 0.12)',
-                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            border: '1px solid rgba(16, 185, 129, 0.35)',
                             color: '#10B981',
-                            fontSize: '0.74rem',
+                            fontSize: '0.75rem',
                             fontWeight: 700,
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '5px'
+                            gap: '6px'
                           }}
                         >
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B981' }} />
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10B981', boxShadow: '0 0 8px #10B981' }} />
                           {isBangla ? 'লাইভ কানেক্টেড' : 'Live Connected'}
                         </span>
 
                         {referral && (
                           <span
                             style={{
-                              padding: '4px 10px',
-                              borderRadius: '16px',
-                              background: 'rgba(139, 92, 246, 0.12)',
-                              border: '1px solid rgba(139, 92, 246, 0.3)',
-                              color: '#A78BFA',
-                              fontSize: '0.72rem',
+                              padding: '4px 12px',
+                              borderRadius: '20px',
+                              background: isDark ? 'rgba(139, 92, 246, 0.15)' : 'rgba(139, 92, 246, 0.1)',
+                              border: '1px solid rgba(139, 92, 246, 0.35)',
+                              color: '#8B5CF6',
+                              fontSize: '0.74rem',
                               fontWeight: 600
                             }}
                           >
@@ -1251,16 +1443,16 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                       </div>
                     </div>
 
-                    {/* 3. Action & Promotional Section */}
+                    {/* 3. Action Section: Full-Width Vibrant Blue Gradient Button */}
                     <div
                       style={{
                         background: isDark
-                          ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)'
-                          : 'linear-gradient(135deg, rgba(2, 132, 199, 0.06) 0%, rgba(16, 185, 129, 0.06) 100%)',
-                        border: isDark ? '1px dashed rgba(0, 240, 255, 0.3)' : '1px dashed rgba(2, 132, 199, 0.3)',
-                        borderRadius: '18px',
-                        padding: '14px 16px',
-                        marginBottom: '18px',
+                          ? 'linear-gradient(135deg, rgba(29, 104, 255, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%)'
+                          : 'linear-gradient(135deg, rgba(29, 104, 255, 0.06) 0%, rgba(16, 185, 129, 0.06) 100%)',
+                        border: isDark ? '1px dashed rgba(29, 104, 255, 0.35)' : '1px dashed rgba(29, 104, 255, 0.35)',
+                        borderRadius: '20px',
+                        padding: '16px',
+                        marginBottom: '16px',
                         textAlign: 'center'
                       }}
                     >
@@ -1270,69 +1462,81 @@ export default function ConnectModal({ isOpen, onClose, onOpenProjects, onOpenDe
                           fontSize: '0.82rem',
                           color: isDark ? '#E2E8F0' : '#1E293B',
                           lineHeight: 1.5,
-                          fontWeight: 600
+                          fontWeight: 600,
+                          fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                         }}
                       >
                         ✨ {isBangla
-                          ? 'আমার সাম্প্রতিক কাজ, বিশেষ অফার ও আপডেট দেখতে চোখ রাখুন।'
+                          ? 'আমার সাম্প্রতিক প্রজেক্ট ও বিশেষ অফারসমূহ দেখতে নিচে ক্লিক করুন।'
                           : 'Stay tuned to explore my latest creations, exclusive deals & updates.'}
                       </p>
 
+                      {/* Full-Width Vibrant Blue Gradient Button */}
                       <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={handleExploreProjects}
+                        className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/25 active:scale-95 transition-all"
                         style={{
                           width: '100%',
-                          padding: '11px 16px',
-                          borderRadius: '12px',
-                          background: 'linear-gradient(135deg, #00B4D8 0%, #0077B6 100%)',
+                          padding: '14px 20px',
+                          background: 'linear-gradient(135deg, #1D68FF 0%, #2563EB 50%, #0284C7 100%)',
                           color: '#FFFFFF',
-                          border: 'none',
                           fontWeight: 800,
-                          fontSize: '0.86rem',
+                          fontSize: '0.94rem',
+                          borderRadius: '16px',
+                          border: 'none',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '8px',
-                          boxShadow: '0 4px 14px rgba(0, 180, 216, 0.3)'
+                          gap: '10px',
+                          boxShadow: '0 8px 24px rgba(29, 104, 255, 0.35)',
+                          transition: 'all 0.2s ease',
+                          fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
                         }}
                       >
-                        <Layers size={16} />
+                        <Layers size={18} />
                         <span>{isBangla ? 'প্রজেক্ট ও অফারসমূহ দেখুন' : 'Explore Projects & Deals'}</span>
-                        <ArrowRight size={14} />
+                        <ArrowRight size={16} />
                       </motion.button>
                     </div>
 
-                    {/* 4. Logout Control: Clean Disconnect / Sign Out Button */}
+                    {/* 4. Logout Control: Clean Disconnect / Sign Out Text Button */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleSignOut}
                       disabled={loadingProvider === 'signout'}
                       style={{
-                        width: '100%',
-                        padding: '10px 14px',
-                        borderRadius: '12px',
-                        background: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
-                        border: '1px solid rgba(239, 68, 68, 0.3)',
-                        color: '#EF4444',
-                        fontSize: '0.80rem',
+                        background: 'transparent',
+                        border: 'none',
+                        color: isDark ? '#F87171' : '#DC2626',
+                        fontSize: '0.84rem',
                         fontWeight: 700,
+                        padding: '8px 16px',
                         cursor: loadingProvider === 'signout' ? 'not-allowed' : 'pointer',
-                        display: 'flex',
+                        display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '6px',
-                        transition: 'all 0.2s ease'
+                        margin: '0 auto',
+                        borderRadius: '10px',
+                        transition: 'all 0.15s ease',
+                        fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : 'inherit'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
                       }}
                     >
                       {loadingProvider === 'signout' ? (
                         <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
                       ) : (
                         <>
-                          <LogOut size={14} />
+                          <LogOut size={15} />
                           <span>{isBangla ? 'ডিসকানেক্ট / সাইন আউট' : 'Disconnect / Sign Out'}</span>
                         </>
                       )}

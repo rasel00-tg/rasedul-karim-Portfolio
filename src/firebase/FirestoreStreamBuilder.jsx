@@ -52,8 +52,8 @@ export const FirestoreStreamBuilder = ({
     }
 
     const setupStream = async () => {
-      // Pre-seed feature collections with cached or baseline items for zero-lag render
-      if (isFeatureCollection) {
+      // Pre-seed feature & project collections with cached items for zero-lag render
+      if (isFeatureCollection || isProjectsCollection) {
         try {
           const { getCachedItems } = await import('../services/featuresService');
           const initialCached = getCachedItems(collectionName);
@@ -98,6 +98,11 @@ export const FirestoreStreamBuilder = ({
 
               if (isProjectsCollection || isSponsorsCollection) {
                 // Direct Firestore data: empty [] remains empty with zero dummy data
+                if (isProjectsCollection && items.length > 0) {
+                  import('../services/featuresService').then(({ setCachedItems }) => {
+                    setCachedItems(collectionName, items);
+                  }).catch(() => {});
+                }
                 setStreamState({
                   data: items,
                   docsMap,

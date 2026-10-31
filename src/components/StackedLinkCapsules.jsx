@@ -48,12 +48,27 @@ const SponsorCarouselView = memo(({
     return () => clearInterval(timer);
   }, [bannerCount, onSelectSlide]);
 
-  // Pre-caching Pipeline
+  const [loadedMap, setLoadedMap] = useState({});
+  const isCurrentImageLoaded = !!(currentItem?.imageUrl && loadedMap[currentItem.imageUrl]);
+
+  // Pre-caching Pipeline into Memory & Preload link tags
   useEffect(() => {
     banners.forEach((b) => {
       if (b?.imageUrl) {
         const img = new Image();
+        img.decoding = 'async';
+        img.onload = () => {
+          setLoadedMap((prev) => ({ ...prev, [b.imageUrl]: true }));
+        };
         img.src = b.imageUrl;
+        if (!document.querySelector(`link[href="${b.imageUrl}"]`)) {
+          const link = document.createElement('link');
+          link.rel = 'preload';
+          link.as = 'image';
+          link.href = b.imageUrl;
+          link.fetchPriority = 'high';
+          document.head.appendChild(link);
+        }
       }
     });
   }, [banners]);
@@ -75,22 +90,22 @@ const SponsorCarouselView = memo(({
         gap: '8px',
         alignItems: 'center',
         marginTop: '4px',
-        paddingBottom: 'max(7rem, env(safe-area-inset-bottom, 28px))'
+        paddingBottom: 'max(8rem, calc(80px + env(safe-area-inset-bottom, 32px)))'
       }}>
         {/* PURE VISUAL CARD: Strictly NO hints, NO labels, NO click text */}
         <motion.div
-          className="bento-carousel-box w-full overflow-hidden rounded-2xl shadow-lg border border-white/20 dark:border-slate-800 bg-slate-900/10 relative"
+          className="w-full aspect-[16/7] sm:aspect-[21/9] rounded-2xl overflow-hidden shadow-lg border border-white/20 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-800/50 relative cursor-pointer"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.22 }}
           onClick={() => onOpenDetail(currentItem)}
           style={{
             width: '100%',
+            aspectRatio: '16 / 7',
             borderRadius: '18px',
             overflow: 'hidden',
             boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
-            border: '1.5px solid rgba(0, 0, 0, 0.08)',
-            background: '#0D1117',
+            border: isDark ? '1.5px solid rgba(255, 255, 255, 0.08)' : '1.5px solid rgba(0, 0, 0, 0.08)',
             position: 'relative',
             cursor: 'pointer',
             touchAction: 'pan-y',
@@ -98,6 +113,11 @@ const SponsorCarouselView = memo(({
             willChange: 'transform, opacity'
           }}
         >
+          {/* Frosted Shimmer Skeleton Placeholder while loading */}
+          {!isCurrentImageLoaded && (
+            <div className="absolute inset-0 w-full h-full bg-slate-200/50 dark:bg-slate-800/50 animate-pulse rounded-2xl z-0" />
+          )}
+
           <AnimatePresence mode="wait">
             <motion.div
               key={currentItem?.id || safeIndex}
@@ -117,15 +137,22 @@ const SponsorCarouselView = memo(({
                 top: 0,
                 left: 0,
                 transform: 'translate3d(0, 0, 0)',
-                willChange: 'transform, opacity'
+                willChange: 'transform, opacity',
+                zIndex: 1
               }}
             >
               <img 
                 src={currentItem?.imageUrl || '/about.png'} 
                 alt="Showcase Banner"
-                loading="lazy"
+                loading="eager"
+                fetchPriority="high"
                 decoding="async"
-                className="w-full h-auto object-cover object-top lg:min-h-[190px] xl:min-h-[220px] block transition-transform duration-300"
+                onLoad={() => {
+                  if (currentItem?.imageUrl) {
+                    setLoadedMap((prev) => ({ ...prev, [currentItem.imageUrl]: true }));
+                  }
+                }}
+                className="w-full h-full object-cover object-top block transition-opacity duration-300"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -133,10 +160,13 @@ const SponsorCarouselView = memo(({
                   objectPosition: 'top center',
                   display: 'block',
                   pointerEvents: 'none',
-                  aspectRatio: '16 / 9'
+                  opacity: isCurrentImageLoaded ? 1 : 0.85
                 }}
                 onError={(e) => {
                   e.target.src = '/about.png';
+                  if (currentItem?.imageUrl) {
+                    setLoadedMap((prev) => ({ ...prev, [currentItem.imageUrl]: true }));
+                  }
                 }}
               />
             </motion.div>
@@ -1102,92 +1132,14 @@ const BentoGridSection = ({
           </FirestoreStreamBuilder>
         </div>
 
-        {/* ========================================================================= */}
-        {/* CARD 6: FULL-WIDTH ELECTRIC BLUE CONNECT STRIP (#0284C7) */}
-        {/* ========================================================================= */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.18 }}
-          whileHover={{ scale: 1.012, y: -1 }}
-          whileTap={{ scale: 0.985 }}
-          onClick={onOpenSubscribe}
-          style={{
-            width: '100%',
-            height: '46px',
-            borderRadius: '14px',
-            background: 'linear-gradient(135deg, #0284C7 0%, #2563EB 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.28)',
-            boxShadow: '0 4px 16px rgba(2, 132, 199, 0.35)',
-            padding: '0 14px',
-            boxSizing: 'border-box',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer',
-            position: 'relative'
-          }}
-        >
-          {/* Left: Text */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            minWidth: 0,
-            flex: 1,
-            textAlign: 'left',
-            fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
-          }}>
-            <h4 style={{
-              margin: 0,
-              fontSize: '0.80rem',
-              fontWeight: 800,
-              color: '#FFFFFF',
-              lineHeight: 1.15
-            }}>
-              {t('bento.connectTitle', isBangla ? 'কানেক্ট করুন' : 'Connect with Me')}
-            </h4>
-            <p style={{
-              margin: '2px 0 0 0',
-              fontSize: '0.62rem',
-              color: 'rgba(255, 255, 255, 0.92)',
-              fontWeight: 500,
-              lineHeight: 1.1,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}>
-              {t('bento.connectSub', isBangla ? 'গুগল বা গিটহাব দিয়ে ১-ক্লিক সংযোগ' : '1-Click Google & GitHub Auth')}
-            </p>
-          </div>
-
-          {/* Right: Icon & Arrow */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flexShrink: 0,
-            marginLeft: '8px'
-          }}>
-            <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              background: 'rgba(255, 255, 255, 0.24)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FFFFFF'
-            }}>
-              <Sparkles size={14} strokeWidth={2.4} />
-            </div>
-            <ChevronRight size={15} strokeWidth={2.4} color="#FFFFFF" />
-          </div>
-        </motion.div>
+        {/* SPONSOR BANNER AUTO-CAROUSEL (PULLED UP DIRECTLY UNDER CARD 4 & 5) */}
 
         {/* ========================================================================= */}
         {/* CARD 7: ENLARGED 100% PURE FULL-COVER 7-BANNER AUTO-CAROUSEL (FIFO) */}
         {/* ========================================================================= */}
-        <SponsorBannerCarousel isDark={isDark} isBangla={isBangla} />
+        <div className="mt-2.5 sm:mt-3 w-full" style={{ marginTop: '10px', width: '100%' }}>
+          <SponsorBannerCarousel isDark={isDark} isBangla={isBangla} />
+        </div>
 
         {/* Bottom Safety Spacer for mobile gesture bar / home button */}
         <div 

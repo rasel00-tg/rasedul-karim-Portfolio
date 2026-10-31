@@ -44,6 +44,7 @@ import {
   Fingerprint
 } from 'lucide-react';
 import { uploadImageToCloudinary } from '../services/cloudinaryService';
+import { uploadImageToCloudflareR2 } from '../utils/r2Upload';
 import {
   uploadFileToStorage,
   createLocalImagePreview,
@@ -708,7 +709,8 @@ const AdminModal = ({ onClose }) => {
   // --- TAB 3: FAVORITE TOOLS STATE ---
   const [favoriteEditingId, setFavoriteEditingId] = useState(null);
   const [favoriteName, setFavoriteName] = useState('');
-  const [favoriteCategory, setFavoriteCategory] = useState('Design');
+  const [favoriteCategory, setFavoriteCategory] = useState('AI Tools');
+  const [favoriteWhyLove, setFavoriteWhyLove] = useState('');
   const [favoriteOfficialUrl, setFavoriteOfficialUrl] = useState('');
   const [favoriteRating, setFavoriteRating] = useState('5.0');
   const [favoriteThumbnailUrl, setFavoriteThumbnailUrl] = useState('/favorite.png');
@@ -716,28 +718,21 @@ const AdminModal = ({ onClose }) => {
   const [uploadingFavoriteImage, setUploadingFavoriteImage] = useState(false);
   const [favoriteDescription, setFavoriteDescription] = useState('');
 
-  const handleFavoriteImageChange = async (e) => {
+  // 1. Strict No Pre-Upload: image selection ONLY creates local preview
+  const handleFavoriteImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFavoriteImageFile(file);
     const localUrl = createLocalImagePreview(file);
     setFavoriteThumbnailUrl(localUrl);
-    setUploadingFavoriteImage(true);
-    try {
-      const url = await uploadFileToStorage(file, 'favorites', idToken);
-      setFavoriteThumbnailUrl(url);
-      showFeatureToast(isBangla ? '✓ আইকন/থাম্বনেইল সফলভাবে আপলোড হয়েছে' : '✓ Icon uploaded to storage');
-    } catch (err) {
-      console.warn('Favorite upload notice:', err.message);
-    } finally {
-      setUploadingFavoriteImage(false);
-    }
+    showFeatureToast(isBangla ? '✓ ছবি নির্বাচন সম্পন্ন (সংরক্ষণে কম্প্রেস ও R2-তে আপলোড হবে)' : '✓ Image selected (will compress & upload on save)');
   };
 
   const resetFavoriteForm = () => {
     setFavoriteEditingId(null);
     setFavoriteName('');
-    setFavoriteCategory('Design');
+    setFavoriteCategory('AI Tools');
+    setFavoriteWhyLove('');
     setFavoriteOfficialUrl('');
     setFavoriteRating('5.0');
     setFavoriteThumbnailUrl('/favorite.png');
@@ -745,46 +740,109 @@ const AdminModal = ({ onClose }) => {
     setFavoriteDescription('');
   };
 
+  // 2. Strict Deferred Upload on Form Submit with Client-Side Canvas Compression & Cloudflare R2 Upload
   const handleSaveFavorite = async (e) => {
     e.preventDefault();
+    setFeatureToast(null); // Clear previous error banner immediately on submit
+
     if (!favoriteName.trim()) {
       showFeatureToast(isBangla ? 'অনুগ্রহ করে টুলের নাম দিন' : 'Please provide tool name', 'error');
       return;
     }
+    if (!favoriteOfficialUrl.trim()) {
+      showFeatureToast(isBangla ? 'অনুগ্রহ করে টুলের অফিসিয়াল লিঙ্ক দিন' : 'Please provide tool official URL', 'error');
+      return;
+    }
+
     setFeatureActionLoading(true);
+    setUploadingFavoriteImage(true);
     try {
+      let finalThumbnailUrl = favoriteThumbnailUrl || '/favorite.png';
+
+      // Only upload to Cloudflare R2 when form passes validation and file exists
+      if (favoriteImageFile) {
+        showFeatureToast(isBangla ? 'ছবি কম্প্রেস ও ক্লাউডফ্লেয়ার R2-তে আপলোড হচ্ছে...' : 'Compressing image & uploading to Cloudflare R2...');
+        try {
+          finalThumbnailUrl = await uploadImageToCloudflareR2(favoriteImageFile, {
+            folder: 'favorites',
+            maxWidth: 1000,
+            maxHeight: 1000,
+            quality: 0.82
+          });
+        } catch (uploadErr) {
+          console.error("R2 Upload Detail:", uploadErr);
+          const errMsg = uploadErr.message?.includes('Failed to fetch') || uploadErr.message?.includes('CORS')
+            ? (isBangla ? 'Cloudflare R2 স্টোরেজে সংযোগ করা যায়নি! CORS বা Worker URL চেক করুন।' : 'Could not connect to Cloudflare R2! Check CORS or Worker URL.')
+            : (uploadErr.message || (isBangla ? 'Cloudflare R2 স্টোরেজে সংযোগ করা যায়নি! CORS বা Worker URL চেক করুন।' : 'R2 connection failed'));
+          showFeatureToast(errMsg, 'error');
+          setFeatureActionLoading(false);
+          setUploadingFavoriteImage(false);
+          return;
+        }
+      }
+
+      const now = new Date().toISOString();
       const payload = {
         name: favoriteName.trim(),
         title: favoriteName.trim(),
         category: favoriteCategory,
+        whyPrefer: favoriteWhyLove.trim(),
+        whyLove: favoriteWhyLove.trim(),
+        url: favoriteOfficialUrl.trim(),
         officialUrl: favoriteOfficialUrl.trim(),
         rating: favoriteRating.trim() || '5.0',
-        thumbnailUrl: favoriteThumbnailUrl.trim() || '/favorite.png',
-        description: favoriteDescription.trim()
+        iconUrl: finalThumbnailUrl.trim() || '/favorite.png',
+        thumbnailUrl: finalThumbnailUrl.trim() || '/favorite.png',
+        description: favoriteWhyLove.trim() || favoriteDescription.trim(),
+        createdAt: now,
+        updatedAt: now
       };
+
       if (favoriteEditingId) {
         await updateFeatureItem(COLLECTIONS.FAVORITE_TOOLS, favoriteEditingId, payload, idToken);
+        try {
+          const { db } = await initFirebase();
+          if (db) {
+            const { doc, setDoc } = await import('firebase/firestore');
+            await setDoc(doc(db, 'favourite_tools', favoriteEditingId), payload, { merge: true });
+          }
+        } catch (_) {}
         showFeatureToast(isBangla ? '✓ ফেভারিট টুল সফলভাবে আপডেট হয়েছে!' : '✓ Favorite tool updated successfully!');
       } else {
-        await saveFeatureItem(COLLECTIONS.FAVORITE_TOOLS, payload, idToken);
+        const savedDoc = await saveFeatureItem(COLLECTIONS.FAVORITE_TOOLS, payload, idToken);
+        try {
+          const { db } = await initFirebase();
+          if (db) {
+            const { doc, setDoc } = await import('firebase/firestore');
+            const targetId = savedDoc?.id || `tool_${Date.now()}`;
+            await setDoc(doc(db, 'favourite_tools', targetId), { ...payload, id: targetId }, { merge: true });
+          }
+        } catch (_) {}
         showFeatureToast(isBangla ? '✓ নতুন ফেভারিট টুল সফলভাবে যুক্ত হয়েছে!' : '✓ New favorite tool added successfully!');
       }
       resetFavoriteForm();
     } catch (err) {
-      showFeatureToast(err.message || 'Operation failed', 'error');
+      console.error('Failed to save favorite tool:', err);
+      const errMsg = err.message?.includes('Failed to fetch') || err.message?.includes('CORS')
+        ? (isBangla ? 'Cloudflare R2 স্টোরেজে সংযোগ করা যায়নি! CORS বা Worker URL চেক করুন।' : 'Could not connect to Cloudflare R2! Check CORS or Worker URL.')
+        : (err.message || 'Operation failed');
+      showFeatureToast(errMsg, 'error');
     } finally {
       setFeatureActionLoading(false);
+      setUploadingFavoriteImage(false);
     }
   };
 
   const handleEditFavorite = (item) => {
     setFavoriteEditingId(item.id);
     setFavoriteName(item.name || item.title || '');
-    setFavoriteCategory(item.category || 'Design');
+    setFavoriteCategory(item.category || 'AI Tools');
+    setFavoriteWhyLove(item.whyLove || item.whyPrefer || item.description || item.note || '');
     setFavoriteOfficialUrl(item.officialUrl || '');
     setFavoriteRating(item.rating || '5.0');
     setFavoriteThumbnailUrl(item.thumbnailUrl || '/favorite.png');
     setFavoriteDescription(item.description || item.note || '');
+    setFavoriteImageFile(null);
   };
 
   const handleDeleteFavorite = async (item) => {
@@ -4172,33 +4230,33 @@ const AdminModal = ({ onClose }) => {
 
                   <form onSubmit={handleSaveFavorite} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'টুলের নাম / আইটেম *' : 'Tool Name / Item *'}</label>
+                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'টুলের নাম (Tool Name) *' : 'Tool Name *'}</label>
                       <input
                         type="text"
                         required
                         value={favoriteName}
                         onChange={(e) => setFavoriteName(e.target.value)}
-                        placeholder="e.g., Figma"
+                        placeholder="e.g., Figma / Midjourney / CapCut"
                         style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box' }}
                       />
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px' }}>
                       <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'ক্যাটাগরি' : 'Category'}</label>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'ক্যাটাগরি (Category) *' : 'Category *'}</label>
                         <select
                           value={favoriteCategory}
                           onChange={(e) => setFavoriteCategory(e.target.value)}
                           style={{ width: '100%', padding: '10px', background: '#0b1329', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }}
                         >
+                          <option value="AI Tools">AI Tools</option>
+                          <option value="Editing Apps">Editing Apps</option>
                           <option value="Design">Design</option>
-                          <option value="Coding">Coding</option>
-                          <option value="Productivity">Productivity</option>
                         </select>
                       </div>
 
                       <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'রেটিং / নোট' : 'Rating / Note'}</label>
+                        <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'রেটিং (Rating)' : 'Rating'}</label>
                         <input
                           type="text"
                           value={favoriteRating}
@@ -4210,9 +4268,24 @@ const AdminModal = ({ onClose }) => {
                     </div>
 
                     <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'অফিশিয়াল লিঙ্ক' : 'Official Link'}</label>
+                      <label style={{ fontSize: '0.8rem', color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>{isBangla ? 'কিসের জন্য পছন্দ করি / কেন ব্যবহার করি (Why I Prefer/Love This Tool) *' : 'Why I Prefer/Love This Tool *'}</span>
+                        <span style={{ fontSize: '0.70rem', color: '#60A5FA' }}>{isBangla ? 'AI ও ডিজাইন স্পেশাল' : 'AI & Design Highlight'}</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={favoriteWhyLove}
+                        onChange={(e) => setFavoriteWhyLove(e.target.value)}
+                        placeholder={isBangla ? 'টুলটি পছন্দের কারণ ও ব্যবহার উল্লেখ করুন (যেমন: UI/UX ডিজাইন, প্রোটোটাইপিংয়ের সেরা টুল)...' : 'Why do you love this tool and when do you use it...'}
+                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box', resize: 'vertical' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'টুল অফিশিয়াল URL / লাইভ লিংক (Official Link) *' : 'Tool Official URL / Live Link *'}</label>
                       <input
                         type="url"
+                        required
                         value={favoriteOfficialUrl}
                         onChange={(e) => setFavoriteOfficialUrl(e.target.value)}
                         placeholder="https://figma.com"
@@ -4220,10 +4293,10 @@ const AdminModal = ({ onClose }) => {
                       />
                     </div>
 
-                    {/* Direct Device Gallery File Picker (NO URL Input) */}
+                    {/* Direct Device Gallery File Picker with No Pre-Upload */}
                     <div>
                       <label style={{ fontSize: '0.8rem', color: '#94A3B8', display: 'block', marginBottom: '6px' }}>
-                        {isBangla ? 'গ্যালারি থেকে আইকন বা থাম্বনেইল নির্বাচন *' : 'Icon / Thumbnail from Device Gallery *'}
+                        {isBangla ? 'টুল আইকন বা লোগো ফাইল নির্বাচন (ক্লাউডফ্লেয়ার R2-তে সেভ হবে)' : 'Tool Icon / Logo File (Saved to Cloudflare R2)'}
                       </label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                         <label style={{
@@ -4232,9 +4305,9 @@ const AdminModal = ({ onClose }) => {
                           gap: '8px',
                           padding: '10px 18px',
                           borderRadius: '10px',
-                          background: 'rgba(255, 179, 0, 0.15)',
-                          border: '1.5px solid #FFB300',
-                          color: '#FFB300',
+                          background: 'rgba(29, 104, 255, 0.15)',
+                          border: '1.5px solid #1D68FF',
+                          color: '#60A5FA',
                           fontSize: '0.84rem',
                           fontWeight: 800,
                           cursor: 'pointer',
@@ -4243,8 +4316,8 @@ const AdminModal = ({ onClose }) => {
                           <Upload size={16} />
                           <span>
                             {uploadingFavoriteImage
-                              ? (isBangla ? 'আপলোড হচ্ছে...' : 'Uploading to Storage...')
-                              : (isBangla ? 'গ্যালারি থেকে ছবি বাছুন' : 'Choose from Gallery')}
+                              ? (isBangla ? 'কম্প্রেস ও আপলোড হচ্ছে...' : 'Compressing & Uploading to R2...')
+                              : (isBangla ? 'গ্যালারি থেকে আইকন বাছুন' : 'Choose Icon File')}
                           </span>
                           <input
                             type="file"
@@ -4256,21 +4329,12 @@ const AdminModal = ({ onClose }) => {
 
                         {favoriteThumbnailUrl && (
                           <span style={{ fontSize: '0.76rem', color: '#4ADE80', fontWeight: 700 }}>
-                            {uploadingFavoriteImage ? (isBangla ? 'স্টোরেজে সেভ হচ্ছে...' : 'Uploading...') : (isBangla ? '✓ আইকন প্রস্তুত' : '✓ Icon Ready')}
+                            {uploadingFavoriteImage 
+                              ? (isBangla ? 'R2-তে আপলোড হচ্ছে...' : 'Uploading to R2...') 
+                              : (favoriteImageFile ? (isBangla ? '✓ নির্বাচিত (সংরক্ষণে কম্প্রেস ও আপলোড হবে)' : '✓ Selected (will compress & upload on save)') : (isBangla ? '✓ বর্তমান আইকন' : '✓ Current Icon'))}
                           </span>
                         )}
                       </div>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{isBangla ? 'বিবরণ / নোট' : 'Description / Note'}</label>
-                      <textarea
-                        rows={2}
-                        value={favoriteDescription}
-                        onChange={(e) => setFavoriteDescription(e.target.value)}
-                        placeholder="e.g., Collaborative vector design and interactive prototyping suite"
-                        style={{ width: '100%', padding: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', boxSizing: 'border-box', resize: 'vertical' }}
-                      />
                     </div>
 
                     {/* Live Preview Card */}
@@ -4288,7 +4352,12 @@ const AdminModal = ({ onClose }) => {
                             <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#fff' }}>{favoriteName || 'Tool Name'}</span>
                             <span style={{ fontSize: '0.7rem', color: '#FFB300', fontWeight: 800 }}>★ {favoriteRating}</span>
                           </div>
-                          <span style={{ fontSize: '0.64rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(245, 127, 23, 0.2)', color: '#FFB300' }}>{favoriteCategory}</span>
+                          <span style={{ fontSize: '0.64rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(29, 104, 255, 0.2)', color: '#60A5FA' }}>{favoriteCategory}</span>
+                          {favoriteWhyLove && (
+                            <div style={{ marginTop: '6px', fontSize: '0.68rem', color: '#BFDBFE', background: 'rgba(29, 104, 255, 0.15)', padding: '4px 8px', borderRadius: '6px' }}>
+                              🎯 Why I Love: {favoriteWhyLove}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

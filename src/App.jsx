@@ -1,7 +1,7 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { FirestoreStreamBuilder } from './firebase/FirestoreStreamBuilder';
 import Navbar from './components/Navbar';
-import HeroSection from './components/HeroSection';
+import Home from './pages/Home';
 
 import ConnectModal from './components/ConnectModal';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -77,43 +77,23 @@ function App() {
           </ErrorBoundary>
           
           {/* Main Mobile-First Digital Business Card Layout - Clean, Fluid & Naturally Scrollable */}
-          <div 
-            id="main-homepage-container"
-            className="w-full min-h-screen overflow-y-auto overflow-x-hidden relative flex flex-col"
-            style={{
-              position: 'relative',
-              zIndex: 1,
-              minHeight: '100vh',
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              WebkitOverflowScrolling: 'touch',
-              touchAction: 'pan-y'
-            }}
-          >
-            <main className="w-full max-w-md lg:max-w-6xl mx-auto px-4 pb-28 pt-2 flex flex-col flex-1">
-              {/* Digital Profile, Metrics, Social Icons & Bento Cards */}
-              <HeroSection 
-                isDreamOpen={showProjects || showDream || showAbout || showSkill || showAdmin || showQR || showReview || showDesign || showUpcoming || showFavorite || showDeals} 
-                onOpenProjects={() => setShowProjects(true)}
-                onOpenAbout={() => setShowAbout(true)}
-                onOpenDream={() => setShowDream(true)}
-                onOpenSkill={() => setShowSkill(true)}
-                onOpenAdmin={() => setShowAdmin(true)}
-                onOpenReview={() => setShowReview(true)}
-                onOpenQR={() => setShowQR(true)}
-                onOpenDrawer={() => setIsDrawerOpen(true)}
-                onOpenDesign={() => setShowDesign(true)}
-                onOpenUpcoming={() => setShowUpcoming(true)}
-                onOpenFavorite={() => setShowFavorite(true)}
-                onOpenDeals={() => setShowDeals(true)}
-                isSubscribeOpen={showSubscribe}
-                setIsSubscribeOpen={setShowSubscribe}
-              />
-            </main>
-          </div>
+          <Home 
+            isDreamOpen={showProjects || showDream || showAbout || showSkill || showAdmin || showQR || showReview || showDesign || showUpcoming || showFavorite || showDeals} 
+            onOpenProjects={() => setShowProjects(true)}
+            onOpenAbout={() => setShowAbout(true)}
+            onOpenDream={() => setShowDream(true)}
+            onOpenSkill={() => setShowSkill(true)}
+            onOpenAdmin={() => setShowAdmin(true)}
+            onOpenReview={() => setShowReview(true)}
+            onOpenQR={() => setShowQR(true)}
+            onOpenDrawer={() => setIsDrawerOpen(true)}
+            onOpenDesign={() => setShowDesign(true)}
+            onOpenUpcoming={() => setShowUpcoming(true)}
+            onOpenFavorite={() => setShowFavorite(true)}
+            onOpenDeals={() => setShowDeals(true)}
+            isSubscribeOpen={showSubscribe}
+            setIsSubscribeOpen={setShowSubscribe}
+          />
         </>
       )}
     </FirestoreStreamBuilder>

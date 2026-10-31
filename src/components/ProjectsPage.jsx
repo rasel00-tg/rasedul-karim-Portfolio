@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Smartphone, Globe, ExternalLink, Search, Sparkles, ArrowLeft, X, Layers } from 'lucide-react';
+import { Smartphone, Globe, ExternalLink, Search, ArrowLeft, X } from 'lucide-react';
+import { getCachedItems } from '../services/featuresService';
 
 export default function ProjectsPage({ items = [], loading = false, onClose }) {
+  // Dual Categories: Only Apps and Websites (Default: 'apps')
   const [activeCategory, setActiveCategory] = useState('apps'); // 'apps' | 'website'
   const [searchQuery, setSearchQuery] = useState('');
   const { isDark } = useTheme();
 
-  // Pure dynamic Firestore source items (zero dummy/demo data)
-  const sourceItems = Array.isArray(items) ? items : [];
+  // Instant zero-lag cache resolution
+  const cachedProjects = getCachedItems('projects') || [];
+  const sourceItems = Array.isArray(items) && items.length > 0 
+    ? items 
+    : (loading ? cachedProjects : (Array.isArray(items) ? items : []));
 
-  // Resolve apps & websites
+  // Categorize specifically into Apps and Websites
   const rawApps = sourceItems.filter(p => {
     const cat = (p.category || '').toLowerCase();
     return cat === 'apps' || cat === 'app';
@@ -21,165 +26,276 @@ export default function ProjectsPage({ items = [], loading = false, onClose }) {
     return cat === 'website' || cat === 'web';
   });
 
+  // Filter based on active category
+  const displayedList = activeCategory === 'website' ? rawWebsites : rawApps;
+
   // Filter based on search query
   const query = searchQuery.trim().toLowerCase();
-  const filteredApps = rawApps.filter(app => {
+  const filteredProjects = displayedList.filter(project => {
     if (!query) return true;
-    const title = (app.title || app.name || app.headline || '').toLowerCase();
-    const tag = (app.subCategory || app.tagline || app.category || app.platform || '').toLowerCase();
-    const desc = (app.description || '').toLowerCase();
-    return title.includes(query) || tag.includes(query) || desc.includes(query);
-  });
-
-  const filteredWebsites = rawWebsites.filter(site => {
-    if (!query) return true;
-    const title = (site.title || site.name || site.headline || '').toLowerCase();
-    const tag = (site.subCategory || site.category || site.platform || '').toLowerCase();
-    const desc = (site.description || '').toLowerCase();
+    const title = (project.title || project.name || project.headline || '').toLowerCase();
+    const tag = (project.subCategory || project.category || project.platform || '').toLowerCase();
+    const desc = (project.description || '').toLowerCase();
     return title.includes(query) || tag.includes(query) || desc.includes(query);
   });
 
   return (
-    <div style={{
-      width: '100%',
-      minHeight: '100vh',
-      height: '100%',
-      backgroundColor: isDark ? '#050B14' : '#F8FAFC',
-      color: isDark ? '#F1F5F9' : '#0F172A',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      margin: 0,
-      padding: 0,
-      boxSizing: 'border-box'
-    }}>
-      {/* ─── Full-Width Edge-to-Edge Sticky Top Header Bar ─── */}
-      <header style={{
+    <div 
+      className="min-h-screen relative overflow-hidden select-none"
+      style={{
         width: '100%',
-        padding: '12px 20px',
-        borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #E2E8F0',
-        backgroundColor: isDark ? 'rgba(11, 19, 35, 0.92)' : 'rgba(255, 255, 255, 0.92)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        flexShrink: 0,
-        boxSizing: 'border-box',
+        minHeight: '100vh',
+        height: '100%',
+        background: isDark 
+          ? 'linear-gradient(135deg, #0B101B 0%, #0F172A 50%, #0B1324 100%)' 
+          : 'linear-gradient(135deg, #F5F8FF 0%, #EEF3FD 50%, #E6EEFC 100%)',
+        color: isDark ? '#FFFFFF' : '#0F172A',
         display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px',
-        zIndex: 50,
-        position: 'sticky',
-        top: 0
-      }}>
-        {/* Left: Back Button, Glowing Icon, Title & Subtitle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        flexDirection: 'column',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        margin: 0,
+        padding: 0,
+        boxSizing: 'border-box',
+        position: 'relative'
+      }}
+    >
+      {/* ─── Scoped Responsive CSS: 3-Col Mobile, Left-Aligned Desktop ─── */}
+      <style>{`
+        .projects-glass-grid {
+          display: grid !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+          width: 100% !important;
+          justify-content: flex-start !important;
+          box-sizing: border-box !important;
+          position: relative !important;
+          z-index: 10 !important;
+        }
+        @media (min-width: 640px) {
+          .projects-glass-grid {
+            grid-template-columns: repeat(auto-fill, minmax(130px, 150px)) !important;
+            gap: 12px !important;
+          }
+        }
+        @media (min-width: 1024px) {
+          .projects-glass-grid {
+            grid-template-columns: repeat(auto-fill, minmax(135px, 155px)) !important;
+            gap: 16px !important;
+          }
+        }
+        @media (min-width: 1280px) {
+          .projects-glass-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 160px)) !important;
+            gap: 16px !important;
+          }
+        }
+      `}</style>
+
+      {/* ─── ভাসমান ব্লু অর্ব ও ট্রান্সলুসেন্ট গ্লাস বাবল (Floating Glass & Vivid Blue Orbs) ─── */}
+      <div 
+        className="absolute inset-0 overflow-hidden pointer-events-none z-0"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          overflow: 'hidden',
+          pointerEvents: 'none',
+          zIndex: 0
+        }}
+      >
+        {/* ডানপাশের ভাইব্রেন্ট ব্লু স্ফিয়ার */}
+        <div 
+          style={{
+            position: 'absolute',
+            top: '110px',
+            right: '40px',
+            width: '180px',
+            height: '180px',
+            background: 'linear-gradient(135deg, #1D68FF 0%, #4F95FF 100%)',
+            borderRadius: '50%',
+            filter: 'blur(3px)',
+            opacity: 0.9,
+            boxShadow: '0 10px 35px rgba(29, 104, 255, 0.45)'
+          }} 
+        />
+
+        {/* বাঁপাশের ছোট ভাইব্রেন্ট ব্লু স্ফিয়ার */}
+        <div 
+          style={{
+            position: 'absolute',
+            top: '46%',
+            left: '-30px',
+            width: '110px',
+            height: '110px',
+            backgroundColor: '#2563EB',
+            borderRadius: '50%',
+            filter: 'blur(2px)',
+            opacity: 0.85,
+            boxShadow: '0 8px 30px rgba(37, 99, 235, 0.4)'
+          }} 
+        />
+
+        {/* বড় ফ্রস্টেড ট্রান্সলুসেন্ট গ্লাস বাবল ১ (টপ-রাইট ওভারল্যাপিং) */}
+        <div 
+          style={{
+            position: 'absolute',
+            top: '-60px',
+            right: '-60px',
+            width: '440px',
+            height: '440px',
+            borderRadius: '50%',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1.5px solid rgba(255, 255, 255, 0.7)',
+            background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.22)',
+            backdropFilter: 'blur(28px)',
+            WebkitBackdropFilter: 'blur(28px)',
+            boxShadow: 'inset 0 0 30px rgba(255, 255, 255, 0.25)'
+          }} 
+        />
+        
+        {/* বড় ফ্রস্টেড ট্রান্সলুসেন্ট গ্লাস বাবল ২ (মিড-রাইট) */}
+        <div 
+          style={{
+            position: 'absolute',
+            top: '180px',
+            right: '-70px',
+            width: '380px',
+            height: '380px',
+            borderRadius: '50%',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.55)',
+            background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.16)',
+            backdropFilter: 'blur(22px)',
+            WebkitBackdropFilter: 'blur(22px)'
+          }} 
+        />
+
+        {/* বড় ফ্রস্টেড ট্রান্সলুসেন্ট গ্লাস বাবল ৩ (বটম-লেফট) */}
+        <div 
+          style={{
+            position: 'absolute',
+            bottom: '-60px',
+            left: '-60px',
+            width: '320px',
+            height: '320px',
+            borderRadius: '50%',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(255, 255, 255, 0.65)',
+            background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.25)',
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)'
+          }} 
+        />
+      </div>
+
+      {/* ─── Sticky Translucent Header Bar ─── */}
+      <header 
+        style={{
+          width: '100%',
+          padding: '10px 16px',
+          borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(255, 255, 255, 0.8)',
+          backgroundColor: isDark ? 'rgba(11, 16, 27, 0.85)' : 'rgba(255, 255, 255, 0.75)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+          boxSizing: 'border-box'
+        }}
+      >
+        {/* Left: Back Button, Glowing Vivid Blue Icon & Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onClose && (
             <button
               type="button"
               onClick={onClose}
               style={{
-                width: '38px',
-                height: '38px',
+                width: '32px',
+                height: '32px',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(0, 0, 0, 0.1)',
-                color: isDark ? '#FFFFFF' : '#0F172A',
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(29, 104, 255, 0.2)',
+                color: isDark ? '#FFFFFF' : '#1D68FF',
                 cursor: 'pointer',
-                flexShrink: 0,
                 transition: 'all 0.2s ease',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
               }}
               title="Back to Home"
               aria-label="Back"
             >
-              <ArrowLeft size={19} />
+              <ArrowLeft size={16} />
             </button>
           )}
 
           <div style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #10B981 0%, #06B6D4 100%)',
+            width: '32px',
+            height: '32px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #1D68FF 0%, #4F95FF 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#FFFFFF',
-            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+            boxShadow: '0 4px 14px rgba(29, 104, 255, 0.4)',
             flexShrink: 0
           }}>
-            <Globe size={20} strokeWidth={2.4} />
+            <Globe size={18} strokeWidth={2.4} />
           </div>
 
           <div>
             <h1 style={{
-              fontSize: 'clamp(1.15rem, 2.2vw, 1.45rem)',
+              fontSize: '1.05rem',
               fontWeight: 900,
               margin: 0,
               letterSpacing: '-0.3px',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '5px',
               lineHeight: 1.2
             }}>
-              <span>Featured</span>
+              <span style={{ color: isDark ? '#FFFFFF' : '#0F172A' }}>Featured</span>
               <span style={{
-                background: 'linear-gradient(90deg, #10B981 0%, #06B6D4 100%)',
+                background: 'linear-gradient(90deg, #1D68FF 0%, #3B82F6 100%)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
               }}>
                 Projects
               </span>
             </h1>
-            <p style={{
-              fontSize: '0.72rem',
-              color: isDark ? '#94A3B8' : '#64748B',
-              margin: '2px 0 0 0',
-              fontWeight: 500
-            }}>
-              Production-ready mobile applications & modern web solutions
-            </p>
           </div>
         </div>
 
-        {/* Center/Right Controls: Search Box, Category Filter Switch & Close Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {/* Center / Right: Search & Dual Category Filter (Apps & Websites) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {/* Quick Search Box */}
-          <div style={{
-            position: 'relative',
-            display: 'flex',
-            alignItems: 'center',
-          }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Search
-              size={15}
+              size={13}
               style={{
                 position: 'absolute',
-                left: '12px',
-                color: isDark ? '#64748B' : '#94A3B8',
-                pointerEvents: 'none',
+                left: '9px',
+                color: '#64748B',
+                pointerEvents: 'none'
               }}
             />
             <input
               type="text"
-              placeholder="Search projects..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
-                padding: '8px 12px 8px 34px',
-                borderRadius: '10px',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid #CBD5E1',
-                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.7)' : '#FFFFFF',
-                color: isDark ? '#F1F5F9' : '#0F172A',
-                fontSize: '0.82rem',
+                padding: '5px 8px 5px 26px',
+                borderRadius: '8px',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(29, 104, 255, 0.2)',
+                backgroundColor: isDark ? 'rgba(15, 23, 42, 0.7)' : 'rgba(255, 255, 255, 0.85)',
+                color: isDark ? '#FFFFFF' : '#0F172A',
+                fontSize: '0.75rem',
                 outline: 'none',
-                width: '160px',
-                transition: 'all 0.2s ease',
+                width: '110px',
                 boxSizing: 'border-box'
               }}
             />
@@ -189,95 +305,96 @@ export default function ProjectsPage({ items = [], loading = false, onClose }) {
                 onClick={() => setSearchQuery('')}
                 style={{
                   position: 'absolute',
-                  right: '8px',
+                  right: '6px',
                   background: 'none',
                   border: 'none',
-                  color: isDark ? '#94A3B8' : '#64748B',
+                  color: '#64748B',
                   cursor: 'pointer',
                   padding: 0,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  justifyContent: 'center'
                 }}
-                title="Clear Search"
+                title="Clear"
               >
-                <X size={13} />
+                <X size={12} />
               </button>
             )}
           </div>
 
-          {/* Category Toggle Switch */}
+          {/* Dual Category Filter: Only Apps & Websites */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.8)' : '#E2E8F0',
-            padding: '3px',
-            borderRadius: '12px',
-            border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid transparent',
+            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)',
+            padding: '2px',
+            borderRadius: '10px',
+            border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(226, 232, 240, 0.9)',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
           }}>
-            {/* Apps Category Tab */}
+            {/* Apps Tab */}
             <button
               type="button"
               onClick={() => setActiveCategory('apps')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: '9px',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: '8px',
                 border: 'none',
-                fontWeight: 700,
-                fontSize: '0.80rem',
+                fontWeight: 800,
+                fontSize: '0.75rem',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                backgroundColor: activeCategory === 'apps' ? '#10B981' : 'transparent',
-                color: activeCategory === 'apps' ? '#FFFFFF' : (isDark ? '#94A3B8' : '#475569'),
-                boxShadow: activeCategory === 'apps' ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none',
+                backgroundColor: activeCategory === 'apps' ? '#1D68FF' : 'transparent',
+                color: activeCategory === 'apps' ? '#FFFFFF' : (isDark ? '#94A3B8' : '#64748B'),
+                boxShadow: activeCategory === 'apps' ? '0 2px 10px rgba(29, 104, 255, 0.35)' : 'none',
               }}
             >
-              <Smartphone size={14} />
+              <Smartphone size={12} />
               <span>Apps</span>
               <span style={{
-                fontSize: '10px',
-                padding: '1px 5px',
+                fontSize: '9px',
+                padding: '0 5px',
                 borderRadius: '9999px',
-                fontWeight: 800,
-                backgroundColor: activeCategory === 'apps' ? 'rgba(255, 255, 255, 0.25)' : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#CBD5E1'),
-                color: activeCategory === 'apps' ? '#FFFFFF' : (isDark ? '#CBD5E1' : '#475569'),
+                fontWeight: 900,
+                backgroundColor: activeCategory === 'apps' ? 'rgba(255, 255, 255, 0.25)' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)'),
+                color: activeCategory === 'apps' ? '#FFFFFF' : (isDark ? '#CBD5E1' : '#64748B'),
               }}>
                 {rawApps.length}
               </span>
             </button>
 
-            {/* Websites Category Tab */}
+            {/* Websites Tab */}
             <button
               type="button"
               onClick={() => setActiveCategory('website')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: '9px',
+                gap: '5px',
+                padding: '5px 12px',
+                borderRadius: '8px',
                 border: 'none',
-                fontWeight: 700,
-                fontSize: '0.80rem',
+                fontWeight: 800,
+                fontSize: '0.75rem',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                backgroundColor: activeCategory === 'website' ? '#06B6D4' : 'transparent',
-                color: activeCategory === 'website' ? '#FFFFFF' : (isDark ? '#94A3B8' : '#475569'),
-                boxShadow: activeCategory === 'website' ? '0 4px 12px rgba(6, 182, 212, 0.35)' : 'none',
+                backgroundColor: activeCategory === 'website' ? '#1D68FF' : 'transparent',
+                color: activeCategory === 'website' ? '#FFFFFF' : (isDark ? '#94A3B8' : '#64748B'),
+                boxShadow: activeCategory === 'website' ? '0 2px 10px rgba(29, 104, 255, 0.35)' : 'none',
               }}
             >
-              <Globe size={14} />
+              <Globe size={12} />
               <span>Websites</span>
               <span style={{
-                fontSize: '10px',
-                padding: '1px 5px',
+                fontSize: '9px',
+                padding: '0 5px',
                 borderRadius: '9999px',
-                fontWeight: 800,
-                backgroundColor: activeCategory === 'website' ? 'rgba(255, 255, 255, 0.25)' : (isDark ? 'rgba(255, 255, 255, 0.08)' : '#CBD5E1'),
-                color: activeCategory === 'website' ? '#FFFFFF' : (isDark ? '#CBD5E1' : '#475569'),
+                fontWeight: 900,
+                backgroundColor: activeCategory === 'website' ? 'rgba(255, 255, 255, 0.25)' : (isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)'),
+                color: activeCategory === 'website' ? '#FFFFFF' : (isDark ? '#CBD5E1' : '#64748B'),
               }}>
                 {rawWebsites.length}
               </span>
@@ -290,11 +407,11 @@ export default function ProjectsPage({ items = [], loading = false, onClose }) {
               type="button"
               onClick={onClose}
               style={{
-                width: '34px',
-                height: '34px',
+                width: '28px',
+                height: '28px',
                 borderRadius: '50%',
-                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(0, 0, 0, 0.1)',
+                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.85)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(226, 232, 240, 0.9)',
                 color: isDark ? '#FFFFFF' : '#0F172A',
                 display: 'flex',
                 alignItems: 'center',
@@ -305,484 +422,305 @@ export default function ProjectsPage({ items = [], loading = false, onClose }) {
               title="Close"
               aria-label="Close"
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           )}
         </div>
       </header>
 
-      {/* ─── Full-Width Responsive Project Cards Container ─── */}
-      <main style={{
-        width: '100%',
-        flex: 1,
-        overflowY: 'auto',
-        padding: '20px 20px 40px 20px',
-        boxSizing: 'border-box',
-        margin: 0
-      }}>
-        {/* Apps Category Grid */}
-        {activeCategory === 'apps' && (
-          <>
-            {filteredApps.length === 0 ? (
-              <EmptyState
-                isDark={isDark}
-                color="#10B981"
-                icon={<Smartphone size={32} />}
-                message={searchQuery ? "No matching apps found" : "No Mobile Apps Available"}
-                sub={searchQuery ? "Try searching with a different keyword" : "Mobile applications published via Firestore will appear here in real-time."}
-              />
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))',
-                gap: '18px',
-                width: '100%',
-                boxSizing: 'border-box'
-              }}>
-                {filteredApps.map((app, index) => (
-                  <AppCard key={app.id || index} app={app} isDark={isDark} />
-                ))}
+      {/* ─── Main Content: Left-Aligned on Desktop with max-w-7xl ─── */}
+      <main 
+        className="w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-6 text-left flex-1 overflow-y-auto"
+        style={{
+          width: '100%',
+          maxWidth: '1440px',
+          flex: 1,
+          overflowY: 'auto',
+          padding: '16px 16px 60px 16px',
+          textAlign: 'left',
+          boxSizing: 'border-box',
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
+        <div 
+          className="projects-glass-grid text-left"
+          style={{
+            textAlign: 'left',
+            boxSizing: 'border-box'
+          }}
+        >
+          {/* Skeleton Shimmer UI in Left-Aligned Glassmorphic Grid */}
+          {loading && filteredProjects.length === 0 ? (
+            [...Array(6)].map((_, i) => (
+              <div 
+                key={i} 
+                className="bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border border-white/80 dark:border-white/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
+                style={{
+                  backgroundColor: isDark ? 'rgba(15, 23, 42, 0.65)' : 'rgba(255, 255, 255, 0.75)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  borderRadius: '16px',
+                  border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.85)',
+                  padding: '10px 8px',
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  width: '100%',
+                  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.04)'
+                }}
+              >
+                {/* Circular Placeholder */}
+                <div 
+                  style={{
+                    width: '58px',
+                    height: '58px',
+                    borderRadius: '50%',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(29, 104, 255, 0.12)',
+                    margin: '2px auto 8px auto',
+                    animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    flexShrink: 0
+                  }} 
+                />
+                <div style={{ width: '80%', height: '11px', borderRadius: '4px', backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.06)', marginBottom: '4px' }} />
+                <div style={{ width: '50%', height: '9px', borderRadius: '4px', backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(29, 104, 255, 0.15)', marginBottom: '8px' }} />
+                <div style={{ width: '100%', height: '26px', borderRadius: '8px', backgroundColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(29, 104, 255, 0.2)' }} />
               </div>
-            )}
-          </>
-        )}
-
-        {/* Website Category Grid */}
-        {activeCategory === 'website' && (
-          <>
-            {filteredWebsites.length === 0 ? (
-              <EmptyState
-                isDark={isDark}
-                color="#06B6D4"
-                icon={<Globe size={32} />}
-                message={searchQuery ? "No matching websites found" : "No Websites Available"}
-                sub={searchQuery ? "Try searching with a different keyword" : "Websites published via Firestore will appear here in real-time."}
-              />
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                gap: '20px',
-                width: '100%',
-                boxSizing: 'border-box'
-              }}>
-                {filteredWebsites.map((site, index) => (
-                  <WebsiteCard key={site.id || index} site={site} isDark={isDark} />
-                ))}
+            ))
+          ) : filteredProjects.length === 0 ? (
+            /* Empty State */
+            <div 
+              style={{
+                gridColumn: '1 / -1',
+                padding: '50px 20px',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                justifyContent: 'flex-start'
+              }}
+            >
+              <div 
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '14px',
+                  backgroundColor: 'rgba(29, 104, 255, 0.12)',
+                  color: '#1D68FF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '12px'
+                }}
+              >
+                {activeCategory === 'website' ? <Globe size={24} /> : <Smartphone size={24} />}
               </div>
-            )}
-          </>
-        )}
+              <h3 style={{
+                fontSize: '0.95rem',
+                fontWeight: 800,
+                color: isDark ? '#FFFFFF' : '#0F172A',
+                margin: '0 0 4px 0'
+              }}>
+                {searchQuery 
+                  ? "No matching items found" 
+                  : (activeCategory === 'website' ? "No Websites Available" : "No Mobile Apps Available")}
+              </h3>
+              <p style={{
+                fontSize: '0.75rem',
+                color: isDark ? '#94A3B8' : '#64748B',
+                maxWidth: '320px',
+                margin: 0
+              }}>
+                {searchQuery 
+                  ? "Try searching with a different keyword." 
+                  : "Items published from the admin panel will appear here in real-time."}
+              </p>
+            </div>
+          ) : (
+            /* Left-Aligned Frosted Glassmorphic Project Cards */
+            filteredProjects.map((project, index) => (
+              <GlassmorphicProjectCard key={project.id || index} project={project} isDark={isDark} />
+            ))
+          )}
+        </div>
       </main>
     </div>
   );
 }
 
-/* ─── Compact Premium AppCard Component with Circular Logo & "Visit Now" Button ─── */
-function AppCard({ app, isDark }) {
+/* ─── Frosted Glassmorphism ProjectCard Component ─── */
+function GlassmorphicProjectCard({ project, isDark }) {
   const [hovered, setHovered] = useState(false);
 
-  const title = app.title || app.name || app.headline || 'Untitled App';
-  const tagline = app.description || app.subCategory || app.tagline || app.platform || 'Production mobile application';
-  const categoryTag = app.subCategory || app.category || 'Mobile App';
-  const iconUrl = app.mediaUrl || app.icon || app.logo || app.thumbnail?.imageUrl || '/app1.png';
-  const actionUrl = app.actionUrl || app.projectUrl || app.playStoreUrl || app.liveUrl || '';
+  const title = project.title || project.name || project.headline || 'Untitled';
+  const category = project.category || project.platform || 'Project';
+  const subCategory = project.subCategory || project.tagline || category;
 
-  const handleVisit = () => {
-    if (actionUrl && actionUrl !== '#') {
-      window.open(actionUrl, '_blank', 'noopener,noreferrer');
+  // Responsive Thumbnail Resolution
+  const isApp = (category || '').toLowerCase().includes('app');
+  const thumbnail = project.thumbnail?.imageUrl || 
+                    project.thumbnail || 
+                    project.mediaUrl || 
+                    project.banner || 
+                    project.imageUrl || 
+                    project.icon || 
+                    (isApp ? '/app1.png' : '/add1.png');
+
+  // Action links
+  const targetUrl = project.actionUrl || project.liveUrl || project.projectUrl || project.playStoreUrl || project.githubUrl || '';
+
+  const handleVisit = (e) => {
+    e.stopPropagation();
+    if (targetUrl && targetUrl !== '#') {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
   return (
-    <div
+    <div 
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      className="bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl border border-white/80 dark:border-white/10 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_35px_rgba(37,99,235,0.12)] hover:border-blue-400/50 transition-all duration-300 relative z-10"
       style={{
-        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.75)' : '#FFFFFF',
-        borderRadius: '18px',
-        padding: '18px 20px',
-        border: hovered
-          ? '1.5px solid rgba(16, 185, 129, 0.55)'
-          : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #E2E8F0'),
-        boxShadow: hovered
-          ? (isDark
-            ? '0 14px 32px rgba(0, 0, 0, 0.65), 0 0 20px rgba(16, 185, 129, 0.18)'
-            : '0 12px 30px rgba(0, 0, 0, 0.08)')
-          : (isDark ? '0 4px 14px rgba(0, 0, 0, 0.25)' : '0 2px 6px rgba(0, 0, 0, 0.03)'),
-        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        position: 'relative',
-        boxSizing: 'border-box'
-      }}
-    >
-      <div>
-        {/* Top Header: Circular Logo + Title + Category Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {/* Circular Professional Logo with Ring & Pulse Online Dot */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '50%',
-              padding: '2px',
-              border: hovered ? '2px solid #10B981' : '2px solid rgba(16, 185, 129, 0.3)',
-              boxShadow: hovered ? '0 4px 16px rgba(16, 185, 129, 0.35)' : '0 4px 10px rgba(0, 0, 0, 0.2)',
-              backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
-              transition: 'all 0.25s ease',
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <img
-                src={iconUrl}
-                alt={title}
-                loading="lazy"
-                decoding="async"
-                width="64"
-                height="64"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  display: 'block',
-                  aspectRatio: '1 / 1'
-                }}
-                onError={(e) => { e.target.src = '/app1.png'; }}
-              />
-            </div>
-            {/* Green Online Dot */}
-            <span style={{
-              position: 'absolute',
-              bottom: '1px',
-              right: '1px',
-              width: '12px',
-              height: '12px',
-              backgroundColor: '#10B981',
-              border: `2px solid ${isDark ? '#0F172A' : '#FFFFFF'}`,
-              borderRadius: '50%',
-              boxShadow: '0 0 6px #10B981'
-            }} />
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h3 style={{
-              fontSize: '1.02rem',
-              fontWeight: 800,
-              margin: 0,
-              color: hovered ? '#10B981' : (isDark ? '#FFFFFF' : '#0F172A'),
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              transition: 'color 0.2s ease',
-              letterSpacing: '-0.2px'
-            }}>
-              {title}
-            </h3>
-            <span style={{
-              display: 'inline-block',
-              marginTop: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              letterSpacing: '0.2px',
-              color: '#10B981',
-              background: 'rgba(16, 185, 129, 0.12)',
-              padding: '2px 8px',
-              borderRadius: '6px'
-            }}>
-              {categoryTag}
-            </span>
-          </div>
-        </div>
-
-        {/* Structured Description (2-line clean clamp) */}
-        {tagline && (
-          <p style={{
-            fontSize: '0.80rem',
-            color: isDark ? '#94A3B8' : '#64748B',
-            marginTop: '12px',
-            marginBottom: '4px',
-            lineHeight: 1.45,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}>
-            {tagline}
-          </p>
-        )}
-      </div>
-
-      {/* Action Button: Premium "Visit Now" Button */}
-      <div style={{
-        marginTop: '14px',
-        paddingTop: '12px',
-        borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.06)' : '1px solid #F1F5F9',
-      }}>
-        <button
-          type="button"
-          onClick={handleVisit}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            width: '100%',
-            padding: '10px 16px',
-            borderRadius: '12px',
-            background: hovered 
-              ? 'linear-gradient(135deg, #10B981 0%, #059669 100%)' 
-              : 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
-            color: '#FFFFFF',
-            fontWeight: 800,
-            fontSize: '0.82rem',
-            border: 'none',
-            boxShadow: hovered 
-              ? '0 6px 18px rgba(16, 185, 129, 0.45)' 
-              : '0 4px 12px rgba(16, 185, 129, 0.25)',
-            transition: 'all 0.25s ease',
-            cursor: 'pointer',
-            boxSizing: 'border-box'
-          }}
-          title={`Visit ${title}`}
-        >
-          <span>Visit Now</span>
-          <ExternalLink size={14} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Compact Premium WebsiteCard Component with Cover Banner & "Visit Now" Button ─── */
-function WebsiteCard({ site, isDark }) {
-  const [hovered, setHovered] = useState(false);
-
-  const title = site.title || site.name || site.headline || 'Untitled Website';
-  const description = site.description || site.shortDescription || 'Full-stack modern web application.';
-  const platform = site.subCategory || site.platform || site.category || 'Web Application';
-  const bannerUrl = site.mediaUrl || site.banner || site.imageUrl || site.thumbnail?.imageUrl || '/add1.png';
-  const actionUrl = site.actionUrl || site.projectUrl || site.link || site.liveUrl || '';
-
-  const handleVisit = () => {
-    if (actionUrl && actionUrl !== '#') {
-      window.open(actionUrl, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.75)' : '#FFFFFF',
-        borderRadius: '18px',
-        border: hovered
-          ? '1.5px solid rgba(6, 182, 212, 0.55)'
-          : (isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid #E2E8F0'),
-        boxShadow: hovered
-          ? (isDark
-            ? '0 14px 32px rgba(0, 0, 0, 0.65), 0 0 20px rgba(6, 182, 212, 0.18)'
-            : '0 12px 30px rgba(0, 0, 0, 0.08)')
-          : (isDark ? '0 4px 14px rgba(0, 0, 0, 0.25)' : '0 2px 6px rgba(0, 0, 0, 0.03)'),
-        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
+        backgroundColor: isDark ? 'rgba(15, 23, 42, 0.65)' : 'rgba(255, 255, 255, 0.72)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderRadius: '16px',
         overflow: 'hidden',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        border: hovered
+          ? '1px solid rgba(59, 130, 246, 0.55)'
+          : (isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.85)'),
+        boxShadow: hovered
+          ? '0 12px 35px rgba(37, 99, 235, 0.16)'
+          : '0 8px 30px rgba(0, 0, 0, 0.04)',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '10px 8px',
+        width: '100%',
+        boxSizing: 'border-box',
         position: 'relative',
-        boxSizing: 'border-box'
+        zIndex: 10
       }}
     >
-      <div>
-        {/* Cover Banner with Subtle Gradient Overlay & Category Tag */}
-        <div style={{
-          width: '100%',
-          height: '165px',
+      {/* গোলাকার আইকন ফ্রেম (Circular Glass Icon Frame) */}
+      <div 
+        className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full overflow-hidden p-1 bg-white/90 dark:bg-slate-800/90 border border-blue-100 dark:border-blue-900/50 shadow-md flex items-center justify-center shrink-0"
+        style={{
+          width: '58px',
+          height: '58px',
+          minWidth: '58px',
+          minHeight: '58px',
+          maxWidth: '58px',
+          maxHeight: '58px',
+          margin: '2px auto 8px auto',
+          borderRadius: '50%',
           overflow: 'hidden',
-          backgroundColor: isDark ? '#1E293B' : '#F1F5F9',
+          padding: '2px',
+          backgroundColor: isDark ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+          border: hovered 
+            ? '2px solid rgba(29, 104, 255, 0.6)' 
+            : (isDark ? '2px solid rgba(59, 130, 246, 0.3)' : '2px solid #DBEAFE'),
+          boxShadow: '0 4px 12px rgba(29, 104, 255, 0.12)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
           position: 'relative',
-        }}>
-          <img
-            src={bannerUrl}
-            alt={title}
-            loading="lazy"
-            decoding="async"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transform: hovered ? 'scale(1.05)' : 'scale(1)',
-              transition: 'transform 0.4s ease',
-              display: 'block',
-              aspectRatio: '16 / 9'
-            }}
-            onError={(e) => { e.target.src = '/add1.png'; }}
-          />
-          {/* Subtle Dark Gradient Overlay */}
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%)',
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            padding: '10px 14px',
-            boxSizing: 'border-box'
-          }}>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 800,
-              color: '#FFFFFF',
-              background: 'rgba(6, 182, 212, 0.85)',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              backdropFilter: 'blur(4px)'
-            }}>
-              {platform}
-            </span>
+          transition: 'border-color 0.25s ease'
+        }}
+      >
+        <img 
+          src={thumbnail} 
+          alt={title} 
+          loading="lazy"
+          decoding="async"
+          onError={(e) => {
+            e.currentTarget.src = isApp ? '/app1.png' : '/add1.png';
+          }}
+          className="w-full h-full rounded-full object-cover block pointer-events-none"
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            objectFit: isApp ? 'contain' : 'cover',
+            display: 'block',
+            transition: 'transform 0.3s ease',
+            transform: hovered ? 'scale(1.08)' : 'scale(1)'
+          }}
+        />
+      </div>
 
-            <span style={{
-              color: '#FFFFFF',
-              fontSize: '11px',
-              fontWeight: 700,
-              opacity: hovered ? 1 : 0.85,
-              transition: 'opacity 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}>
-              <span>Live Web</span>
-              <ExternalLink size={12} />
-            </span>
-          </div>
-        </div>
-
-        {/* Content Details: Title & Description */}
-        <div style={{ padding: '14px 18px 10px 18px' }}>
-          <h3 style={{
-            fontSize: '1.02rem',
+      {/* টাইটেল ও প্ল্যাটফর্ম মেটাডাটা */}
+      <div style={{ width: '100%', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <h3 
+          style={{
+            fontSize: '11px',
             fontWeight: 800,
-            margin: '0 0 6px 0',
-            color: hovered ? '#06B6D4' : (isDark ? '#FFFFFF' : '#0F172A'),
-            lineHeight: 1.35,
-            transition: 'color 0.2s ease',
+            margin: '0 0 2px 0',
+            color: isDark ? '#FFFFFF' : '#0F172A',
+            lineHeight: 1.25,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
-            textOverflow: 'ellipsis'
-          }}>
-            {title}
-          </h3>
-          <p style={{
-            fontSize: '0.80rem',
-            color: isDark ? '#94A3B8' : '#64748B',
-            margin: 0,
-            lineHeight: 1.45,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}>
-            {description}
-          </p>
-        </div>
-      </div>
-
-      {/* Action Button: Premium "Visit Now" Button */}
-      <div style={{
-        padding: '0 18px 18px 18px',
-      }}>
-        <button
-          type="button"
-          onClick={handleVisit}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            width: '100%',
-            padding: '10px 16px',
-            borderRadius: '12px',
-            background: hovered 
-              ? 'linear-gradient(135deg, #06B6D4 0%, #0D9488 100%)' 
-              : 'linear-gradient(135deg, #0891B2 0%, #06B6D4 100%)',
-            color: '#FFFFFF',
-            fontWeight: 800,
-            fontSize: '0.82rem',
-            border: 'none',
-            boxShadow: hovered
-              ? '0 6px 18px rgba(6, 182, 212, 0.45)'
-              : '0 4px 12px rgba(6, 182, 212, 0.25)',
-            transition: 'all 0.25s ease',
-            cursor: 'pointer',
-            boxSizing: 'border-box'
+            textOverflow: 'ellipsis',
+            width: '100%'
           }}
-          title={`Visit ${title}`}
+          title={title}
         >
-          <span>Visit Now</span>
-          <ExternalLink size={14} />
-        </button>
+          {title}
+        </h3>
+        <span 
+          style={{
+            fontSize: '9px',
+            fontWeight: 700,
+            color: isDark ? '#94A3B8' : '#2563EB',
+            display: 'block',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            width: '100%'
+          }}
+        >
+          {subCategory}
+        </span>
       </div>
-    </div>
-  );
-}
 
-/* ─── Compact Empty State Component ─── */
-function EmptyState({ isDark, color, icon, message, sub }) {
-  return (
-    <div style={{
-      width: '100%',
-      padding: '48px 20px',
-      textAlign: 'center',
-      borderRadius: '18px',
-      backgroundColor: isDark ? 'rgba(15, 23, 42, 0.4)' : '#FFFFFF',
-      border: isDark ? '1px dashed rgba(255, 255, 255, 0.12)' : '1px dashed #CBD5E1',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxSizing: 'border-box'
-    }}>
-      <div style={{
-        width: '56px',
-        height: '56px',
-        borderRadius: '16px',
-        backgroundColor: `${color}18`,
-        color: color,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: '14px',
-        boxShadow: `0 0 16px ${color}20`
-      }}>
-        {icon}
-      </div>
-      <h3 style={{
-        margin: '0 0 6px 0',
-        fontSize: '1.05rem',
-        fontWeight: 800,
-        color: isDark ? '#FFFFFF' : '#0F172A'
-      }}>
-        {message}
-      </h3>
-      <p style={{
-        margin: 0,
-        fontSize: '0.80rem',
-        color: isDark ? '#94A3B8' : '#64748B',
-        maxWidth: '380px'
-      }}>
-        {sub}
-      </p>
+      {/* "Visit Now" অ্যাকশন বাটন - ভাইব্রেন্ট ব্লু গ্রেডিয়েন্ট */}
+      <button
+        type="button"
+        onClick={handleVisit}
+        className="w-full py-1.5 px-2 mt-2 bg-gradient-to-r from-[#1D68FF] to-[#3B82F6] hover:from-[#1554D8] hover:to-[#2563EB] text-white text-[10px] font-bold rounded-lg text-center flex items-center justify-center gap-1 shadow-md shadow-blue-500/25 transition-all active:scale-95"
+        style={{
+          width: '100%',
+          padding: '6px 4px',
+          marginTop: '8px',
+          background: hovered 
+            ? 'linear-gradient(135deg, #1554D8 0%, #2563EB 100%)' 
+            : 'linear-gradient(135deg, #1D68FF 0%, #3B82F6 100%)',
+          color: '#FFFFFF',
+          borderRadius: '8px',
+          fontSize: '10px',
+          fontWeight: 700,
+          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '3px',
+          border: 'none',
+          cursor: 'pointer',
+          boxShadow: '0 4px 14px rgba(29, 104, 255, 0.3)',
+          transition: 'all 0.2s ease',
+          boxSizing: 'border-box'
+        }}
+        title={`Visit ${title}`}
+      >
+        <span>Visit Now</span>
+        <ExternalLink size={10} strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
