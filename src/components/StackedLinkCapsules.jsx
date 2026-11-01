@@ -95,9 +95,9 @@ const SponsorCarouselView = memo(({
         {/* PURE VISUAL CARD: Strictly NO hints, NO labels, NO click text */}
         <motion.div
           className="w-full aspect-[16/7] sm:aspect-[21/9] rounded-2xl overflow-hidden shadow-lg border border-white/20 dark:border-slate-800 bg-slate-200/50 dark:bg-slate-800/50 relative cursor-pointer"
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.22 }}
+          transition={{ duration: 0.25 }}
           onClick={() => onOpenDetail(currentItem)}
           style={{
             width: '100%',
@@ -146,6 +146,7 @@ const SponsorCarouselView = memo(({
                 alt="Showcase Banner"
                 loading="eager"
                 fetchPriority="high"
+                fetchpriority="high"
                 decoding="async"
                 onLoad={() => {
                   if (currentItem?.imageUrl) {
@@ -436,40 +437,112 @@ const SponsorCarouselView = memo(({
 });
 SponsorCarouselView.displayName = 'SponsorCarouselView';
 
+const CACHE_KEY_SPONSOR_BANNERS = 'cached_sponsor_banners';
+
+const SponsorBannerCarouselInner = memo(({
+  data,
+  isDark,
+  isBangla,
+  currentSlide,
+  setCurrentSlide,
+  selectedBanner,
+  setSelectedBanner
+}) => {
+  // 1. Instant Synchronous State Initialization from LocalStorage (0-second render)
+  const [banners, setBanners] = useState(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY_SPONSOR_BANNERS);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      // ignore parsing or localStorage exceptions
+    }
+    return [];
+  });
+
+  // 2. Sync with Live Firestore StreamBuilder & Update LocalStorage
+  useEffect(() => {
+    if (data !== undefined && data !== null && Array.isArray(data)) {
+      if (data.length > 0) {
+        const freshSorted = [...data]
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+          .slice(0, 7);
+        setBanners(freshSorted);
+        try {
+          localStorage.setItem(CACHE_KEY_SPONSOR_BANNERS, JSON.stringify(freshSorted));
+        } catch (e) {}
+      } else {
+        // If Firestore explicitly reports 0 active banners, clear state and cache
+        setBanners([]);
+        try {
+          localStorage.removeItem(CACHE_KEY_SPONSOR_BANNERS);
+        } catch (e) {}
+      }
+    }
+  }, [data]);
+
+  // 3. High-Priority Head Preload for Instant First Banner Display
+  useEffect(() => {
+    if (banners && banners.length > 0 && banners[0]?.imageUrl) {
+      const firstUrl = banners[0].imageUrl;
+      if (!document.querySelector(`link[rel="preload"][href="${firstUrl}"]`)) {
+        const link = document.createElement('link');
+        link.rel = 'preload';
+        link.as = 'image';
+        link.href = firstUrl;
+        link.fetchPriority = 'high';
+        link.setAttribute('fetchpriority', 'high');
+        document.head.appendChild(link);
+      }
+    }
+  }, [banners]);
+
+  // When no active sponsor posters exist in cache or database, do not render any dummy banners
+  if (!banners || banners.length === 0) {
+    return null;
+  }
+
+  const bannerCount = banners.length;
+  const safeIndex = currentSlide % bannerCount;
+  const currentItem = banners[safeIndex] || banners[0];
+
+  return (
+    <SponsorCarouselView
+      banners={banners}
+      currentItem={currentItem}
+      safeIndex={safeIndex}
+      onSelectSlide={setCurrentSlide}
+      onOpenDetail={setSelectedBanner}
+      selectedBanner={selectedBanner}
+      onCloseDetail={() => setSelectedBanner(null)}
+      isDark={isDark}
+      isBangla={isBangla}
+    />
+  );
+});
+SponsorBannerCarouselInner.displayName = 'SponsorBannerCarouselInner';
+
 const SponsorBannerCarousel = ({ isDark, isBangla }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [selectedBanner, setSelectedBanner] = useState(null);
 
   return (
     <FirestoreStreamBuilder collectionName={COLLECTIONS.SPONSOR_BANNERS}>
-      {({ data }) => {
-        const banners = (data || [])
-          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-          .slice(0, 7);
-
-        // When no active sponsor posters exist in Firestore, do not render any dummy banners
-        if (banners.length === 0) {
-          return null;
-        }
-
-        const bannerCount = banners.length;
-        const safeIndex = currentSlide % bannerCount;
-        const currentItem = banners[safeIndex] || banners[0];
-
-        return (
-          <SponsorCarouselView
-            banners={banners}
-            currentItem={currentItem}
-            safeIndex={safeIndex}
-            onSelectSlide={setCurrentSlide}
-            onOpenDetail={setSelectedBanner}
-            selectedBanner={selectedBanner}
-            onCloseDetail={() => setSelectedBanner(null)}
-            isDark={isDark}
-            isBangla={isBangla}
-          />
-        );
-      }}
+      {({ data }) => (
+        <SponsorBannerCarouselInner
+          data={data}
+          isDark={isDark}
+          isBangla={isBangla}
+          currentSlide={currentSlide}
+          setCurrentSlide={setCurrentSlide}
+          selectedBanner={selectedBanner}
+          setSelectedBanner={setSelectedBanner}
+        />
+      )}
     </FirestoreStreamBuilder>
   );
 };

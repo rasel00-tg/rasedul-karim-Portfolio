@@ -83,7 +83,7 @@ export const FirestoreStreamBuilder = ({
             q = query(colRef);
           }
 
-          unsubscribe = onSnapshot(
+          const unsubscribeSnap = onSnapshot(
             q,
             (querySnapshot) => {
               if (!isMounted) return;
@@ -161,6 +161,12 @@ export const FirestoreStreamBuilder = ({
               }
             }
           );
+
+          if (!isMounted) {
+            unsubscribeSnap();
+            return;
+          }
+          unsubscribe = unsubscribeSnap;
         } else {
           // REST Fallback for Firestore collection
           const res = await fetch(

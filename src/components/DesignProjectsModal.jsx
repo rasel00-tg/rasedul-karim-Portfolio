@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
   Palette, 
-  ExternalLink, 
-  Sparkles, 
-  Layers, 
-  CheckCircle2, 
-  FolderGit2,
-  ArrowRight,
-  ArrowLeft
+  ArrowLeft,
+  Home as HomeIcon
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -19,375 +14,286 @@ import { COLLECTIONS } from '../services/featuresService';
 const DesignProjectsModal = ({ onClose }) => {
   const { isDark } = useTheme();
   const { isBangla } = useLanguage();
-  const [selectedFilter, setSelectedFilter] = useState('All');
 
   // PopScope / Browser Back Interception to return to Homebar
   useEffect(() => {
     window.history.pushState({ modal: 'design_projects' }, '');
     const handlePopState = () => {
-      onClose();
+      if (onClose) onClose();
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [onClose]);
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'rgba(5, 10, 24, 0.82)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '12px',
-          boxSizing: 'border-box'
-        }}
-      >
-        <motion.div
-          initial={{ scale: 0.94, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.94, opacity: 0, y: 20 }}
-          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: '100%',
-            maxWidth: '1550px',
-            height: '94vh',
-            maxHeight: '94vh',
-            borderRadius: '24px',
-            background: isDark ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.98)',
-            border: '1.5px solid rgba(0, 131, 143, 0.4)',
-            boxShadow: '0 25px 60px rgba(0, 131, 143, 0.35), 0 0 40px rgba(0, 240, 255, 0.15)',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            position: 'relative'
-          }}
-        >
-          {/* Header Bar */}
-          <div style={{
-            padding: '20px 24px',
-            borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: isDark ? 'rgba(0, 131, 143, 0.12)' : 'rgba(0, 131, 143, 0.06)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+    <FirestoreStreamBuilder collectionName={COLLECTIONS.DESIGN_PROJECTS || 'design_projects'}>
+      {() => (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="w-full min-h-screen bg-gradient-to-br from-[#F5F8FF] via-[#EEF3FD] to-[#E6EEFC] dark:from-[#0B101B] dark:via-[#0F172A] dark:to-[#0B1324] relative overflow-hidden flex flex-col items-center justify-center p-4 sm:p-6"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              minHeight: '100vh',
+              background: isDark
+                ? 'linear-gradient(135deg, #0B101B 0%, #0F172A 50%, #0B1324 100%)'
+                : 'linear-gradient(135deg, #F5F8FF 0%, #EEF3FD 50%, #E6EEFC 100%)',
+              zIndex: 99999,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              boxSizing: 'border-box'
+            }}
+          >
+            {/* Top Right Sleek Corner Close (✕) Button */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                zIndex: 30
+              }}
+            >
               <button
                 onClick={onClose}
+                aria-label="Close"
+                className="w-9 h-9 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-sm active:scale-95 transition-all text-sm font-bold z-20 cursor-pointer"
+                title={isBangla ? 'বন্ধ করুন' : 'Close'}
+              >
+                <X size={17} strokeWidth={2.4} />
+              </button>
+            </div>
+
+            {/* Top Left Back Button */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '20px',
+                left: '20px',
+                zIndex: 30
+              }}
+            >
+              <button
+                onClick={onClose}
+                aria-label="Back to Home"
+                className="w-9 h-9 rounded-full bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-white/10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-sm active:scale-95 transition-all text-sm font-bold z-20 cursor-pointer"
+                title={isBangla ? 'হোমে ফিরে যান' : 'Back'}
+              >
+                <ArrowLeft size={17} strokeWidth={2.4} />
+              </button>
+            </div>
+
+            {/* Ambient Background Orbs & Frosted Glass Layers */}
+            {/* Right Glowing Blue Sphere */}
+            <div
+              className="absolute top-24 -right-10 w-44 h-44 sm:w-60 sm:h-60 bg-gradient-to-tr from-[#1D68FF] to-[#4F95FF] rounded-full blur-xs opacity-90 shadow-[0_10px_35px_rgba(29,104,255,0.4)] pointer-events-none"
+              style={{
+                position: 'absolute',
+                top: '10%',
+                right: '-30px',
+                width: '240px',
+                height: '240px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #1D68FF 0%, #4F95FF 100%)',
+                opacity: isDark ? 0.75 : 0.9,
+                boxShadow: '0 10px 45px rgba(29, 104, 255, 0.45), 0 0 70px rgba(79, 149, 255, 0.35)',
+                pointerEvents: 'none',
+                filter: 'blur(3px)'
+              }}
+            />
+
+            {/* Left Accent Blue Sphere */}
+            <div
+              className="absolute top-[50%] -left-12 w-28 h-28 sm:w-40 sm:h-40 bg-[#2563EB] rounded-full blur-xs opacity-85 shadow-[0_8px_30px_rgba(37,99,235,0.35)] pointer-events-none"
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '-40px',
+                width: '160px',
+                height: '160px',
+                borderRadius: '50%',
+                background: '#2563EB',
+                opacity: isDark ? 0.7 : 0.85,
+                boxShadow: '0 8px 35px rgba(37, 99, 235, 0.4), 0 0 50px rgba(37, 99, 235, 0.3)',
+                pointerEvents: 'none',
+                filter: 'blur(2px)'
+              }}
+            />
+
+            {/* Overlapping Translucent Frosted Glass Bubble (Right) */}
+            <div
+              className="backdrop-blur-2xl border border-white/60 bg-white/20 rounded-full pointer-events-none"
+              style={{
+                position: 'absolute',
+                top: '6%',
+                right: '4%',
+                width: '310px',
+                height: '310px',
+                borderRadius: '50%',
+                background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.22)',
+                backdropFilter: 'blur(28px)',
+                WebkitBackdropFilter: 'blur(28px)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.65)',
+                pointerEvents: 'none'
+              }}
+            />
+
+            {/* Overlapping Translucent Frosted Glass Bubble (Left) */}
+            <div
+              className="backdrop-blur-2xl border border-white/60 bg-white/20 rounded-full pointer-events-none"
+              style={{
+                position: 'absolute',
+                bottom: '8%',
+                left: '3%',
+                width: '240px',
+                height: '240px',
+                borderRadius: '50%',
+                background: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.22)',
+                backdropFilter: 'blur(28px)',
+                WebkitBackdropFilter: 'blur(28px)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(255, 255, 255, 0.65)',
+                pointerEvents: 'none'
+              }}
+            />
+
+            {/* 1. Central Frosted Glass Notice Card Frame (Solid Visible Glass Card) */}
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 15 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-[360px] sm:max-w-md mx-auto p-6 sm:p-8 rounded-[28px] text-center flex flex-col items-center relative z-10"
+              style={{
+                width: '100%',
+                maxWidth: '380px',
+                margin: '0 auto',
+                padding: '28px 24px',
+                borderRadius: '28px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                position: 'relative',
+                zIndex: 10,
+                background: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.88)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid rgba(255, 255, 255, 0.95)',
+                boxShadow: isDark
+                  ? '0 20px 45px rgba(0, 0, 0, 0.5), 0 0 30px rgba(29, 104, 255, 0.15)'
+                  : '0 15px 35px rgba(29, 104, 255, 0.12), 0 0 20px rgba(255, 255, 255, 0.8)',
+                boxSizing: 'border-box'
+              }}
+            >
+              {/* 2. Colorful Animated Floating Icon (Vibrant Animated Icon Box) */}
+              <div
+                className="w-20 h-20 rounded-2xl flex items-center justify-center mb-4 shadow-lg animate-bounce"
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '50%',
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '20px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: isDark ? '#FFFFFF' : '#0F172A',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  transition: 'all 0.2s ease'
+                  marginBottom: '16px',
+                  background: 'linear-gradient(135deg, #1D68FF 0%, #00D2FF 100%)',
+                  boxShadow: '0 10px 25px rgba(29, 104, 255, 0.35)'
                 }}
-                title={isBangla ? 'হোমবারে ফিরে যান' : 'Back to Home'}
-                aria-label="Back"
               >
-                <ArrowLeft size={17} />
-              </button>
-              <div style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '14px',
-                background: 'linear-gradient(135deg, #00838F 0%, #0097A7 100%)',
-                boxShadow: '0 4px 18px rgba(0, 131, 143, 0.45)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0
-              }}>
-                <img 
-                  src="/design project.png" 
-                  alt="Design Project" 
-                  loading="lazy"
-                  decoding="async"
-                  style={{ width: '28px', height: '28px', objectFit: 'contain' }}
+                <Palette 
+                  style={{ 
+                    width: '36px', 
+                    height: '36px', 
+                    color: '#FFFFFF' 
+                  }} 
+                  strokeWidth={2.4} 
                 />
               </div>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h2 style={{
-                    margin: 0,
-                    fontSize: '1.3rem',
-                    fontWeight: 900,
-                    color: isDark ? '#FFFFFF' : '#0F172A',
-                    fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
-                  }}>
-                    {isBangla ? 'ডিজাইন প্রজেক্ট শোকেস' : 'Design Project Showcase'}
-                  </h2>
-                  <span style={{
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    background: 'rgba(0, 240, 255, 0.15)',
-                    border: '1px solid rgba(0, 240, 255, 0.35)',
-                    color: '#00F0FF',
-                    fontSize: '0.7rem',
-                    fontWeight: 800,
-                    letterSpacing: '0.5px'
-                  }}>
-                    LIVE SYNC
-                  </span>
-                </div>
-                <p style={{
-                  margin: '3px 0 0 0',
-                  fontSize: '0.78rem',
-                  color: isDark ? '#94A3B8' : '#64748B',
+
+              {/* 3. Under Maintenance Badge */}
+              <span
+                style={{
+                  background: '#FFF3CD',
+                  color: '#B7791F',
+                  border: '1px solid #FFEBAA',
+                  padding: '4px 14px',
+                  borderRadius: '50px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  display: 'inline-block',
+                  marginBottom: '10px'
+                }}
+              >
+                ● {isBangla ? 'আপডেট চলমান' : 'Under Maintenance'}
+              </span>
+
+              {/* Page Title */}
+              <h2
+                style={{
+                  fontSize: '22px',
+                  fontWeight: '900',
+                  color: isDark ? '#FFFFFF' : '#0F172A',
+                  marginBottom: '8px',
+                  fontFamily: isBangla ? "'Anek Bangla', 'LiAdorNoirrit', sans-serif" : "'DM Serif Display', serif"
+                }}
+              >
+                {isBangla ? 'ডিজাইন প্রজেক্টস' : 'Design Projects'}
+              </h2>
+
+              {/* Notice Message */}
+              <p
+                style={{
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: isDark ? '#CBD5E1' : '#334155',
+                  lineHeight: '1.6',
+                  maxWidth: '300px',
+                  margin: '0 auto',
                   fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
-                }}>
-                  {isBangla 
-                    ? 'ইউআই/ইউএক্স, ব্র্যান্ডিং ও আধুনিক ক্রিয়েটিভ ডিজাইনের লাইভ কালেকশন' 
-                    : 'Curated UI/UX, branding, and interactive digital design prototypes'}
-                </p>
-              </div>
-            </div>
+                }}
+              >
+                এই ফিচারটি সাময়িক বন্ধ আছে, আপডেট সম্পন্ন হলে পূনরায় সচল হবে
+              </p>
 
-            <button
-              onClick={onClose}
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                background: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-                border: 'none',
-                color: isDark ? '#FFFFFF' : '#0F172A',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Real-Time Firestore Stream Content */}
-          <div style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '22px 24px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px'
-          }}>
-            <FirestoreStreamBuilder collectionName={COLLECTIONS.DESIGN_PROJECTS}>
-              {({ data, loading }) => {
-                const designs = data || [];
-                const activeDesigns = designs.filter(d => d.status !== 'Draft');
-
-                return (
-                  <>
-                    {/* Live Counter & Metrics Bar */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                      gap: '12px',
-                      padding: '12px 18px',
-                      borderRadius: '16px',
-                      background: isDark ? 'rgba(0, 131, 143, 0.08)' : 'rgba(0, 131, 143, 0.05)',
-                      border: `1px solid ${isDark ? 'rgba(0, 131, 143, 0.25)' : 'rgba(0, 131, 143, 0.15)'}`
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Sparkles size={16} color="#00F0FF" />
-                        <span style={{
-                          fontSize: '0.86rem',
-                          fontWeight: 700,
-                          color: isDark ? '#E2E8F0' : '#1E293B',
-                          fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
-                        }}>
-                          {isBangla ? `মোট প্রজেক্ট: ${activeDesigns.length} টি সক্রিয়` : `Total: ${activeDesigns.length} Active Designs`}
-                        </span>
-                      </div>
-                      <span style={{
-                        fontSize: '0.74rem',
-                        color: '#00838F',
-                        fontWeight: 800,
-                        letterSpacing: '0.5px'
-                      }}>
-                        ⚡ Real-time Firestore Stream
-                      </span>
-                    </div>
-
-                    {/* Designs Grid */}
-                    <div style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                      gap: '22px'
-                    }}>
-                      {activeDesigns.map((item) => (
-                        <motion.div
-                          key={item.id}
-                          whileHover={{ y: -4, scale: 1.015 }}
-                          transition={{ duration: 0.2 }}
-                          style={{
-                            borderRadius: '18px',
-                            background: isDark ? 'rgba(30, 41, 59, 0.7)' : 'rgba(248, 250, 252, 0.9)',
-                            border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'}`,
-                            overflow: 'hidden',
-                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
-                            display: 'flex',
-                            flexDirection: 'column'
-                          }}
-                        >
-                          {/* Preview Image */}
-                          <div style={{
-                            width: '100%',
-                            height: '150px',
-                            position: 'relative',
-                            background: '#0b1329',
-                            overflow: 'hidden'
-                          }}>
-                            <img 
-                              src={item.imageUrl || '/app1.png'} 
-                              alt={item.title}
-                              loading="lazy"
-                              decoding="async"
-                              onError={(e) => { e.target.src = '/app1.png'; }}
-                              style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                transition: 'transform 0.3s ease'
-                              }}
-                            />
-                            {item.category && (
-                              <div style={{
-                                position: 'absolute',
-                                top: '10px',
-                                left: '10px',
-                                padding: '3px 8px',
-                                borderRadius: '8px',
-                                background: 'rgba(0, 0, 0, 0.7)',
-                                backdropFilter: 'blur(6px)',
-                                color: '#00F0FF',
-                                fontSize: '0.68rem',
-                                fontWeight: 800
-                              }}>
-                                {item.category}
-                              </div>
-                            )}
-                            <div style={{
-                              position: 'absolute',
-                              top: '10px',
-                              right: '10px',
-                              padding: '3px 8px',
-                              borderRadius: '8px',
-                              background: item.status === 'Draft' ? 'rgba(239, 68, 68, 0.85)' : 'rgba(16, 185, 129, 0.85)',
-                              color: '#FFFFFF',
-                              fontSize: '0.66rem',
-                              fontWeight: 800
-                            }}>
-                              {item.status || 'Active'}
-                            </div>
-                          </div>
-
-                          {/* Content */}
-                          <div style={{
-                            padding: '16px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            flex: 1,
-                            justifyContent: 'space-between'
-                          }}>
-                            <div>
-                              <h3 style={{
-                                margin: '0 0 6px 0',
-                                fontSize: '1rem',
-                                fontWeight: 800,
-                                color: isDark ? '#FFFFFF' : '#0F172A',
-                                fontFamily: isBangla ? "'Anek Bangla', sans-serif" : "'DM Serif Display', serif"
-                              }}>
-                                {item.title}
-                              </h3>
-                              <p style={{
-                                margin: '0 0 14px 0',
-                                fontSize: '0.78rem',
-                                lineHeight: 1.45,
-                                color: isDark ? '#94A3B8' : '#64748B',
-                                fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
-                              }}>
-                                {item.subtitle || item.description}
-                              </p>
-                            </div>
-
-                            {item.projectUrl ? (
-                              <a
-                                href={item.projectUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '8px',
-                                  padding: '9px 14px',
-                                  borderRadius: '12px',
-                                  background: 'linear-gradient(135deg, #00838F 0%, #0097A7 100%)',
-                                  color: '#FFFFFF',
-                                  textDecoration: 'none',
-                                  fontSize: '0.78rem',
-                                  fontWeight: 800,
-                                  boxShadow: '0 4px 14px rgba(0, 131, 143, 0.35)',
-                                  transition: 'all 0.2s ease',
-                                  fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
-                                }}
-                              >
-                                <span>{isBangla ? 'প্রজেক্ট লিংক দেখুন' : 'Explore Project (Behance / Figma)'}</span>
-                                <ExternalLink size={14} />
-                              </a>
-                            ) : (
-                              <div style={{
-                                padding: '8px 12px',
-                                borderRadius: '10px',
-                                background: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)',
-                                color: isDark ? '#94A3B8' : '#64748B',
-                                fontSize: '0.74rem',
-                                textAlign: 'center',
-                                fontWeight: 700
-                              }}>
-                                {isBangla ? 'প্রিভিউ মোড' : 'Preview Showcase'}
-                              </div>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </>
-                );
-              }}
-            </FirestoreStreamBuilder>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+              {/* 4. Premium Vibrant Blue "Back to Home" Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  width: '100%',
+                  marginTop: '20px',
+                  padding: '12px 20px',
+                  background: 'linear-gradient(90deg, #1D68FF 0%, #2563EB 100%)',
+                  color: '#FFFFFF',
+                  borderRadius: '16px',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 8px 20px rgba(29, 104, 255, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  fontFamily: isBangla ? "'Anek Bangla', sans-serif" : 'inherit'
+                }}
+              >
+                <HomeIcon size={16} color="#FFFFFF" />
+                <span>← {isBangla ? 'হোমে ফিরে যান' : 'Back to Home'}</span>
+              </button>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
+      )}
+    </FirestoreStreamBuilder>
   );
 };
 

@@ -1146,4 +1146,24 @@ img {
   text-overflow: ellipsis !important;
 }
 
+/* 60FPS Smooth Scrolling & GPU Hardware Handover for Low-End Devices */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Glitch & Frame Drop Elimination: Compositor Layer Activation */
+.backdrop-blur-xl,
+.backdrop-blur-2xl,
+.backdrop-blur-md,
+.backdrop-blur-lg,
+.backdrop-blur {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+
 
